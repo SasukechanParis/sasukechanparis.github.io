@@ -412,7 +412,6 @@
     setText('#btn-google-login-screen', 'googleLogin');
     setText('#btn-google-login', 'googleLogin');
     setText('#btn-logout', 'logout');
-    setText('#btn-header-logout', 'logout');
     setText('.login-card p', 'loginScreenDescription');
     setText('#settings-content-contract .help-text', 'contractTemplateHelp');
     setTitle('#dashboard-month-picker', 'dashboardMonthHint');
@@ -5933,8 +5932,7 @@
     if (headerUserName) {
       const displayName = hasUser ? getAuthDisplayName(user) : (isGuest ? t('authLoggedInUserFallback') : '');
       const uid = String(user?.uid || '').trim();
-      const uidShort = uid ? uid.slice(0, 8) : '';
-      headerUserName.textContent = uidShort ? `${displayName} (${uidShort})` : displayName;
+      headerUserName.textContent = displayName;
       headerUserName.title = uid ? `${displayName}\nUID: ${uid}` : displayName;
     }
     if (headerUserAvatar) {
@@ -5948,6 +5946,8 @@
     }
     if (headerLogout) {
       headerLogout.style.display = hasUser && !isGuest ? '' : 'none';
+      headerLogout.title = t('logout');
+      headerLogout.setAttribute('aria-label', t('logout'));
     }
   }
 
