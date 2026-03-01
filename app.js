@@ -27,6 +27,7 @@
   const FORM_FIELD_VISIBILITY_KEY = 'photocrm_form_field_visibility';
   const GOOGLE_CALENDAR_AUTO_SYNC_KEY = 'photocrm_google_calendar_auto_sync';
   const GOOGLE_CALENDAR_SELECTED_ID_KEY = 'photocrm_google_calendar_selected_id';
+  const USER_PLAN_KEY = 'photocrm_user_plan';
   const GOOGLE_CALENDAR_DEFAULT_ID = 'sasuke.photographe@gmail.com';
   const LOCAL_GUEST_MODE_KEY = 'photocrm_local_guest_mode';
   const IDB_MIRROR_DB_NAME = 'PholioDB';
@@ -36,7 +37,7 @@
   const FORCE_DARK_MODE = false;
   const ENABLE_STATS_FEATURES = true;
   const DEFAULT_INVOICE_MESSAGE_KEY = 'invoiceDefaultMessage';
-  const FREE_PLAN_LIMIT = 30;
+  const FREE_PLAN_LIMIT = 20;
 
   const DASHBOARD_CARD_DEFINITIONS = [
     { key: 'totalCustomers', labelKey: 'cardTotalCustomers', fallbackLabel: 'Total Customers' },
@@ -203,6 +204,7 @@
       FORM_FIELD_VISIBILITY_KEY,
       GOOGLE_CALENDAR_AUTO_SYNC_KEY,
       GOOGLE_CALENDAR_SELECTED_ID_KEY,
+      USER_PLAN_KEY,
     ];
   }
 
@@ -315,6 +317,9 @@
   // ===== Language Management =====
   let currentLang = getCloudValue(LANG_KEY, getLocalValue(LANG_KEY, 'ja'));
   if (!window.LOCALE || !window.LOCALE[currentLang]) currentLang = 'ja';
+  let currentUserPlan = normalizeUserPlan(
+    getCloudValue(USER_PLAN_KEY, getCloudValue('plan', getLocalValue(USER_PLAN_KEY, 'free')))
+  );
 
   function getLanguageSelectElement() {
     return document.getElementById('languageSelect') || document.getElementById('lang-select');
@@ -486,6 +491,80 @@
     };
   }
 
+  function normalizeUserPlan(plan) {
+    const normalized = String(plan || '').trim().toLowerCase();
+    if (normalized === 'team') return 'team';
+    if (normalized === 'individual' || normalized === 'pro') return 'individual';
+    return 'free';
+  }
+
+  function hasPaidPlanAccess(plan = currentUserPlan) {
+    const normalized = normalizeUserPlan(plan);
+    return normalized === 'individual' || normalized === 'team';
+  }
+
+  function getCustomerLimitByPlan(plan = currentUserPlan) {
+    return normalizeUserPlan(plan) === 'free' ? FREE_PLAN_LIMIT : Number.POSITIVE_INFINITY;
+  }
+
+  function canUseLanguageByPlan(lang, plan = currentUserPlan) {
+    const normalizedLang = String(lang || '').trim();
+    if (normalizedLang === 'ja' || normalizedLang === 'en') return true;
+    return hasPaidPlanAccess(plan);
+  }
+
+  function getPlanBadgeText(plan = currentUserPlan) {
+    const normalized = normalizeUserPlan(plan);
+    if (normalized === 'team') return 'TEAM';
+    if (normalized === 'individual') return 'PRO';
+    return 'FREE';
+  }
+
+  function updateHeaderPlanBadge() {
+    const badge = document.getElementById('header-plan-badge');
+    if (!badge) return;
+    const plan = normalizeUserPlan(currentUserPlan);
+    badge.textContent = getPlanBadgeText(plan);
+    badge.dataset.plan = plan;
+    badge.title = `Plan: ${getPlanBadgeText(plan)}`;
+  }
+
+  function syncPlanFromStorage() {
+    const candidate = getCloudValue(USER_PLAN_KEY, getCloudValue('plan', getLocalValue(USER_PLAN_KEY, 'free')));
+    setCurrentUserPlan(candidate, { persistCloud: false });
+  }
+
+  function setCurrentUserPlan(plan, options = {}) {
+    const { persistCloud = false } = options;
+    currentUserPlan = normalizeUserPlan(plan);
+    saveLocalValue(USER_PLAN_KEY, currentUserPlan);
+    // Future Stripe integration can call this function with persistCloud=true
+    // after a successful checkout/webhook verification.
+    if (persistCloud && window.FirebaseService?.setUserPlan) {
+      window.FirebaseService.setUserPlan(currentUserPlan).catch((err) => {
+        console.warn('Failed to persist user plan', err);
+      });
+    }
+    updateHeaderPlanBadge();
+    refreshLanguageOptionAvailability();
+    if (!canUseLanguageByPlan(currentLang, currentUserPlan)) {
+      updateLanguage('ja');
+    }
+  }
+
+  function refreshLanguageOptionAvailability() {
+    const languageSelect = getLanguageSelectElement();
+    if (!languageSelect) return;
+    Array.from(languageSelect.options).forEach((option) => {
+      const allowed = canUseLanguageByPlan(option.value, currentUserPlan);
+      option.disabled = !allowed;
+      option.dataset.planLocked = allowed ? 'false' : 'true';
+    });
+    languageSelect.title = hasPaidPlanAccess(currentUserPlan)
+      ? ''
+      : (t('planFeatureLanguageLocked') || '');
+  }
+
   function refreshUiAfterLanguageChange() {
     renderTable();
     renderWorkflowStatusLegend();
@@ -502,6 +581,9 @@
   }
 
   function updateLanguage(lang) {
+    if (!canUseLanguageByPlan(lang, currentUserPlan)) {
+      lang = canUseLanguageByPlan(currentLang, currentUserPlan) ? currentLang : 'ja';
+    }
     if (!window.LOCALE || !window.LOCALE[lang]) {
       console.warn(`Unsupported language "${lang}". Falling back to Japanese.`);
       lang = 'ja';
@@ -570,6 +652,7 @@
     const customerTableWrapper = document.getElementById('table-wrapper');
     if (customerTableWrapper) customerTableWrapper.style.overflowX = 'auto';
 
+    refreshLanguageOptionAvailability();
     refreshUiAfterLanguageChange();
   }
   window.updateLanguage = updateLanguage;
@@ -586,6 +669,7 @@
     if (State.getRaw(EXPENSES_KEY, null) === null) State.setJSON(EXPENSES_KEY, []);
     if (State.getRaw(PLAN_MASTER_KEY, null) === null) State.setJSON(PLAN_MASTER_KEY, []);
     if (State.getRaw(OPTIONS_KEY, null) === null) State.setJSON(OPTIONS_KEY, DEFAULT_OPTIONS);
+    if (State.getRaw(USER_PLAN_KEY, null) === null) State.setJSON(USER_PLAN_KEY, 'free');
   }
 
   // ===== Storage Helpers =====
@@ -981,6 +1065,7 @@
     formFieldVisibilityConfig = loadFormFieldVisibilityConfig();
     googleCalendarAutoSyncEnabled = loadGoogleCalendarAutoSyncEnabled();
     googleCalendarSelectedId = loadGoogleCalendarSelectedId();
+    syncPlanFromStorage();
   }
 
   // ===== DOM =====
@@ -1079,6 +1164,7 @@
   function activateLocalGuestMode(message = '') {
     isLoggedIn = true;
     saveLocalValue(LOCAL_GUEST_MODE_KEY, true);
+    setCurrentUserPlan('free', { persistCloud: false });
     safeRun('localMode.theme', () => applyTheme('dark'));
     safeRun('localMode.language', () => updateLanguage(currentLang || 'ja'));
     safeRun('localMode.renderTable', () => renderTable());
@@ -5678,16 +5764,19 @@
 
   // ===== Free Tier Limit Logic =====
   function checkCustomerLimit() {
-    if (customers.length >= FREE_PLAN_LIMIT) {
-      showUpgradeModal();
+    const limit = getCustomerLimitByPlan(currentUserPlan);
+    if (Number.isFinite(limit) && customers.length >= limit) {
+      showUpgradeModal(limit);
       return false;
     }
     return true;
   }
 
-  function showUpgradeModal() {
-    // Show a simple upgrade message or rediected to landing pricing
-    const confirmed = confirm(t('msgLimitReached') || "Free plan limit reached (30 customers). Upgrade to continue adding more customers.");
+  function showUpgradeModal(limit = FREE_PLAN_LIMIT) {
+    const confirmed = confirm(
+      t('msgLimitReachedPlan', { limit: String(limit) })
+      || `Free plan limit reached (${limit} customers). Upgrade to continue adding more customers.`
+    );
     if (confirmed) {
       window.open('landing.html#pricing', '_blank');
     }
@@ -5705,6 +5794,14 @@
     const legalValues = settings?.legalFieldValues && typeof settings.legalFieldValues === 'object'
       ? settings.legalFieldValues
       : {};
+
+    if (!hasPaidPlanAccess(currentUserPlan) && legalFields.length > 0) {
+      if (titleEl) titleEl.textContent = profile.legalSectionTitle || 'Legal Information';
+      if (captionEl) captionEl.textContent = t('planFeatureLegalLocked') || '';
+      if (section) section.style.display = '';
+      container.innerHTML = `<div class="invoice-legal-locked">${escapeHtml(t('planFeatureLegalLocked') || '')}</div>`;
+      return;
+    }
 
     if (titleEl) titleEl.textContent = profile.legalSectionTitle || 'Legal Information';
     if (captionEl) captionEl.textContent = profile.legalSectionHint || '';
@@ -5977,6 +6074,12 @@
   function handleLanguageSelectChange(event) {
     const selected = event?.target?.value;
     if (!selected) return;
+    if (!canUseLanguageByPlan(selected, currentUserPlan)) {
+      showToast(t('planFeatureLanguageLocked') || 'Upgrade required to use this language.', 'error');
+      const languageSelect = getLanguageSelectElement();
+      if (languageSelect) languageSelect.value = currentLang;
+      return;
+    }
     applyInvoiceLocaleDefaults(selected, { force: true });
     updateUITS(selected);
     if (settingsOverlay?.classList.contains('active')) {
@@ -6165,6 +6268,7 @@
     applyTheme(FORCE_DARK_MODE ? 'dark' : currentTheme);
 
     // 2. Set defaults
+    syncPlanFromStorage();
     updateLanguage(currentLang || 'ja');
     applyInvoiceLocaleDefaults(currentLang || 'ja', { force: false });
     updateCurrency(currentCurrency);
@@ -6217,6 +6321,7 @@
     currentTheme = FORCE_DARK_MODE ? 'dark' : getCloudValue(THEME_KEY, getLocalValue(THEME_KEY, 'dark'));
     currentCurrency = getCloudValue(CURRENCY_KEY, getLocalValue(CURRENCY_KEY, 'USD'));
     if (!CURRENCY_CONFIG[currentCurrency]) currentCurrency = 'USD';
+    syncPlanFromStorage();
     reloadRuntimeStateFromStorage();
     if (ENABLE_STATS_FEATURES) {
       applyHeroMetricsConfig();
@@ -6267,6 +6372,7 @@
 
   function updateHeaderAuthUi(user = null) {
     const headerLogout = document.getElementById('btn-header-logout');
+    const headerPlanBadge = document.getElementById('header-plan-badge');
     const isGuest = getLocalValue(LOCAL_GUEST_MODE_KEY, false) === true;
     const hasUser = !!user;
     if (headerLogout) {
@@ -6274,6 +6380,10 @@
       headerLogout.title = t('logout');
       headerLogout.setAttribute('aria-label', t('logout'));
     }
+    if (headerPlanBadge) {
+      headerPlanBadge.style.display = hasUser ? 'inline-flex' : 'none';
+    }
+    updateHeaderPlanBadge();
   }
 
   function hasGuestLocalData() {
@@ -6361,6 +6471,7 @@
 
     if (state === 'loggedOut') {
       isLoggedIn = false;
+      setCurrentUserPlan('free', { persistCloud: false });
       if (authStatus) authStatus.textContent = t('authLoggedOutPrompt');
       if (loginBtn) loginBtn.style.display = '';
       if (logoutBtn) logoutBtn.style.display = 'none';
@@ -6376,6 +6487,7 @@
 
     if (state === 'loggedIn') {
       const userName = getAuthDisplayName(user);
+      syncPlanFromStorage();
       if (authStatus) authStatus.textContent = t('authLoggedInAs', { user: userName });
       if (loginBtn) loginBtn.style.display = 'none';
       if (logoutBtn) logoutBtn.style.display = '';
@@ -6396,6 +6508,12 @@
     try {
       await window.FirebaseService.loadForUser(resolvedUser);
       hydrateStateFromCloud();
+      syncPlanFromStorage();
+      if (window.FirebaseService?.setUserPlan && !getCloudValue('plan', null)) {
+        window.FirebaseService.setUserPlan(currentUserPlan).catch((err) => {
+          console.warn('User plan bootstrap save failed', err);
+        });
+      }
       applyTheme(currentTheme);
       updateLanguage(currentLang || 'ja');
       updateCurrency(currentCurrency);
