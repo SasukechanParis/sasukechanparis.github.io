@@ -989,9 +989,6 @@
   const mobileHeaderMenuButton = document.getElementById('btn-mobile-header-menu');
   const cloudSyncIndicator = document.getElementById('cloud-sync-indicator');
   const cloudSyncLabel = document.getElementById('cloud-sync-label');
-  const headerUserBadge = document.getElementById('header-user-badge');
-  const headerUserAvatar = document.getElementById('header-user-avatar');
-  const headerUserName = document.getElementById('header-user-name');
   const listView = $('#list-view');
   const calendarView = $('#calendar-view');
   const calendarFilterInputs = $$('.calendar-filter-input');
@@ -5916,8 +5913,13 @@
 
   function setCloudSyncIndicator(state = 'local', customMessage = '') {
     cloudSyncState = state;
+    const statusLabel = customMessage || getCloudSyncStatusLabel(state);
     if (cloudSyncIndicator) cloudSyncIndicator.dataset.state = state;
-    if (cloudSyncLabel) cloudSyncLabel.textContent = customMessage || getCloudSyncStatusLabel(state);
+    if (cloudSyncIndicator) {
+      cloudSyncIndicator.title = statusLabel;
+      cloudSyncIndicator.setAttribute('aria-label', statusLabel);
+    }
+    if (cloudSyncLabel) cloudSyncLabel.textContent = statusLabel;
   }
 
   function getAuthDisplayName(user) {
@@ -5928,22 +5930,6 @@
     const headerLogout = document.getElementById('btn-header-logout');
     const isGuest = getLocalValue(LOCAL_GUEST_MODE_KEY, false) === true;
     const hasUser = !!user;
-    if (headerUserBadge) headerUserBadge.style.display = hasUser ? 'inline-flex' : 'none';
-    if (headerUserName) {
-      const displayName = hasUser ? getAuthDisplayName(user) : (isGuest ? t('authLoggedInUserFallback') : '');
-      const uid = String(user?.uid || '').trim();
-      headerUserName.textContent = displayName;
-      headerUserName.title = uid ? `${displayName}\nUID: ${uid}` : displayName;
-    }
-    if (headerUserAvatar) {
-      if (hasUser && user?.photoURL) {
-        headerUserAvatar.src = user.photoURL;
-      } else {
-        headerUserAvatar.src = 'iconpholio.png';
-      }
-      headerUserAvatar.alt = hasUser ? getAuthDisplayName(user) : '';
-      headerUserAvatar.style.visibility = hasUser ? 'visible' : 'hidden';
-    }
     if (headerLogout) {
       headerLogout.style.display = hasUser && !isGuest ? '' : 'none';
       headerLogout.title = t('logout');
