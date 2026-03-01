@@ -422,16 +422,19 @@ body {
 
 .header-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
   margin-left: 0;
-  gap: 6px;
+  gap: 8px;
   align-items: center;
-  row-gap: 8px;
+  row-gap: 0;
   flex: 1 0 100%;
   min-width: 0;
   max-width: none;
-  padding-top: 2px;
+  padding-top: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
 }
 
 .header-actions > * {
@@ -454,11 +457,15 @@ body {
 .header-actions .btn-secondary,
 .header-actions .btn-primary {
   min-width: fit-content;
-  padding: 0 12px;
+  padding: 0 10px;
   height: 34px;
   line-height: 34px;
   font-size: clamp(0.74rem, 1.0vw, 0.82rem);
   flex-shrink: 1;
+}
+
+.header-actions #btn-header-logout {
+  display: none !important;
 }
 
 .header-actions select {
@@ -506,6 +513,7 @@ html[lang="fr"] .header-actions select {
   border-radius: 999px;
   background: #9ca3af;
   flex: 0 0 auto;
+  animation: none;
 }
 
 .cloud-sync-label {
@@ -513,15 +521,30 @@ html[lang="fr"] .header-actions select {
 }
 
 .cloud-sync-indicator[data-state="syncing"] .cloud-sync-dot {
-  background: #f59e0b;
+  background: #FFC107;
+  animation: cloudSyncPulse 1.05s ease-in-out infinite;
 }
 
 .cloud-sync-indicator[data-state="ready"] .cloud-sync-dot {
-  background: #22c55e;
+  background: #4CAF50;
+  animation: none;
 }
 
 .cloud-sync-indicator[data-state="error"] .cloud-sync-dot {
-  background: #ef4444;
+  background: #F44336;
+  animation: none;
+}
+
+@keyframes cloudSyncPulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.88);
+  }
 }
 
 #btn-header-logout {

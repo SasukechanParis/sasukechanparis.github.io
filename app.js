@@ -5911,13 +5911,21 @@
     return t('cloudSyncStatusLocal');
   }
 
+  function getCloudSyncTooltipLabel(state, fallbackLabel = '') {
+    if (state === 'ready') return 'クラウド同期済み';
+    if (state === 'syncing') return 'クラウド同期中...';
+    if (state === 'error') return '同期エラー：再ログインしてください';
+    return fallbackLabel || 'ローカル保存中';
+  }
+
   function setCloudSyncIndicator(state = 'local', customMessage = '') {
     cloudSyncState = state;
     const statusLabel = customMessage || getCloudSyncStatusLabel(state);
+    const tooltipLabel = getCloudSyncTooltipLabel(state, statusLabel);
     if (cloudSyncIndicator) cloudSyncIndicator.dataset.state = state;
     if (cloudSyncIndicator) {
-      cloudSyncIndicator.title = statusLabel;
-      cloudSyncIndicator.setAttribute('aria-label', statusLabel);
+      cloudSyncIndicator.title = tooltipLabel;
+      cloudSyncIndicator.setAttribute('aria-label', tooltipLabel);
     }
     if (cloudSyncLabel) cloudSyncLabel.textContent = statusLabel;
   }
