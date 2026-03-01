@@ -467,6 +467,25 @@
     return t(DEFAULT_INVOICE_MESSAGE_KEY);
   }
 
+  function getInvoiceCountryProfiles() {
+    const profiles = window.INVOICE_COUNTRY_PROFILES;
+    if (!profiles || typeof profiles !== 'object') return {};
+    return profiles;
+  }
+
+  function getInvoiceCountryProfile(lang = currentLang) {
+    const profiles = getInvoiceCountryProfiles();
+    return profiles[lang] || profiles.en || {
+      code: 'US',
+      currency: 'USD',
+      defaultTaxRate: 10,
+      taxLabel: 'Tax',
+      legalSectionTitle: 'Legal Information',
+      legalSectionHint: '',
+      legalFields: [],
+    };
+  }
+
   function refreshUiAfterLanguageChange() {
     renderTable();
     renderWorkflowStatusLegend();
@@ -1357,7 +1376,10 @@
   const CURRENCY_CONFIG = {
     USD: { symbol: '$', locale: 'en-US' },
     JPY: { symbol: '¥', locale: 'ja-JP' },
-    EUR: { symbol: '€', locale: 'de-DE' },
+    EUR: { symbol: '€', locale: 'fr-FR' },
+    KRW: { symbol: '₩', locale: 'ko-KR' },
+    CNY: { symbol: '¥', locale: 'zh-CN' },
+    TWD: { symbol: 'NT$', locale: 'zh-TW' },
   };
 
   let currentCurrency = getCloudValue(CURRENCY_KEY, getLocalValue(CURRENCY_KEY, 'USD'));
@@ -2275,7 +2297,7 @@
   // ===== Financial Helpers =====
   function getTaxSettings() {
     const defaults = {
-      enabled: false,
+      enabled: true,
       rate: 10,
       label: 'Tax',
       included: false,
@@ -2286,6 +2308,10 @@
       bank: '',
       invoiceTemplate: 'modern',
       invoiceFooterMessage: getDefaultInvoiceMessage(),
+      invoiceLogoDataUrl: '',
+      invoiceStampDataUrl: '',
+      invoiceRegionCode: '',
+      legalFieldValues: {},
     };
 
     return { ...defaults, ...(getCloudValue(TAX_SETTINGS_KEY, {}) || {}) };
@@ -5205,6 +5231,7 @@
 
   // ===== Invoice Builder =====
   let invoiceBuilderCustomerId = null;
+  let invoicePreviewDraftData = null;
 
   function getDefaultInvoiceItems(customer) {
     return [{
@@ -5222,6 +5249,46 @@
     })).filter(item => item.description && item.quantity > 0);
   }
 
+  function calculateInvoiceTotalsForBuilder(subtotalRaw) {
+    const subtotal = Math.max(0, Number(subtotalRaw) || 0);
+    const settings = getTaxSettings();
+    const isTaxEnabled = settings.enabled !== false;
+    const taxRate = Math.max(0, Number(settings.rate) || 0);
+    const isTaxIncluded = settings.included === true;
+    const taxLabel = settings.label || getInvoiceCountryProfile(currentLang).taxLabel || 'Tax';
+
+    if (!isTaxEnabled || taxRate <= 0) {
+      return {
+        subtotal,
+        tax: 0,
+        total: subtotal,
+        taxRate,
+        taxLabel,
+      };
+    }
+
+    if (isTaxIncluded) {
+      const preTax = subtotal / (1 + taxRate / 100);
+      const tax = subtotal - preTax;
+      return {
+        subtotal: preTax,
+        tax,
+        total: subtotal,
+        taxRate,
+        taxLabel,
+      };
+    }
+
+    const tax = subtotal * (taxRate / 100);
+    return {
+      subtotal,
+      tax,
+      total: subtotal + tax,
+      taxRate,
+      taxLabel,
+    };
+  }
+
   function updateInvoiceBuilderSummary() {
     const customer = customers.find(x => x.id === invoiceBuilderCustomerId);
     if (!customer) return;
@@ -5234,15 +5301,14 @@
     })));
 
     const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
-    const amounts = calculateTax(subtotal);
-    const settings = getTaxSettings();
+    const amounts = calculateInvoiceTotalsForBuilder(subtotal);
 
     const summary = document.getElementById('invoice-builder-summary');
     if (!summary) return;
 
     summary.innerHTML = `
       <div class="invoice-summary-row"><span>${t('invoicePdfSubtotal')}</span><strong>${formatCurrency(amounts.subtotal)}</strong></div>
-      <div class="invoice-summary-row"><span>${settings.label || 'Tax'}</span><strong>${formatCurrency(amounts.tax)}</strong></div>
+      <div class="invoice-summary-row"><span>${escapeHtml(amounts.taxLabel)} (${amounts.taxRate}%)</span><strong>${formatCurrency(amounts.tax)}</strong></div>
       <div class="invoice-summary-row invoice-summary-total"><span>${t('invoicePdfTotal')}</span><strong>${formatCurrency(amounts.total)}</strong></div>
     `;
   }
@@ -5336,6 +5402,129 @@
     setTimeout(() => { modal.style.display = 'none'; }, 300);
   };
 
+  function handleInvoiceDuePlus14Click() {
+    const issueDateInput = document.getElementById('invoice-issue-date');
+    const dueDateInput = document.getElementById('invoice-due-date');
+    if (!dueDateInput) return;
+    const baseDate = issueDateInput?.value ? new Date(issueDateInput.value) : new Date();
+    if (Number.isNaN(baseDate.getTime())) return;
+    baseDate.setDate(baseDate.getDate() + 14);
+    dueDateInput.value = baseDate.toISOString().slice(0, 10);
+  }
+
+  function collectInvoiceBuilderDraftData() {
+    const customer = customers.find(c => c.id === invoiceBuilderCustomerId);
+    if (!customer) return null;
+
+    const rows = Array.from(document.querySelectorAll('.invoice-item-row'));
+    const items = normalizeInvoiceItems(rows.map(row => ({
+      description: row.querySelector('.invoice-item-desc').value,
+      quantity: row.querySelector('.invoice-item-qty').value,
+      unitPrice: row.querySelector('.invoice-item-unit').value,
+    })));
+
+    if (!items.length) {
+      showToast(t('invoiceLineItemRequired'), 'error');
+      return null;
+    }
+
+    return {
+      customer,
+      items,
+      issueDate: document.getElementById('invoice-issue-date')?.value || '',
+      dueDate: document.getElementById('invoice-due-date')?.value || '',
+      senderName: document.getElementById('invoice-sender-name')?.value?.trim() || '',
+      recipientName: document.getElementById('invoice-recipient-name')?.value?.trim() || '',
+      senderContact: document.getElementById('invoice-sender-contact')?.value?.trim() || '',
+      recipientContact: document.getElementById('invoice-recipient-contact')?.value?.trim() || '',
+      message: document.getElementById('invoice-message')?.value?.trim() || getDefaultInvoiceMessage(),
+    };
+  }
+
+  function persistInvoiceDraftToCustomer(draft) {
+    const customer = draft.customer;
+    customer.invoiceItems = draft.items;
+    customer.invoiceIssueDate = draft.issueDate;
+    customer.invoiceDueDate = draft.dueDate;
+    customer.invoiceSenderName = draft.senderName;
+    customer.invoiceRecipientName = draft.recipientName;
+    customer.invoiceSenderContact = draft.senderContact;
+    customer.invoiceRecipientContact = draft.recipientContact;
+    customer.invoiceMessage = draft.message;
+
+    const settings = getTaxSettings();
+    saveTaxSettings({
+      ...settings,
+      invoiceFooterMessage: draft.message,
+    });
+    saveInvoiceSenderProfile({
+      name: draft.senderName,
+      contact: draft.senderContact,
+    });
+    customer.updatedAt = new Date().toISOString();
+    saveCustomers(customers);
+  }
+
+  function openInvoicePreviewModal() {
+    const draft = collectInvoiceBuilderDraftData();
+    if (!draft) return;
+    if (typeof window.buildInvoicePreviewMarkup !== 'function') {
+      showToast('印刷プレビューの生成に失敗しました。', 'error');
+      return;
+    }
+    invoicePreviewDraftData = draft;
+    const frame = document.getElementById('invoice-preview-frame');
+    const modal = document.getElementById('invoice-preview-modal');
+    if (!frame || !modal) return;
+
+    const markup = window.buildInvoicePreviewMarkup(draft.customer, 'invoice', {
+      items: draft.items,
+      issueDate: draft.issueDate,
+      dueDate: draft.dueDate,
+      senderName: draft.senderName,
+      recipientName: draft.recipientName,
+      senderContact: draft.senderContact,
+      recipientContact: draft.recipientContact,
+      message: draft.message,
+    });
+    frame.srcdoc = `<!doctype html><html lang="${escapeHtml(currentLang || 'en')}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#f3f4f6;">${markup}</body></html>`;
+    modal.style.display = 'flex';
+    setTimeout(() => modal.classList.add('active'), 10);
+  }
+
+  window.closeInvoicePreviewModal = function () {
+    const modal = document.getElementById('invoice-preview-modal');
+    if (!modal) return;
+    modal.classList.remove('active');
+    setTimeout(() => { modal.style.display = 'none'; }, 250);
+  };
+
+  function handleInvoicePreviewPrintClick() {
+    const frame = document.getElementById('invoice-preview-frame');
+    if (!frame?.contentWindow) return;
+    frame.contentWindow.focus();
+    frame.contentWindow.print();
+  }
+
+  function handleInvoicePreviewPdfDownloadClick() {
+    if (!invoicePreviewDraftData || typeof window.generateInvoicePDF !== 'function') {
+      showToast('PDFの出力データが見つかりません。', 'error');
+      return;
+    }
+    const draft = invoicePreviewDraftData;
+    persistInvoiceDraftToCustomer(draft);
+    window.generateInvoicePDF(draft.customer, 'invoice', {
+      items: draft.items,
+      issueDate: draft.issueDate,
+      dueDate: draft.dueDate,
+      senderName: draft.senderName,
+      recipientName: draft.recipientName,
+      senderContact: draft.senderContact,
+      recipientContact: draft.recipientContact,
+      message: draft.message,
+    });
+  }
+
   function handleAddInvoiceItemClick() {
     const container = document.getElementById('invoice-items-container');
     if (!container) return;
@@ -5349,50 +5538,20 @@
   }
 
   function handleGenerateCustomInvoiceClick() {
-    const customer = customers.find(c => c.id === invoiceBuilderCustomerId);
-    if (!customer || !window.generateInvoicePDF) return;
+    if (typeof window.generateInvoicePDF !== 'function') return;
+    const draft = collectInvoiceBuilderDraftData();
+    if (!draft) return;
+    persistInvoiceDraftToCustomer(draft);
 
-    const rows = Array.from(document.querySelectorAll('.invoice-item-row'));
-    const items = normalizeInvoiceItems(rows.map(row => ({
-      description: row.querySelector('.invoice-item-desc').value,
-      quantity: row.querySelector('.invoice-item-qty').value,
-      unitPrice: row.querySelector('.invoice-item-unit').value,
-    })));
-
-    if (!items.length) {
-      showToast(t('invoiceLineItemRequired'), 'error');
-      return;
-    }
-
-    customer.invoiceItems = items;
-    customer.invoiceIssueDate = document.getElementById('invoice-issue-date')?.value || '';
-    customer.invoiceDueDate = document.getElementById('invoice-due-date')?.value || '';
-    customer.invoiceSenderName = document.getElementById('invoice-sender-name')?.value?.trim() || '';
-    customer.invoiceRecipientName = document.getElementById('invoice-recipient-name')?.value?.trim() || '';
-    customer.invoiceSenderContact = document.getElementById('invoice-sender-contact')?.value?.trim() || '';
-    customer.invoiceRecipientContact = document.getElementById('invoice-recipient-contact')?.value?.trim() || '';
-    customer.invoiceMessage = document.getElementById('invoice-message')?.value?.trim() || getDefaultInvoiceMessage();
-    const settings = getTaxSettings();
-    saveTaxSettings({
-      ...settings,
-      invoiceFooterMessage: customer.invoiceMessage,
-    });
-    saveInvoiceSenderProfile({
-      name: customer.invoiceSenderName,
-      contact: customer.invoiceSenderContact,
-    });
-    customer.updatedAt = new Date().toISOString();
-    saveCustomers(customers);
-
-    window.generateInvoicePDF(customer, 'invoice', {
-      items,
-      issueDate: customer.invoiceIssueDate,
-      dueDate: customer.invoiceDueDate,
-      senderName: customer.invoiceSenderName,
-      recipientName: customer.invoiceRecipientName,
-      senderContact: customer.invoiceSenderContact,
-      recipientContact: customer.invoiceRecipientContact,
-      message: customer.invoiceMessage,
+    window.generateInvoicePDF(draft.customer, 'invoice', {
+      items: draft.items,
+      issueDate: draft.issueDate,
+      dueDate: draft.dueDate,
+      senderName: draft.senderName,
+      recipientName: draft.recipientName,
+      senderContact: draft.senderContact,
+      recipientContact: draft.recipientContact,
+      message: draft.message,
     });
     closeInvoiceBuilderModal();
   }
@@ -5534,10 +5693,114 @@
     }
   }
 
+  function renderInvoiceLegalFields(lang = currentLang, settings = getTaxSettings()) {
+    const profile = getInvoiceCountryProfile(lang);
+    const section = $('#invoice-legal-section');
+    const titleEl = $('#invoice-legal-section-title');
+    const captionEl = $('#invoice-legal-caption');
+    const container = $('#invoice-legal-fields');
+    if (!container) return;
+
+    const legalFields = Array.isArray(profile.legalFields) ? profile.legalFields : [];
+    const legalValues = settings?.legalFieldValues && typeof settings.legalFieldValues === 'object'
+      ? settings.legalFieldValues
+      : {};
+
+    if (titleEl) titleEl.textContent = profile.legalSectionTitle || 'Legal Information';
+    if (captionEl) captionEl.textContent = profile.legalSectionHint || '';
+    if (section) section.style.display = legalFields.length ? '' : 'none';
+
+    container.innerHTML = legalFields.map((field) => `
+      <div class="invoice-legal-field">
+        <label for="invoice-legal-${escapeHtml(field.key)}">${escapeHtml(field.label || field.key)}</label>
+        <input
+          type="text"
+          id="invoice-legal-${escapeHtml(field.key)}"
+          data-legal-field-key="${escapeHtml(field.key)}"
+          placeholder="${escapeHtml(field.placeholder || '')}"
+          value="${escapeHtml(legalValues[field.key] || '')}"
+        >
+      </div>
+    `).join('');
+  }
+
+  function getInvoiceLegalFieldValuesFromForm() {
+    const legalFieldValues = {};
+    document.querySelectorAll('#invoice-legal-fields [data-legal-field-key]').forEach((input) => {
+      const key = input.getAttribute('data-legal-field-key');
+      if (!key) return;
+      legalFieldValues[key] = String(input.value || '').trim();
+    });
+    return legalFieldValues;
+  }
+
+  function applyInvoiceLocaleDefaults(lang, options = {}) {
+    const { force = true } = options;
+    const profile = getInvoiceCountryProfile(lang);
+    const currentSettings = getTaxSettings();
+    const isFirstRegionInit = !currentSettings.invoiceRegionCode;
+    const shouldApplyLocaleDefaults = force || isFirstRegionInit;
+    const nextSettings = {
+      ...currentSettings,
+      rate: shouldApplyLocaleDefaults
+        ? Number(profile.defaultTaxRate ?? currentSettings.rate ?? 10)
+        : Number(currentSettings.rate ?? profile.defaultTaxRate ?? 10),
+      label: shouldApplyLocaleDefaults
+        ? (profile.taxLabel || currentSettings.label || 'Tax')
+        : (currentSettings.label || profile.taxLabel || 'Tax'),
+      invoiceRegionCode: profile.code || currentSettings.invoiceRegionCode || '',
+      legalFieldValues: { ...(currentSettings.legalFieldValues || {}) },
+    };
+
+    (profile.legalFields || []).forEach((field) => {
+      if (typeof nextSettings.legalFieldValues[field.key] !== 'string') {
+        nextSettings.legalFieldValues[field.key] = '';
+      }
+    });
+
+    saveTaxSettings(nextSettings);
+
+    const defaultCurrency = profile.currency;
+    if (
+      defaultCurrency
+      && CURRENCY_CONFIG[defaultCurrency]
+      && currentCurrency !== defaultCurrency
+      && shouldApplyLocaleDefaults
+    ) {
+      updateCurrency(defaultCurrency);
+    }
+  }
+
+  function setInvoiceAssetPreview(selector, dataUrl = '') {
+    const img = $(selector);
+    if (!img) return;
+    if (dataUrl) {
+      img.src = dataUrl;
+      img.style.display = 'inline-block';
+    } else {
+      img.removeAttribute('src');
+      img.style.display = 'none';
+    }
+  }
+
+  function readImageFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  let pendingInvoiceLogoDataUrl = '';
+  let pendingInvoiceStampDataUrl = '';
+
   function loadInvoiceSettings() {
     const settings = getTaxSettings();
     $('#tax-rate').value = settings.rate;
-    $('#tax-label').value = settings.label === 'Tax' || settings.label === 'VAT' || settings.label === 'GST' || settings.label === 'Sales Tax' || settings.label === '消費税' ? settings.label : 'Custom';
+    const taxLabelSelect = $('#tax-label');
+    const hasPresetTaxLabel = Array.from(taxLabelSelect?.options || []).some((option) => option.value === settings.label);
+    if (taxLabelSelect) taxLabelSelect.value = hasPresetTaxLabel ? settings.label : 'Custom';
 
     if ($('#tax-label').value === 'Custom') {
       $('#tax-label-custom').style.display = 'block';
@@ -5556,6 +5819,15 @@
     $('#invoice-bank').value = settings.bank || '';
     const templateSelect = $('#invoice-template');
     if (templateSelect) templateSelect.value = settings.invoiceTemplate || 'modern';
+    renderInvoiceLegalFields(currentLang, settings);
+    pendingInvoiceLogoDataUrl = settings.invoiceLogoDataUrl || '';
+    pendingInvoiceStampDataUrl = settings.invoiceStampDataUrl || '';
+    setInvoiceAssetPreview('#invoice-logo-preview', pendingInvoiceLogoDataUrl);
+    setInvoiceAssetPreview('#invoice-stamp-preview', pendingInvoiceStampDataUrl);
+    const logoInput = $('#invoice-logo-upload');
+    const stampInput = $('#invoice-stamp-upload');
+    if (logoInput) logoInput.value = '';
+    if (stampInput) stampInput.value = '';
   }
 
   function handleTaxEnabledChange(e) {
@@ -5566,9 +5838,48 @@
     $('#tax-label-custom').style.display = e.target.value === 'Custom' ? 'block' : 'none';
   }
 
+  async function handleInvoiceLogoUploadChange(event) {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+    try {
+      pendingInvoiceLogoDataUrl = await readImageFileAsDataUrl(file);
+      setInvoiceAssetPreview('#invoice-logo-preview', pendingInvoiceLogoDataUrl);
+    } catch (err) {
+      console.error('Invoice logo load failed', err);
+      showToast('ロゴ画像の読み込みに失敗しました。', 'error');
+    }
+  }
+
+  async function handleInvoiceStampUploadChange(event) {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+    try {
+      pendingInvoiceStampDataUrl = await readImageFileAsDataUrl(file);
+      setInvoiceAssetPreview('#invoice-stamp-preview', pendingInvoiceStampDataUrl);
+    } catch (err) {
+      console.error('Invoice stamp load failed', err);
+      showToast('印影画像の読み込みに失敗しました。', 'error');
+    }
+  }
+
+  function handleClearInvoiceLogoClick() {
+    pendingInvoiceLogoDataUrl = '';
+    setInvoiceAssetPreview('#invoice-logo-preview', '');
+    const input = $('#invoice-logo-upload');
+    if (input) input.value = '';
+  }
+
+  function handleClearInvoiceStampClick() {
+    pendingInvoiceStampDataUrl = '';
+    setInvoiceAssetPreview('#invoice-stamp-preview', '');
+    const input = $('#invoice-stamp-upload');
+    if (input) input.value = '';
+  }
+
   function handleSaveInvoiceSettings() {
     const label = $('#tax-label').value === 'Custom' ? $('#tax-label-custom').value : $('#tax-label').value;
     const currentSettings = getTaxSettings();
+    const profile = getInvoiceCountryProfile(currentLang);
     const settings = {
       enabled: $('#tax-enabled').checked,
       rate: Number($('#tax-rate').value),
@@ -5581,6 +5892,13 @@
       bank: $('#invoice-bank').value,
       invoiceTemplate: $('#invoice-template').value || 'modern',
       invoiceFooterMessage: currentSettings.invoiceFooterMessage || getDefaultInvoiceMessage(),
+      invoiceLogoDataUrl: pendingInvoiceLogoDataUrl || '',
+      invoiceStampDataUrl: pendingInvoiceStampDataUrl || '',
+      invoiceRegionCode: profile.code || currentSettings.invoiceRegionCode || '',
+      legalFieldValues: {
+        ...(currentSettings.legalFieldValues || {}),
+        ...getInvoiceLegalFieldValuesFromForm(),
+      },
     };
     saveTaxSettings(settings);
     showToast(t('msgSettingsSaved'));
@@ -5659,7 +5977,11 @@
   function handleLanguageSelectChange(event) {
     const selected = event?.target?.value;
     if (!selected) return;
+    applyInvoiceLocaleDefaults(selected, { force: true });
     updateUITS(selected);
+    if (settingsOverlay?.classList.contains('active')) {
+      loadInvoiceSettings();
+    }
     setMobileHeaderMenuOpen(false);
   }
 
@@ -5804,7 +6126,15 @@
     bindContractTemplateEventListeners();
     bindEventOnce($('#btn-confirm-delete'), 'click', handleConfirmDeleteClick, 'confirm-delete');
     bindEventOnce(document.getElementById('btn-add-invoice-item'), 'click', handleAddInvoiceItemClick, 'invoice-item-add');
+    bindEventOnce(document.getElementById('btn-preview-custom-invoice'), 'click', openInvoicePreviewModal, 'invoice-preview-open');
     bindEventOnce(document.getElementById('btn-generate-custom-invoice'), 'click', handleGenerateCustomInvoiceClick, 'invoice-generate-custom');
+    bindEventOnce(document.getElementById('btn-print-invoice-preview'), 'click', handleInvoicePreviewPrintClick, 'invoice-preview-print');
+    bindEventOnce(document.getElementById('btn-download-invoice-preview-pdf'), 'click', handleInvoicePreviewPdfDownloadClick, 'invoice-preview-pdf');
+    bindEventOnce(document.getElementById('btn-invoice-due-plus14'), 'click', handleInvoiceDuePlus14Click, 'invoice-due-plus14');
+    bindEventOnce(document.getElementById('invoice-logo-upload'), 'change', handleInvoiceLogoUploadChange, 'invoice-logo-upload');
+    bindEventOnce(document.getElementById('invoice-stamp-upload'), 'change', handleInvoiceStampUploadChange, 'invoice-stamp-upload');
+    bindEventOnce(document.getElementById('btn-clear-invoice-logo'), 'click', handleClearInvoiceLogoClick, 'invoice-logo-clear');
+    bindEventOnce(document.getElementById('btn-clear-invoice-stamp'), 'click', handleClearInvoiceStampClick, 'invoice-stamp-clear');
     bindEventOnce($('#tax-enabled'), 'change', handleTaxEnabledChange, 'tax-enabled-change');
     bindEventOnce($('#tax-label'), 'change', handleTaxLabelChange, 'tax-label-change');
     bindEventOnce($('#btn-save-invoice-settings'), 'click', handleSaveInvoiceSettings, 'tax-settings-save');
@@ -5836,6 +6166,7 @@
 
     // 2. Set defaults
     updateLanguage(currentLang || 'ja');
+    applyInvoiceLocaleDefaults(currentLang || 'ja', { force: false });
     updateCurrency(currentCurrency);
     if (ENABLE_STATS_FEATURES) {
       applyHeroMetricsConfig();

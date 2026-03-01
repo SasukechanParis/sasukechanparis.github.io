@@ -2760,7 +2760,113 @@ Tarif : {{total_price}}`,
     }
 };
 
+// Country/region specific invoice profiles.
+// To add a new market, copy one block and adjust code/currency/tax/legal fields.
+const INVOICE_COUNTRY_PROFILES = {
+    ja: {
+        code: 'JP',
+        currency: 'JPY',
+        defaultTaxRate: 10,
+        taxLabel: '消費税',
+        legalSectionTitle: '法定情報（日本）',
+        legalSectionHint: '適格請求書に必要な登録番号を入力してください。',
+        legalFields: [
+            {
+                key: 'invoiceRegistrationNumber',
+                label: '適格請求書登録番号（T番号）',
+                placeholder: 'T1234567890123',
+            },
+        ],
+    },
+    en: {
+        code: 'US',
+        currency: 'USD',
+        defaultTaxRate: 8.25,
+        taxLabel: 'Sales Tax',
+        legalSectionTitle: 'Legal Information',
+        legalSectionHint: 'Enter tax/business identifiers required for your state or country.',
+        legalFields: [
+            {
+                key: 'ein',
+                label: 'Business Tax ID (EIN)',
+                placeholder: '12-3456789',
+            },
+        ],
+    },
+    fr: {
+        code: 'FR',
+        currency: 'EUR',
+        defaultTaxRate: 20,
+        taxLabel: 'TVA',
+        legalSectionTitle: 'Informations legales (France)',
+        legalSectionHint: 'Renseignez les identifiants legaux obligatoires (SIRET/TVA).',
+        legalFields: [
+            {
+                key: 'siretNumber',
+                label: 'Numero SIRET',
+                placeholder: '123 456 789 00012',
+            },
+            {
+                key: 'tvaNumber',
+                label: 'Numero TVA intracommunautaire',
+                placeholder: 'FRXX123456789',
+            },
+        ],
+    },
+    "zh-CN": {
+        code: 'CN',
+        currency: 'CNY',
+        defaultTaxRate: 13,
+        taxLabel: '增值税',
+        legalSectionTitle: '法定信息（中国）',
+        legalSectionHint: '请填写开票所需的统一社会信用代码或税号。',
+        legalFields: [
+            {
+                key: 'socialCreditCode',
+                label: '统一社会信用代码',
+                placeholder: '913XXXXXXXXXXXXXXX',
+            },
+            {
+                key: 'taxpayerId',
+                label: '纳税人识别号',
+                placeholder: '请输入税号',
+            },
+        ],
+    },
+    "zh-TW": {
+        code: 'TW',
+        currency: 'TWD',
+        defaultTaxRate: 5,
+        taxLabel: '營業稅',
+        legalSectionTitle: '法定資訊（台灣）',
+        legalSectionHint: '請填寫統一編號等開立單據所需資訊。',
+        legalFields: [
+            {
+                key: 'uniformNumber',
+                label: '統一編號',
+                placeholder: '12345678',
+            },
+        ],
+    },
+    ko: {
+        code: 'KR',
+        currency: 'KRW',
+        defaultTaxRate: 10,
+        taxLabel: '부가세',
+        legalSectionTitle: '법적 정보 (대한민국)',
+        legalSectionHint: '세금계산서 발행에 필요한 사업자 정보를 입력하세요.',
+        legalFields: [
+            {
+                key: 'businessRegistrationNumber',
+                label: '사업자등록번호',
+                placeholder: '123-45-67890',
+            },
+        ],
+    },
+};
+
 // Export locales to window
 if (typeof window !== 'undefined') {
     window.LOCALE = LOCALE;
+    window.INVOICE_COUNTRY_PROFILES = INVOICE_COUNTRY_PROFILES;
 }
