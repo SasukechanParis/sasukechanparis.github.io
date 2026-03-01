@@ -1,0 +1,19 @@
+{
+  "name": "PhotoCRM Cloud",
+  "short_name": "PhotoCRM",
+  "description": "フォトグラファー向けクラウドCRM",
+  "lang": "ja",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0f0f1a",
+  "theme_color": "#8b5cf6",
+  "icons": [
+    {
+      "src": "iconpholio.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
