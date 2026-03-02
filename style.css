@@ -248,7 +248,7 @@ body {
   align-items: center;
   gap: 8px;
   min-width: 0;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
 }
 
 .header-right {
@@ -270,6 +270,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 8px;
+  min-width: 0;
 }
 
 .brand-logo-image {
@@ -288,24 +289,29 @@ body {
   color: var(--text-primary);
   line-height: 1.05;
   white-space: nowrap;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .header-left #languageSelect {
-  min-width: 120px;
+  min-width: 124px;
   max-width: 176px;
   height: 32px;
   line-height: 32px;
   padding: 0 8px;
   font-size: 0.76rem;
+  flex: 0 0 auto;
 }
 
 .header-left #currency-select {
-  min-width: 102px;
+  min-width: 108px;
   max-width: 136px;
   height: 32px;
   line-height: 32px;
   padding: 0 8px;
   font-size: 0.74rem;
+  flex: 0 0 auto;
 }
 
 .header-left #btn-settings {
@@ -442,12 +448,12 @@ body {
 .header-actions {
   display: flex;
   flex-wrap: nowrap;
-  justify-content: flex-start;
-  margin-left: 0;
+  justify-content: flex-end;
+  margin-left: auto;
   gap: 8px;
   align-items: center;
   row-gap: 0;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   min-width: 0;
   max-width: none;
   padding-top: 0;
@@ -549,6 +555,16 @@ html[lang="fr"] .header-actions {
   gap: 6px;
 }
 
+html[lang="ja"] .header-left,
+html[lang="en"] .header-left {
+  gap: 10px;
+}
+
+html[lang="ja"] .header-actions,
+html[lang="en"] .header-actions {
+  gap: 10px;
+}
+
 html[lang="fr"] .header-actions .btn,
 html[lang="fr"] .header-actions .ui-button-standard,
 html[lang="fr"] .header-actions .theme-toggle,
@@ -558,6 +574,22 @@ html[lang="fr"] .header-actions select {
   padding: 0 8px;
   font-size: 0.78rem;
   max-width: 146px;
+}
+
+html[lang="ja"] .header-actions .btn,
+html[lang="ja"] .header-actions .ui-button-standard,
+html[lang="ja"] .header-actions .theme-toggle,
+html[lang="ja"] .header-actions .btn-secondary,
+html[lang="ja"] .header-actions .btn-primary,
+html[lang="ja"] .header-actions select,
+html[lang="en"] .header-actions .btn,
+html[lang="en"] .header-actions .ui-button-standard,
+html[lang="en"] .header-actions .theme-toggle,
+html[lang="en"] .header-actions .btn-secondary,
+html[lang="en"] .header-actions .btn-primary,
+html[lang="en"] .header-actions select {
+  padding: 0 9px;
+  font-size: 0.8rem;
 }
 
 .header-actions .theme-toggle {
@@ -623,11 +655,27 @@ html[lang="fr"] .header-actions select {
 
 @media (max-width: 1380px) and (min-width: 769px) {
   .app-header {
-    gap: 8px;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
   }
 
   .brand-wordmark {
     font-size: 1.15rem;
+  }
+
+  .header-left {
+    flex: 1 1 100%;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+
+  .header-actions {
+    flex: 1 1 100%;
+    margin-left: 0;
+    justify-content: flex-start;
+    padding-top: 6px;
+    border-top: 1px dashed color-mix(in srgb, var(--border-color) 76%, transparent);
   }
 
   .header-actions .btn,
@@ -2109,6 +2157,7 @@ tbody tr:hover {
 
   .brand-wordmark {
     font-size: 1.08rem;
+    max-width: 96px;
   }
 
   .header-left #languageSelect {
@@ -2159,6 +2208,10 @@ tbody tr:hover {
     min-width: 40px;
     padding: 0 6px;
     font-size: 0.62rem;
+  }
+
+  .header-plan-usage {
+    display: none !important;
   }
 
   .mobile-header-menu-btn {
