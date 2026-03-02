@@ -43,12 +43,12 @@
     <!-- ===== Header ===== -->
     <header class="app-header">
       <div class="header-left">
-        <div class="logo logo-stack">
-          <div class="brand-unit">
-            <img src="iconpholio.png" alt="Pholio" class="brand-logo-image" />
+        <div class="logo">
+          <img src="iconpholio.png" alt="Pholio" class="brand-logo-image" />
+          <div class="brand-text-group">
             <span class="brand-wordmark">Pholio</span>
+            <span class="header-plan-badge" id="header-plan-badge" data-plan="free" style="display:none;">FREE</span>
           </div>
-          <span class="header-plan-badge" id="header-plan-badge" data-plan="free" style="display:none;">FREE</span>
         </div>
         <select id="languageSelect" class="btn btn-secondary btn-sm">
           <option value="en">🇺🇸 English</option>
@@ -78,6 +78,11 @@
           data-i18n-title="exportIcs">カレンダー連携 (iCal)</button>
         <button class="btn btn-secondary btn-sm" id="btn-export" title="売上集計 (CSV)" data-i18n="exportCsv"
           data-i18n-title="exportCsv">売上集計 (CSV)</button>
+      </div>
+      <div class="header-right">
+        <button class="btn btn-secondary btn-sm" id="btn-header-logout" style="display:none;" title="ログアウト">
+          <span class="btn-text" data-i18n="logout">ログアウト</span>
+        </button>
       </div>
     </header>
 
