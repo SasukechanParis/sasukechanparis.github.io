@@ -881,6 +881,54 @@ window.FirebaseService = {
     return { id: inquiryRef.id, createdAtIso };
   },
 
+  async saveSupportTicket(payload = {}) {
+    await ensureInitialized();
+    const user = auth.currentUser;
+    if (!user) throw new Error('not_logged_in');
+
+    const ticketRef = doc(collection(db, 'support_tickets'));
+    const createdAtIso = new Date().toISOString();
+    const safePayload = payload && typeof payload === 'object' ? payload : {};
+    const rawCategory = String(safePayload.category || 'bug').trim().toLowerCase();
+    const allowedCategories = new Set(['bug', 'question', 'feature_request']);
+    const category = allowedCategories.has(rawCategory) ? rawCategory : 'bug';
+    const osInfoPayload = safePayload.osInfo && typeof safePayload.osInfo === 'object'
+      ? safePayload.osInfo
+      : {};
+
+    const ticket = {
+      id: ticketRef.id,
+      userId: user.uid,
+      email: user.email || '',
+      displayName: user.displayName || '',
+      subject: String(safePayload.subject || '').trim(),
+      category,
+      message: String(safePayload.message || '').trim(),
+      language: String(safePayload.language || ''),
+      currency: String(safePayload.currency || ''),
+      osInfo: {
+        platform: String(osInfoPayload.platform || ''),
+        userAgent: String(osInfoPayload.userAgent || ''),
+        language: String(osInfoPayload.language || ''),
+        vendor: String(osInfoPayload.vendor || ''),
+        hardwareConcurrency: Number.isFinite(Number(osInfoPayload.hardwareConcurrency))
+          ? Number(osInfoPayload.hardwareConcurrency)
+          : null,
+        deviceMemory: Number.isFinite(Number(osInfoPayload.deviceMemory))
+          ? Number(osInfoPayload.deviceMemory)
+          : null,
+      },
+      status: 'pending',
+      ai_draft_reply: String(safePayload.ai_draft_reply || ''),
+      source: 'pholio_app',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      createdAtIso,
+    };
+    await setDoc(ticketRef, ticket, { merge: true });
+    return { id: ticketRef.id, createdAtIso };
+  },
+
   async signOut() {
     await ensureInitialized();
     setGoogleOAuthAccessToken('');

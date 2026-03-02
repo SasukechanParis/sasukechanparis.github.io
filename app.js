@@ -6408,6 +6408,65 @@
     setTimeout(() => { overlay.style.display = 'none'; }, 220);
   }
 
+  function getClientOsInfo() {
+    const nav = window.navigator || {};
+    const uaData = nav.userAgentData || null;
+    return {
+      platform: String(uaData?.platform || nav.platform || 'unknown'),
+      userAgent: String(nav.userAgent || ''),
+      language: String(nav.language || ''),
+      vendor: String(nav.vendor || ''),
+      hardwareConcurrency: Number.isFinite(Number(nav.hardwareConcurrency)) ? Number(nav.hardwareConcurrency) : null,
+      deviceMemory: typeof nav.deviceMemory === 'number' ? nav.deviceMemory : null,
+    };
+  }
+
+  function resetSupportTicketForm() {
+    const subjectInput = document.getElementById('support-ticket-subject');
+    const categorySelect = document.getElementById('support-ticket-category');
+    const messageInput = document.getElementById('support-ticket-message');
+    if (subjectInput) subjectInput.value = '';
+    if (categorySelect) categorySelect.value = 'bug';
+    if (messageInput) messageInput.value = '';
+  }
+
+  async function handleSupportTicketSubmit() {
+    const subject = String(document.getElementById('support-ticket-subject')?.value || '').trim();
+    const category = String(document.getElementById('support-ticket-category')?.value || 'bug').trim() || 'bug';
+    const message = String(document.getElementById('support-ticket-message')?.value || '').trim();
+
+    if (!subject || !message) {
+      showToast(t('supportValidation'), 'error');
+      return;
+    }
+
+    const user = window.FirebaseService?.getCurrentUser?.();
+    if (!user || typeof window.FirebaseService?.saveSupportTicket !== 'function') {
+      showToast(t('supportLoginRequired'), 'error');
+      return;
+    }
+
+    const payload = {
+      subject,
+      category,
+      message,
+      language: currentLang,
+      currency: currentCurrency,
+      osInfo: getClientOsInfo(),
+      status: 'pending',
+      ai_draft_reply: '',
+    };
+
+    try {
+      await window.FirebaseService.saveSupportTicket(payload);
+      resetSupportTicketForm();
+      showToast(t('supportSubmitSuccess'));
+    } catch (err) {
+      console.error('Support ticket submit failed', err);
+      showToast(t('supportSubmitFailed'), 'error');
+    }
+  }
+
   async function handleEnterpriseContactSubmit() {
     const teamName = String(document.getElementById('enterprise-contact-team-name')?.value || '').trim();
     const representativeName = String(document.getElementById('enterprise-contact-representative-name')?.value || '').trim();
@@ -6985,6 +7044,7 @@
     bindEventOnce(document.getElementById('enterprise-contact-overlay'), 'click', (event) => {
       if (event.target?.id === 'enterprise-contact-overlay') closeEnterpriseContactModal();
     }, 'enterprise-contact-overlay-close');
+    bindEventOnce(document.getElementById('btn-support-submit'), 'click', handleSupportTicketSubmit, 'support-ticket-submit');
     bindEventOnce(document.getElementById('add-item-btn'), 'click', () => addDynamicChargeItem(), 'add-extra-item-click');
     bindEventOnce(document.getElementById('btn-google-login'), 'click', handleGoogleLoginClick, 'google-login-banner');
     bindEventOnce(document.getElementById('btn-google-login-screen'), 'click', handleGoogleLoginClick, 'google-login-screen');
