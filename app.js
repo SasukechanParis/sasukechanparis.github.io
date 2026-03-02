@@ -30,6 +30,7 @@
   const USER_PLAN_KEY = 'photocrm_user_plan';
   const USER_BILLING_PROFILE_KEY = 'photocrm_user_billing_profile';
   const ENTERPRISE_CONTACT_REQUESTS_KEY = 'photocrm_enterprise_contact_requests';
+  const STRIPE_PENDING_PLAN_KEY = 'photocrm_stripe_pending_plan_update';
   const ADMIN_MANAGEMENT_EMAILS = new Set(['sasuke.photographe@gmail.com']);
   const GOOGLE_CALENDAR_DEFAULT_ID = 'sasuke.photographe@gmail.com';
   const LOCAL_GUEST_MODE_KEY = 'photocrm_local_guest_mode';
@@ -72,6 +73,11 @@
       extraMemberPrice: 0,
       maxMembers: null,
     },
+  });
+  const STRIPE_CHECKOUT_URLS = Object.freeze({
+    individual: 'https://checkout.stripe.com/c/pay/placeholder_individual',
+    small_team: 'https://checkout.stripe.com/c/pay/placeholder_small_team',
+    medium_team: 'https://checkout.stripe.com/c/pay/placeholder_medium_team',
   });
 
   const DASHBOARD_CARD_DEFINITIONS = [
@@ -6093,6 +6099,14 @@
   function handleSubscriptionPlanSelect(nextPlan) {
     const normalized = normalizeUserPlan(nextPlan);
     if (normalized === normalizeUserPlan(currentUserPlan)) return;
+    if (normalized === 'enterprise') {
+      handleSubscriptionPlanContactClick(normalized);
+      return;
+    }
+    if (normalized !== 'free') {
+      openStripeCheckoutForPlan(normalized);
+      return;
+    }
     setCurrentUserPlan(normalized, { persistCloud: true });
     renderSettings();
     renderPlanManagementSection();
@@ -6148,7 +6162,7 @@
     setTimeout(() => { overlay.style.display = 'none'; }, 220);
   }
 
-  function handleEnterpriseContactSubmit() {
+  async function handleEnterpriseContactSubmit() {
     const teamName = String(document.getElementById('enterprise-contact-team-name')?.value || '').trim();
     const representativeName = String(document.getElementById('enterprise-contact-representative-name')?.value || '').trim();
     const memberRange = String(document.getElementById('enterprise-contact-member-range')?.value || '').trim();
@@ -6160,21 +6174,76 @@
       return;
     }
 
-    const nextRequests = [
-      {
-        id: generateId(),
-        createdAt: new Date().toISOString(),
-        plan: normalizeUserPlan(selectedPlan),
-        teamName,
-        representativeName,
-        memberRange,
-        message,
-      },
-      ...getEnterpriseContactRequests(),
-    ];
+    const inquiryPayload = {
+      id: generateId(),
+      createdAt: new Date().toISOString(),
+      plan: normalizeUserPlan(selectedPlan),
+      teamName,
+      companyName: teamName,
+      representativeName,
+      memberRange,
+      message,
+    };
+    const nextRequests = [inquiryPayload, ...getEnterpriseContactRequests()];
     saveEnterpriseContactRequests(nextRequests);
-    showToast(t('enterpriseContactSubmitted'));
-    closeEnterpriseContactModal();
+
+    try {
+      if (window.FirebaseService?.saveEnterpriseInquiry) {
+        await window.FirebaseService.saveEnterpriseInquiry(inquiryPayload);
+      }
+      showToast(t('enterpriseContactSubmitted'));
+      closeEnterpriseContactModal();
+    } catch (err) {
+      console.error('Enterprise inquiry submit failed', err);
+      showToast('Inquiry submission failed. Please try again.', 'error');
+    }
+  }
+
+  function getStripeCheckoutUrlForPlan(plan) {
+    const normalized = normalizeUserPlan(plan);
+    return STRIPE_CHECKOUT_URLS[normalized] || '';
+  }
+
+  function buildStripeCheckoutUrl(plan) {
+    const normalized = normalizeUserPlan(plan);
+    const baseUrl = getStripeCheckoutUrlForPlan(normalized);
+    if (!baseUrl) return '';
+
+    const checkoutUrl = new URL(baseUrl);
+    const successUrl = new URL(window.location.origin + window.location.pathname);
+    successUrl.searchParams.set('checkout_status', 'success');
+    successUrl.searchParams.set('plan', normalized);
+    const cancelUrl = new URL(window.location.href);
+    cancelUrl.searchParams.delete('checkout_status');
+    cancelUrl.searchParams.delete('stripe_success');
+    cancelUrl.searchParams.delete('plan');
+
+    checkoutUrl.searchParams.set('plan', normalized);
+    checkoutUrl.searchParams.set('currency', currentCurrency);
+    checkoutUrl.searchParams.set('lang', currentLang || 'en');
+    checkoutUrl.searchParams.set('success_url', successUrl.toString());
+    checkoutUrl.searchParams.set('cancel_url', cancelUrl.toString());
+
+    const currentUser = window.FirebaseService?.getCurrentUser?.();
+    if (currentUser?.uid) checkoutUrl.searchParams.set('client_reference_id', currentUser.uid);
+    if (currentUser?.email) checkoutUrl.searchParams.set('customer_email', currentUser.email);
+    return checkoutUrl.toString();
+  }
+
+  function openStripeCheckoutForPlan(plan) {
+    const normalized = normalizeUserPlan(plan);
+    const checkoutUrl = buildStripeCheckoutUrl(normalized);
+    if (!checkoutUrl) {
+      showToast('Stripe Checkout URL is not configured.', 'error');
+      return;
+    }
+    saveLocalValue(STRIPE_PENDING_PLAN_KEY, {
+      plan: normalized,
+      requestedAt: new Date().toISOString(),
+      currency: currentCurrency,
+      lang: currentLang || 'en',
+    });
+    window.location.assign(checkoutUrl);
   }
 
   function renderPlanManagementSection() {
@@ -6824,6 +6893,7 @@
   let authUnsubscribe = null;
   let cloudSyncState = 'local';
   let mergePromptedUid = null;
+  let stripeCheckoutResultHandled = false;
 
   function getCloudSyncStatusLabel(state) {
     if (state === 'syncing') return t('cloudSyncStatusSyncing');
@@ -7000,6 +7070,57 @@
     }
   }
 
+  function consumePendingStripeCheckoutParams() {
+    const params = new URLSearchParams(window.location.search);
+    const hasSuccess = params.get('checkout_status') === 'success' || params.get('stripe_success') === '1';
+    if (!hasSuccess) return null;
+    const directPlan = String(params.get('plan') || '').trim();
+    const pending = getLocalValue(STRIPE_PENDING_PLAN_KEY, {});
+    const pendingPlan = String(pending?.plan || '').trim();
+    const chosenPlan = directPlan || pendingPlan;
+    if (!chosenPlan) return null;
+    return {
+      plan: normalizeUserPlan(chosenPlan),
+      rawPlan: chosenPlan,
+    };
+  }
+
+  function clearStripeCheckoutParams() {
+    const currentUrl = new URL(window.location.href);
+    const keys = ['checkout_status', 'stripe_success', 'plan', 'session_id'];
+    let changed = false;
+    keys.forEach((key) => {
+      if (currentUrl.searchParams.has(key)) {
+        currentUrl.searchParams.delete(key);
+        changed = true;
+      }
+    });
+    if (changed) {
+      const nextUrl = `${currentUrl.pathname}${currentUrl.search ? `?${currentUrl.searchParams.toString()}` : ''}${currentUrl.hash || ''}`;
+      window.history.replaceState({}, document.title, nextUrl);
+    }
+  }
+
+  async function applyStripeCheckoutResultIfNeeded(user) {
+    if (stripeCheckoutResultHandled) return;
+    const pending = consumePendingStripeCheckoutParams();
+    if (!pending || !pending.plan || !user || !window.FirebaseService?.setUserPlan) return;
+    stripeCheckoutResultHandled = true;
+
+    try {
+      await window.FirebaseService.setUserPlan(pending.plan);
+      setCurrentUserPlan(pending.plan, { persistCloud: false });
+      showToast(t('settingsSubscriptionUpdated', { plan: getPlanBadgeText(pending.plan) }));
+    } catch (err) {
+      console.error('Stripe checkout plan sync failed', err);
+      showToast('Plan update failed. Please contact support.', 'error');
+    } finally {
+      saveLocalValue(STRIPE_PENDING_PLAN_KEY, {});
+      clearStripeCheckoutParams();
+      if (settingsOverlay?.classList.contains('active')) renderPlanManagementSection();
+    }
+  }
+
   function getAppContainerElement() {
     const byId = document.getElementById('app-container');
     if (byId) return byId;
@@ -7154,6 +7275,7 @@
           setCloudSyncIndicator('syncing', `${t('cloudSyncStatusSyncing')} (${userName})`);
           maybeMergeGuestDataToCloud(user)
             .then(() => handleAuthState(user))
+            .then(() => applyStripeCheckoutResultIfNeeded(user))
             .then(() => setCloudSyncIndicator('ready'))
             .catch((err) => {
               console.error('Auth update error:', err);
