@@ -2160,10 +2160,6 @@ tbody tr:hover {
     display: flex;
   }
 
-  .header-actions {
-    row-gap: 8px;
-  }
-
   .header-actions .btn,
   .header-actions .ui-button-standard,
   .header-actions .theme-toggle,

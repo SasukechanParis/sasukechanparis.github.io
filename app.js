@@ -642,6 +642,14 @@
       }
     });
 
+    // Update alt attributes
+    document.querySelectorAll('[data-i18n-alt]').forEach(el => {
+      const key = el.getAttribute('data-i18n-alt');
+      if (key) {
+        el.setAttribute('alt', t(key));
+      }
+    });
+
     // Update language selector
     const langSelect = getLanguageSelectElement();
     if (langSelect) {
@@ -6102,7 +6110,7 @@
       setInvoiceAssetPreview('#invoice-logo-preview', pendingInvoiceLogoDataUrl);
     } catch (err) {
       console.error('Invoice logo load failed', err);
-      showToast('ロゴ画像の読み込みに失敗しました。', 'error');
+      showToast(t('invoiceLogoLoadFailed') || 'Failed to load logo image.', 'error');
     }
   }
 
@@ -6114,7 +6122,7 @@
       setInvoiceAssetPreview('#invoice-stamp-preview', pendingInvoiceStampDataUrl);
     } catch (err) {
       console.error('Invoice stamp load failed', err);
-      showToast('印影画像の読み込みに失敗しました。', 'error');
+      showToast(t('invoiceStampLoadFailed') || 'Failed to load stamp image.', 'error');
     }
   }
 
