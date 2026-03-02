@@ -1,9 +1,12 @@
 import { initializeApp, getApps, getApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import {
   getAuth,
+  multiFactor,
   setPersistence,
   browserLocalPersistence,
   GoogleAuthProvider,
+  TotpMultiFactorGenerator,
+  getMultiFactorResolver,
   signInWithPopup,
   signOut as firebaseSignOut,
   onAuthStateChanged,
@@ -83,6 +86,8 @@ const firebaseInitPromise = setPersistence(auth, browserLocalPersistence).catch(
 
 let redirectResolved = false;
 let initialAuthStatePromise = null;
+let pendingMfaSignInResolver = null;
+let pendingTotpEnrollment = null;
 let googleOAuthAccessToken = (() => {
   try {
     return localStorage.getItem(GOOGLE_OAUTH_ACCESS_TOKEN_KEY) || '';
@@ -643,6 +648,112 @@ function getAdminMfaState(user) {
       enrollmentTime: String(factor?.enrollmentTime || '').trim(),
     })),
   };
+}
+
+function mapMfaHint(hint) {
+  return {
+    uid: String(hint?.uid || '').trim(),
+    factorId: String(hint?.factorId || '').trim(),
+    displayName: String(hint?.displayName || '').trim(),
+    phoneNumber: String(hint?.phoneNumber || '').trim(),
+  };
+}
+
+function getPendingMfaChallenge() {
+  if (!pendingMfaSignInResolver) return null;
+  return {
+    required: true,
+    factorType: 'totp',
+    hintCount: Array.isArray(pendingMfaSignInResolver.hints) ? pendingMfaSignInResolver.hints.length : 0,
+    hints: (Array.isArray(pendingMfaSignInResolver.hints) ? pendingMfaSignInResolver.hints : [])
+      .map(mapMfaHint),
+    createdAtMs: Number(pendingMfaSignInResolver.__createdAtMs) || Date.now(),
+  };
+}
+
+async function resolvePendingMfaSignInCode(oneTimePassword = '', hintUid = '') {
+  const otp = String(oneTimePassword || '').trim();
+  if (!pendingMfaSignInResolver) throw new Error('mfa_no_pending_challenge');
+  if (!otp || otp.length < 6) throw new Error('mfa_invalid_code');
+  const resolver = pendingMfaSignInResolver;
+  const hints = Array.isArray(resolver.hints) ? resolver.hints : [];
+  const selectedHint = hints.find((hint) => String(hint?.uid || '') === String(hintUid || '').trim())
+    || hints.find((hint) => hint?.factorId === TotpMultiFactorGenerator.FACTOR_ID)
+    || hints[0];
+  if (!selectedHint) throw new Error('mfa_hint_not_found');
+  if (selectedHint.factorId !== TotpMultiFactorGenerator.FACTOR_ID) {
+    throw new Error('mfa_factor_not_supported');
+  }
+  const assertion = TotpMultiFactorGenerator.assertionForSignIn(selectedHint.uid, otp);
+  const result = await resolver.resolveSignIn(assertion);
+  pendingMfaSignInResolver = null;
+  return result;
+}
+
+function clearPendingMfaSignInChallenge() {
+  pendingMfaSignInResolver = null;
+}
+
+async function startTotpEnrollmentForCurrentAdmin(user, options = {}) {
+  if (!user) throw new Error('not_logged_in');
+  if (!isAdminUser(user)) throw new Error('not_admin');
+  const safeOptions = options && typeof options === 'object' ? options : {};
+  const issuer = String(safeOptions.issuer || 'Pholio').trim() || 'Pholio';
+  const accountName = String(safeOptions.accountName || user.email || 'admin').trim() || 'admin';
+  const session = await multiFactor(user).getSession();
+  const totpSecret = await TotpMultiFactorGenerator.generateSecret(session);
+  pendingTotpEnrollment = {
+    uid: user.uid,
+    issuer,
+    accountName,
+    secret: totpSecret,
+    createdAtMs: Date.now(),
+  };
+  return {
+    required: true,
+    issuer,
+    accountName,
+    secretKey: String(totpSecret.secretKey || '').trim(),
+    qrCodeUrl: String(totpSecret.generateQrCodeUrl(accountName, issuer) || '').trim(),
+  };
+}
+
+function getPendingTotpEnrollment() {
+  if (!pendingTotpEnrollment) return null;
+  return {
+    uid: pendingTotpEnrollment.uid,
+    issuer: pendingTotpEnrollment.issuer,
+    accountName: pendingTotpEnrollment.accountName,
+    secretKey: String(pendingTotpEnrollment.secret?.secretKey || '').trim(),
+    qrCodeUrl: String(pendingTotpEnrollment.secret?.generateQrCodeUrl(
+      pendingTotpEnrollment.accountName,
+      pendingTotpEnrollment.issuer
+    ) || '').trim(),
+  };
+}
+
+async function finalizeTotpEnrollmentForCurrentAdmin(user, oneTimePassword = '', displayName = 'Pholio Admin') {
+  if (!user) throw new Error('not_logged_in');
+  if (!isAdminUser(user)) throw new Error('not_admin');
+  if (!pendingTotpEnrollment || pendingTotpEnrollment.uid !== user.uid) {
+    throw new Error('totp_enrollment_not_started');
+  }
+  const otp = String(oneTimePassword || '').trim();
+  if (!otp || otp.length < 6) throw new Error('mfa_invalid_code');
+  const assertion = TotpMultiFactorGenerator.assertionForEnrollment(
+    pendingTotpEnrollment.secret,
+    otp,
+  );
+  await multiFactor(user).enroll(assertion, String(displayName || 'Pholio Admin').trim() || 'Pholio Admin');
+  pendingTotpEnrollment = null;
+  return {
+    enrolled: true,
+    mfa: getAdminMfaState(user),
+  };
+}
+
+function cancelTotpEnrollment() {
+  pendingTotpEnrollment = null;
 }
 
 async function createAdminSecureSession(user, options = {}) {
@@ -1566,20 +1677,35 @@ window.FirebaseService = {
     provider.setCustomParameters({ prompt: 'select_account' });
     provider.addScope(GOOGLE_CALENDAR_SCOPE);
     provider.addScope(GOOGLE_CALENDAR_READ_SCOPE);
+    clearPendingMfaSignInChallenge();
 
-    const result = await signInWithPopup(auth, provider);
-    const credential = GoogleAuthProvider.credentialFromResult(result);
-    setGoogleOAuthAccessToken(credential?.accessToken || '');
-    const syncResults = await Promise.allSettled([
-      syncUserProfileDoc(result.user),
-      syncAdminUserSummary(result.user),
-    ]);
-    syncResults.forEach((syncResult) => {
-      if (syncResult.status === 'rejected') {
-        console.warn('Post-login profile sync failed', syncResult.reason);
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      setGoogleOAuthAccessToken(credential?.accessToken || '');
+      const syncResults = await Promise.allSettled([
+        syncUserProfileDoc(result.user),
+        syncAdminUserSummary(result.user),
+      ]);
+      syncResults.forEach((syncResult) => {
+        if (syncResult.status === 'rejected') {
+          console.warn('Post-login profile sync failed', syncResult.reason);
+        }
+      });
+      return result;
+    } catch (err) {
+      const code = String(err?.code || '').trim();
+      if (code === 'auth/multi-factor-auth-required') {
+        try {
+          pendingMfaSignInResolver = getMultiFactorResolver(auth, err);
+          pendingMfaSignInResolver.__createdAtMs = Date.now();
+        } catch (resolverErr) {
+          console.warn('Failed to initialize MFA resolver', resolverErr);
+          pendingMfaSignInResolver = null;
+        }
       }
-    });
-    return result;
+      throw err;
+    }
   },
 
   async signInWithPopup() {
@@ -1596,6 +1722,49 @@ window.FirebaseService = {
 
   getAdminMfaState() {
     return getAdminMfaState(auth.currentUser);
+  },
+
+  getPendingMfaChallenge() {
+    return getPendingMfaChallenge();
+  },
+
+  clearPendingMfaChallenge() {
+    clearPendingMfaSignInChallenge();
+  },
+
+  async resolvePendingMfaSignIn(oneTimePassword, hintUid = '') {
+    await ensureInitialized();
+    const result = await resolvePendingMfaSignInCode(oneTimePassword, hintUid);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    setGoogleOAuthAccessToken(credential?.accessToken || '');
+    const syncResults = await Promise.allSettled([
+      syncUserProfileDoc(result.user),
+      syncAdminUserSummary(result.user),
+    ]);
+    syncResults.forEach((syncResult) => {
+      if (syncResult.status === 'rejected') {
+        console.warn('Post-MFA profile sync failed', syncResult.reason);
+      }
+    });
+    return result;
+  },
+
+  async startAdminTotpEnrollment(options = {}) {
+    await ensureInitialized();
+    return startTotpEnrollmentForCurrentAdmin(auth.currentUser, options);
+  },
+
+  getPendingAdminTotpEnrollment() {
+    return getPendingTotpEnrollment();
+  },
+
+  cancelAdminTotpEnrollment() {
+    cancelTotpEnrollment();
+  },
+
+  async finalizeAdminTotpEnrollment(oneTimePassword, displayName = 'Pholio Admin') {
+    await ensureInitialized();
+    return finalizeTotpEnrollmentForCurrentAdmin(auth.currentUser, oneTimePassword, displayName);
   },
 
   async bootstrapAdminSecurity(payload = {}) {
@@ -1768,6 +1937,8 @@ window.FirebaseService = {
     if (isAdminUser(auth.currentUser)) {
       await endAdminSecureSession(auth.currentUser, 'sign_out').catch(() => {});
     }
+    clearPendingMfaSignInChallenge();
+    cancelTotpEnrollment();
     setGoogleOAuthAccessToken('');
     return firebaseSignOut(auth);
   },

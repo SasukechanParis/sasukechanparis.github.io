@@ -527,6 +527,7 @@
     const detailTotalPriceLabel = document.getElementById('detail-total-price')?.closest('.detail-item')?.querySelector('.detail-label');
     if (detailTotalPriceLabel) detailTotalPriceLabel.textContent = t('labelTotalPrice');
     setCloudSyncIndicator(cloudSyncState);
+    updateAdminTotpControlsVisibility();
     if (isCurrentUserAdmin() && !canAccessAdminPanel()) {
       const warningMessage = getAdminSecurityWarningMessage(adminSecurityContext.reason);
       if (warningMessage) setAdminDeviceWarning(warningMessage, 'error');
@@ -6701,6 +6702,9 @@
   function clearAdminSecurityState(reason = 'not_admin') {
     stopAdminSessionMonitor();
     clearPersistedAdminSecureSession();
+    mfaLoginChallengeInfo = null;
+    window.FirebaseService?.clearPendingMfaChallenge?.();
+    window.FirebaseService?.cancelAdminTotpEnrollment?.();
     adminDeviceState = { approved: [], pending: [] };
     adminSecurityContext = {
       isAdmin: false,
@@ -6719,6 +6723,135 @@
     } else {
       const warningMessage = getAdminSecurityWarningMessage(reason);
       setAdminDeviceWarning(warningMessage, warningMessage ? 'error' : 'warning');
+    }
+  }
+
+  function getAdminMfaStatusText() {
+    const mfaState = window.FirebaseService?.getAdminMfaState?.() || {};
+    if (!mfaState.required) return '';
+    if (mfaState.verified) {
+      return t('adminTotpEnabledStatus', { count: String(Number(mfaState.enrolledFactorCount) || 0) });
+    }
+    return t('adminTotpDisabledStatus');
+  }
+
+  function updateAdminTotpControlsVisibility() {
+    const section = document.getElementById('admin-mfa-settings-section');
+    const status = document.getElementById('admin-mfa-status-text');
+    if (!section || !status) return;
+    const isAdmin = isCurrentUserAdmin();
+    section.style.display = isAdmin ? '' : 'none';
+    if (!isAdmin) return;
+    status.textContent = getAdminMfaStatusText() || t('adminTotpSetupDesc');
+  }
+
+  function openModalOverlayById(overlayId) {
+    const overlay = document.getElementById(overlayId);
+    if (!overlay) return;
+    overlay.style.display = 'flex';
+    setTimeout(() => overlay.classList.add('active'), 10);
+  }
+
+  function closeModalOverlayById(overlayId) {
+    const overlay = document.getElementById(overlayId);
+    if (!overlay) return;
+    overlay.classList.remove('active');
+    setTimeout(() => {
+      overlay.style.display = 'none';
+    }, 220);
+  }
+
+  function closeAdminTotpModal() {
+    closeModalOverlayById('admin-totp-overlay');
+  }
+
+  function closeMfaLoginModal(clearChallenge = false) {
+    if (clearChallenge) {
+      mfaLoginChallengeInfo = null;
+      window.FirebaseService?.clearPendingMfaChallenge?.();
+    }
+    closeModalOverlayById('mfa-login-overlay');
+  }
+
+  function openMfaLoginModal(challenge = null) {
+    const hint = document.getElementById('mfa-login-hint');
+    const codeInput = document.getElementById('mfa-login-code');
+    mfaLoginChallengeInfo = challenge && typeof challenge === 'object'
+      ? challenge
+      : (window.FirebaseService?.getPendingMfaChallenge?.() || null);
+    if (hint) hint.textContent = t('mfaLoginHint');
+    if (codeInput) codeInput.value = '';
+    openModalOverlayById('mfa-login-overlay');
+  }
+
+  async function openAdminTotpSetupModal() {
+    const user = window.FirebaseService?.getCurrentUser?.();
+    if (!user || !isAdminEmail(user.email)) {
+      showToast(t('supportLoginRequired'), 'error');
+      return;
+    }
+    if (!window.FirebaseService?.startAdminTotpEnrollment) {
+      showToast(t('adminSecurityInitFailed'), 'error');
+      return;
+    }
+    try {
+      const enrollment = await window.FirebaseService.startAdminTotpEnrollment({
+        issuer: 'Pholio',
+        accountName: user.email || 'admin',
+      });
+      const secretInput = document.getElementById('admin-totp-secret');
+      const uriInput = document.getElementById('admin-totp-uri');
+      const codeInput = document.getElementById('admin-totp-code');
+      if (secretInput) secretInput.value = String(enrollment?.secretKey || '');
+      if (uriInput) uriInput.value = String(enrollment?.qrCodeUrl || '');
+      if (codeInput) codeInput.value = '';
+      openModalOverlayById('admin-totp-overlay');
+    } catch (err) {
+      console.error('TOTP enrollment start failed', err);
+      showToast(t('adminSecurityInitFailed'), 'error');
+    }
+  }
+
+  async function handleAdminTotpEnrollSubmit() {
+    const code = String(document.getElementById('admin-totp-code')?.value || '').trim();
+    if (!code || code.length < 6) {
+      showToast(t('mfaInvalidCode'), 'error');
+      return;
+    }
+    try {
+      await window.FirebaseService?.finalizeAdminTotpEnrollment?.(code, 'Pholio Admin');
+      showToast(t('adminTotpEnrollmentCompleted'));
+      closeAdminTotpModal();
+      updateAdminTotpControlsVisibility();
+      const currentUser = window.FirebaseService?.getCurrentUser?.();
+      if (currentUser && isAdminEmail(currentUser.email)) {
+        await initializeAdminSecurityForUser(currentUser);
+      }
+    } catch (err) {
+      console.error('TOTP enrollment finalize failed', err);
+      showToast(t('mfaCodeMismatch'), 'error');
+    }
+  }
+
+  async function handleMfaLoginSubmit() {
+    const code = String(document.getElementById('mfa-login-code')?.value || '').trim();
+    if (!code || code.length < 6) {
+      showToast(t('mfaInvalidCode'), 'error');
+      return;
+    }
+    if (!window.FirebaseService?.resolvePendingMfaSignIn) {
+      showToast(t('googleLoginFailed'), 'error');
+      return;
+    }
+    try {
+      const hintUid = String(mfaLoginChallengeInfo?.hints?.[0]?.uid || '').trim();
+      await window.FirebaseService.resolvePendingMfaSignIn(code, hintUid);
+      closeMfaLoginModal(false);
+      mfaLoginChallengeInfo = null;
+      showToast(t('mfaLoginSuccess'));
+    } catch (err) {
+      console.error('MFA sign-in resolve failed', err);
+      showToast(t('mfaCodeMismatch'), 'error');
     }
   }
 
@@ -6836,9 +6969,11 @@
   async function initializeAdminSecurityForUser(user) {
     adminDeviceContextCache = null;
     adminDeviceState = { approved: [], pending: [] };
+    updateAdminTotpControlsVisibility();
     if (!user || !isAdminEmail(user.email)) {
       clearAdminSecurityState('not_admin');
       updateAdminSettingsAvailability();
+      updateAdminTotpControlsVisibility();
       return;
     }
 
@@ -6895,11 +7030,13 @@
       }
       renderAdminDeviceTableRows();
       updateAdminSettingsAvailability();
+      updateAdminTotpControlsVisibility();
     } catch (err) {
       console.error('Admin security bootstrap failed', err);
       clearAdminSecurityState('admin_security_init_failed');
       setAdminDeviceWarning(getAdminSecurityWarningMessage('admin_security_init_failed'), 'error');
       updateAdminSettingsAvailability();
+      updateAdminTotpControlsVisibility();
     }
   }
 
@@ -7163,6 +7300,7 @@
       planBadge.dataset.plan = normalizeUserPlan(currentUserPlan);
     }
     if (planLabel) planLabel.textContent = currentPlanText;
+    updateAdminTotpControlsVisibility();
   }
 
   function handleSaveBillingProfile() {
@@ -7447,6 +7585,15 @@
       console.error('Firebase Auth Error:', err?.code, err?.message);
       console.error(err);
 
+      if (code === 'auth/multi-factor-auth-required') {
+        const challenge = window.FirebaseService?.getPendingMfaChallenge?.();
+        if (challenge) {
+          openMfaLoginModal(challenge);
+          showToast(t('mfaLoginPrompt'));
+          return;
+        }
+      }
+
       if (code === 'auth/operation-not-supported-in-this-environment') {
         activateLocalGuestMode(t('localGuestModeUnsupported'));
         alert(t('googleLoginUnavailableAlert'));
@@ -7463,6 +7610,8 @@
     mergePromptedUid = null;
     saveLocalValue(LOCAL_GUEST_MODE_KEY, true);
     clearAdminSecurityState('not_admin');
+    closeMfaLoginModal(true);
+    closeAdminTotpModal();
     setCloudSyncIndicator('syncing');
     Promise.resolve(window.FirebaseService?.signOut?.())
       .catch((err) => {
@@ -7571,6 +7720,19 @@
     bindEventOnce(document.getElementById('btn-admin-device-refresh'), 'click', refreshAdminDeviceList, 'admin-device-refresh');
     bindEventOnce(document.getElementById('admin-device-approved-body'), 'click', handleAdminDeviceActionClick, 'admin-device-approved-action');
     bindEventOnce(document.getElementById('admin-device-pending-body'), 'click', handleAdminDeviceActionClick, 'admin-device-pending-action');
+    bindEventOnce(document.getElementById('btn-admin-open-totp'), 'click', openAdminTotpSetupModal, 'admin-totp-open');
+    bindEventOnce(document.getElementById('btn-admin-totp-enroll'), 'click', handleAdminTotpEnrollSubmit, 'admin-totp-enroll');
+    bindEventOnce(document.getElementById('btn-admin-totp-cancel'), 'click', closeAdminTotpModal, 'admin-totp-cancel');
+    bindEventOnce(document.getElementById('btn-admin-totp-close'), 'click', closeAdminTotpModal, 'admin-totp-close');
+    bindEventOnce(document.getElementById('admin-totp-overlay'), 'click', (event) => {
+      if (event.target?.id === 'admin-totp-overlay') closeAdminTotpModal();
+    }, 'admin-totp-overlay-close');
+    bindEventOnce(document.getElementById('btn-mfa-login-submit'), 'click', handleMfaLoginSubmit, 'mfa-login-submit');
+    bindEventOnce(document.getElementById('btn-mfa-login-cancel'), 'click', () => closeMfaLoginModal(true), 'mfa-login-cancel');
+    bindEventOnce(document.getElementById('btn-mfa-login-close'), 'click', () => closeMfaLoginModal(true), 'mfa-login-close');
+    bindEventOnce(document.getElementById('mfa-login-overlay'), 'click', (event) => {
+      if (event.target?.id === 'mfa-login-overlay') closeMfaLoginModal(true);
+    }, 'mfa-login-overlay-close');
     bindEventOnce(document.getElementById('btn-save-contract-template'), 'click', handleSaveContractTemplate, 'contract-template-save');
     bindEventOnce(document.getElementById('btn-contract-preset-standard'), 'click', () => applyContractTemplatePreset('standard'), 'contract-preset-standard');
     bindEventOnce(document.getElementById('btn-contract-preset-bridal'), 'click', () => applyContractTemplatePreset('bridal'), 'contract-preset-bridal');
@@ -7689,6 +7851,7 @@
   let adminSessionTimeoutHandle = null;
   let adminSessionActivityBound = false;
   let adminSessionLastTouchedAt = 0;
+  let mfaLoginChallengeInfo = null;
 
   function getLocaleTextOrFallback(key, fallback = '') {
     const locale = window.LOCALE?.[currentLang];
@@ -8103,6 +8266,7 @@
       headerPlanUsage.style.display = 'none';
     }
     updateAdminSettingsAvailability();
+    updateAdminTotpControlsVisibility();
   }
 
   function hasGuestLocalData() {

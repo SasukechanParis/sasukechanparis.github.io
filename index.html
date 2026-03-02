@@ -721,6 +721,11 @@
               <span class="header-plan-badge" id="profile-plan-badge" data-plan="free">FREE</span>
               <span class="billing-plan-text" id="profile-plan-label">FREE</span>
             </div>
+            <div class="settings-section" id="admin-mfa-settings-section" style="display:none;">
+              <h4 data-i18n="adminTotpSetupTitle">認証アプリ連携</h4>
+              <p class="help-text" id="admin-mfa-status-text" data-i18n="adminTotpSetupDesc">管理者アカウント用の認証アプリ（TOTP）を設定します。</p>
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-admin-open-totp" data-i18n="adminTotpSetupButton">認証アプリを登録</button>
+            </div>
             <div class="form-group">
               <label for="profile-full-name" data-i18n="billingFullNameLabel">屋号 / 氏名</label>
               <input type="text" id="profile-full-name" data-i18n-placeholder="billingFullNamePlaceholder" placeholder="例: Pholio Studio">
@@ -1076,6 +1081,54 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" id="btn-enterprise-contact-cancel" data-i18n="cancel">Cancel</button>
         <button class="btn btn-primary" id="btn-enterprise-contact-submit" data-i18n="enterpriseContactSubmit">Submit</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="admin-totp-overlay" style="display:none;">
+    <div class="modal" style="max-width:560px;">
+      <div class="modal-header">
+        <h2 class="modal-title" data-i18n="adminTotpSetupTitle">認証アプリ連携</h2>
+        <button type="button" class="btn-close" id="btn-admin-totp-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="help-text" data-i18n="adminTotpSetupScanHint">QRコードをスキャンするか、下のシークレットキーを認証アプリに入力してください。</p>
+        <div class="form-group">
+          <label for="admin-totp-secret" data-i18n="adminTotpSecretLabel">シークレットキー</label>
+          <input type="text" id="admin-totp-secret" readonly value="">
+        </div>
+        <div class="form-group">
+          <label for="admin-totp-uri" data-i18n="adminTotpUriLabel">otpauth URI</label>
+          <textarea id="admin-totp-uri" readonly style="min-height:90px;"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="admin-totp-code" data-i18n="adminTotpCodeLabel">認証コード（6桁）</label>
+          <input type="text" id="admin-totp-code" maxlength="8" inputmode="numeric" autocomplete="one-time-code" data-i18n-placeholder="adminTotpCodePlaceholder" placeholder="123456">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="btn-admin-totp-cancel" data-i18n="cancel">キャンセル</button>
+        <button type="button" class="btn btn-primary" id="btn-admin-totp-enroll" data-i18n="adminTotpEnrollConfirmButton">登録を完了</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="mfa-login-overlay" style="display:none;">
+    <div class="modal" style="max-width:480px;">
+      <div class="modal-header">
+        <h2 class="modal-title" data-i18n="mfaLoginTitle">管理者二要素認証</h2>
+        <button type="button" class="btn-close" id="btn-mfa-login-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="help-text" id="mfa-login-hint" data-i18n="mfaLoginHint">認証アプリに表示された6桁コードを入力してください。</p>
+        <div class="form-group">
+          <label for="mfa-login-code" data-i18n="mfaLoginCodeLabel">認証コード</label>
+          <input type="text" id="mfa-login-code" maxlength="8" inputmode="numeric" autocomplete="one-time-code" data-i18n-placeholder="mfaLoginCodePlaceholder" placeholder="123456">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="btn-mfa-login-cancel" data-i18n="cancel">キャンセル</button>
+        <button type="button" class="btn btn-primary" id="btn-mfa-login-submit" data-i18n="mfaLoginVerifyButton">確認</button>
       </div>
     </div>
   </div>
