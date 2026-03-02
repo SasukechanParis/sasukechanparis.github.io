@@ -332,6 +332,10 @@ body {
   display: none;
 }
 
+.mobile-header-controls {
+  display: none;
+}
+
 .stats-toggle-btn {
   margin-top: 0;
   display: inline-flex;
@@ -528,10 +532,17 @@ body {
   line-height: 32px;
   font-size: clamp(0.74rem, 1.0vw, 0.82rem);
   flex-shrink: 1;
+  max-width: 168px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .header-actions select {
   flex-shrink: 1;
+  max-width: 148px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 html[lang="fr"] .header-actions {
@@ -544,8 +555,9 @@ html[lang="fr"] .header-actions .theme-toggle,
 html[lang="fr"] .header-actions .btn-secondary,
 html[lang="fr"] .header-actions .btn-primary,
 html[lang="fr"] .header-actions select {
-  padding: 0 10px;
-  font-size: 0.85rem;
+  padding: 0 8px;
+  font-size: 0.78rem;
+  max-width: 146px;
 }
 
 .header-actions .theme-toggle {
@@ -2100,18 +2112,29 @@ tbody tr:hover {
   }
 
   .header-left #languageSelect {
-    min-width: 96px;
-    max-width: 112px;
-    width: 112px;
-    font-size: 0.7rem;
-    padding: 0 8px;
+    display: none;
+  }
+
+  .header-left #currency-select {
+    display: none;
   }
 
   .header-left #btn-settings {
+    width: 32px;
+    min-width: 32px;
     height: 32px;
-    line-height: 32px;
-    padding: 0 8px;
-    font-size: 0.72rem;
+    padding: 0;
+    font-size: 0;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .header-left #btn-settings::before {
+    content: "⚙";
+    font-size: 0.95rem;
+    line-height: 1;
   }
 
   .header-left .theme-toggle {
@@ -2177,6 +2200,13 @@ tbody tr:hover {
     display: flex;
   }
 
+  .mobile-header-controls {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+
   .header-actions .btn,
   .header-actions .ui-button-standard,
   .header-actions .theme-toggle,
@@ -2185,9 +2215,12 @@ tbody tr:hover {
   .header-actions select {
     width: 100%;
     min-width: 0;
+    max-width: none;
     justify-content: flex-start;
     padding: 0 12px;
     font-size: 0.82rem;
+    text-overflow: clip;
+    overflow: visible;
   }
 
   .list-columns-trigger {
@@ -2396,10 +2429,11 @@ tbody tr:hover {
   }
 
   .header-left #languageSelect {
-    min-width: 82px;
-    max-width: 94px;
-    width: 94px;
-    padding: 0 6px;
+    display: none;
+  }
+
+  .header-plan-usage {
+    display: none !important;
   }
 }
 
@@ -2548,6 +2582,19 @@ tbody tr:hover {
   background: rgba(0, 0, 0, 0.05);
   justify-content: flex-end;
   border-top: 1px solid var(--border-color);
+}
+
+.modal-footer .btn {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[lang="fr"] .modal-footer .btn {
+  max-width: 220px;
+  padding-inline: 10px;
+  font-size: 0.82rem;
 }
 
 [data-theme="dark"] .modal-footer {
@@ -2931,6 +2978,7 @@ tbody tr:hover {
     width: 95%;
     max-width: 95%;
     max-height: 95vh;
+    max-height: calc(100dvh - 8px);
   }
 
   .form-grid {
@@ -2955,11 +3003,25 @@ tbody tr:hover {
 
   .modal-footer {
     flex-direction: column-reverse;
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    background: color-mix(in srgb, var(--bg-secondary) 92%, transparent);
+    backdrop-filter: blur(4px);
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
   }
 
   .modal-footer .btn {
     width: 100%;
     justify-content: center;
+    max-width: none;
+  }
+
+  .modal-body {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    padding-bottom: 20px;
   }
 
   .invoice-item-table-head,

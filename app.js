@@ -358,8 +358,25 @@
     getCloudValue(USER_PLAN_KEY, getCloudValue('plan', getLocalValue(USER_PLAN_KEY, 'free')))
   );
 
+  function getLanguageSelectElements() {
+    const elements = [
+      document.getElementById('languageSelect'),
+      document.getElementById('languageSelect-mobile'),
+      document.getElementById('lang-select'),
+    ].filter(Boolean);
+    return Array.from(new Set(elements));
+  }
+
   function getLanguageSelectElement() {
-    return document.getElementById('languageSelect') || document.getElementById('lang-select');
+    return getLanguageSelectElements()[0] || null;
+  }
+
+  function getHeaderCurrencySelectElements() {
+    const elements = [
+      document.getElementById('currency-select'),
+      document.getElementById('currency-select-mobile'),
+    ].filter(Boolean);
+    return Array.from(new Set(elements));
   }
 
   function getLanguageOptionDefinitions() {
@@ -821,16 +838,18 @@
   }
 
   function refreshLanguageOptionAvailability() {
-    const languageSelect = getLanguageSelectElement();
-    if (!languageSelect) return;
-    Array.from(languageSelect.options).forEach((option) => {
-      const allowed = canUseLanguageByPlan(option.value, currentUserPlan);
-      option.disabled = !allowed;
-      option.dataset.planLocked = allowed ? 'false' : 'true';
+    const languageSelects = getLanguageSelectElements();
+    if (languageSelects.length === 0) return;
+    languageSelects.forEach((languageSelect) => {
+      Array.from(languageSelect.options).forEach((option) => {
+        const allowed = canUseLanguageByPlan(option.value, currentUserPlan);
+        option.disabled = !allowed;
+        option.dataset.planLocked = allowed ? 'false' : 'true';
+      });
+      languageSelect.title = hasPaidPlanAccess(currentUserPlan)
+        ? ''
+        : (t('planFeatureLanguageLocked') || '');
     });
-    languageSelect.title = hasPaidPlanAccess(currentUserPlan)
-      ? ''
-      : (t('planFeatureLanguageLocked') || '');
   }
 
   function refreshUiAfterLanguageChange() {
@@ -907,12 +926,11 @@
     });
 
     // Update language selector
-    const langSelect = getLanguageSelectElement();
-    if (langSelect) {
+    getLanguageSelectElements().forEach((langSelect) => {
       langSelect.value = lang;
       langSelect.disabled = false;
       langSelect.title = '';
-    }
+    });
     const themeBtn = document.getElementById('btn-theme');
     if (themeBtn) {
       const themeTitle = currentTheme === 'dark' ? t('themeSwitchToLight') : t('themeSwitchToDark');
@@ -2639,8 +2657,9 @@
     currentCurrency = currency;
     saveLocalValue(CURRENCY_KEY, currency);
     saveCloudValue(CURRENCY_KEY, currency);
-    const sel = document.getElementById('currency-select');
-    if (sel) sel.value = currency;
+    getHeaderCurrencySelectElements().forEach((sel) => {
+      sel.value = currency;
+    });
 
     renderTable();
     updateDashboard();
@@ -6593,8 +6612,9 @@
     if (!selected) return;
     if (!canUseLanguageByPlan(selected, currentUserPlan)) {
       showToast(t('planFeatureLanguageLocked') || 'Upgrade required to use this language.', 'error');
-      const languageSelect = getLanguageSelectElement();
-      if (languageSelect) languageSelect.value = currentLang;
+      getLanguageSelectElements().forEach((languageSelect) => {
+        languageSelect.value = currentLang;
+      });
       return;
     }
     applyInvoiceLocaleDefaults(selected, { force: true });
@@ -6727,12 +6747,17 @@
   }
 
   function bindCoreUIEventListeners() {
-    bindEventOnce(getLanguageSelectElement(), 'change', handleLanguageSelectChange, 'lang-select-change');
-    bindEventOnce(document.getElementById('currency-select'), 'change', (event) => {
-      const nextCurrency = String(event?.target?.value || '').trim();
-      if (!nextCurrency) return;
-      updateCurrency(nextCurrency);
-    }, 'header-currency-select-change');
+    getLanguageSelectElements().forEach((selectEl, index) => {
+      bindEventOnce(selectEl, 'change', handleLanguageSelectChange, `lang-select-change-${index}`);
+    });
+    getHeaderCurrencySelectElements().forEach((currencySelectEl, index) => {
+      bindEventOnce(currencySelectEl, 'change', (event) => {
+        const nextCurrency = String(event?.target?.value || '').trim();
+        if (!nextCurrency) return;
+        updateCurrency(nextCurrency);
+        setMobileHeaderMenuOpen(false);
+      }, `header-currency-select-change-${index}`);
+    });
     bindEventOnce(document.getElementById('btn-theme'), 'click', toggleTheme, 'theme-toggle-click');
     if (ENABLE_STATS_FEATURES) {
       bindEventOnce(document.getElementById('btn-toggle-dashboard'), 'click', handleDashboardToggleButtonClick, 'dashboard-visibility-toggle');
