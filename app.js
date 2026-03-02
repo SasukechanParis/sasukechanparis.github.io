@@ -395,7 +395,8 @@
   }
 
   function getStudioDisplayName() {
-    return currentStudioName || 'Pholio';
+    const billingProfileName = normalizeStudioName(getBillingProfile()?.fullName || '');
+    return billingProfileName || currentStudioName || 'Pholio';
   }
 
   function updateHeaderBrandWordmark() {
@@ -410,6 +411,33 @@
     if (persistCloud) saveCloudValue(STUDIO_NAME_KEY, currentStudioName);
     else saveLocalValue(STUDIO_NAME_KEY, currentStudioName);
     updateHeaderBrandWordmark();
+  }
+
+  function canAccessTeamManagement(plan = currentUserPlan) {
+    const normalized = normalizeUserPlan(plan);
+    return normalized === 'small_team' || normalized === 'medium_team' || normalized === 'enterprise';
+  }
+
+  function updateTeamManagementTabAvailability() {
+    const teamTabButton = settingsOverlay?.querySelector?.('.settings-tab-btn[data-tab="team"]')
+      || document.querySelector('.settings-tab-btn[data-tab="team"]');
+    const teamTabContent = document.getElementById('settings-content-team');
+    if (!teamTabButton || !teamTabContent) return;
+
+    const allowed = canAccessTeamManagement(currentUserPlan);
+    teamTabButton.style.display = allowed ? '' : 'none';
+    teamTabButton.disabled = !allowed;
+    teamTabButton.setAttribute('aria-disabled', String(!allowed));
+
+    if (!allowed && teamTabButton.classList.contains('active')) {
+      teamTabButton.classList.remove('active');
+      teamTabContent.classList.remove('active');
+      const menuTab = settingsOverlay?.querySelector?.('.settings-tab-btn[data-tab="menu"]');
+      const menuContent = document.getElementById('settings-content-menu');
+      if (menuTab) menuTab.classList.add('active');
+      if (menuContent) menuContent.classList.add('active');
+    }
+    if (!allowed) teamTabContent.classList.remove('active');
   }
 
   function getHeaderCurrencySelectElements() {
@@ -885,6 +913,7 @@
       });
     }
     updateHeaderPlanBadge();
+    updateTeamManagementTabAvailability();
     refreshLanguageOptionAvailability();
     if (!canUseLanguageByPlan(currentLang, currentUserPlan)) {
       updateLanguage('ja');
@@ -918,6 +947,7 @@
     updateGraphToggleButtonLabel();
     updateHeroStatsToggleButtonLabel();
     renderSettings();
+    updateTeamManagementTabAvailability();
     syncDynamicItemRowsWithSettings();
   }
 
@@ -7351,6 +7381,8 @@
       invoiceRegistrationNumber,
       email,
     });
+    setStudioName(fullName, { persistCloud: true });
+    updateHeaderBrandWordmark();
     showToast(t('billingProfileSaved') || t('msgSettingsSaved'));
   }
 
@@ -7526,6 +7558,7 @@
     loadBillingProfileSettings();
     loadContractTemplateSettings();
     renderPlanManagementSection();
+    updateTeamManagementTabAvailability();
     updateAdminSettingsAvailability();
     if (canAccessAdminPanel()) {
       refreshAdminOverview();
@@ -7586,6 +7619,9 @@
         settingsOverlay.querySelectorAll('.settings-tab-content').forEach((c) => c.classList.remove('active'));
         btn.classList.add('active');
         const tab = btn.dataset.tab;
+        if (tab === 'team' && !canAccessTeamManagement(currentUserPlan)) {
+          return;
+        }
         $(`#settings-content-${tab}`)?.classList.add('active');
         if (tab === 'invoice') loadInvoiceSettings();
         if (tab === 'profile') loadBillingProfileSettings();
