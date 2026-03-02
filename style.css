@@ -2850,6 +2850,10 @@ tbody tr:hover {
   max-width: 760px;
 }
 
+.contact-modal {
+  max-width: 560px;
+}
+
 .legal-region-switch {
   display: flex;
   align-items: center;

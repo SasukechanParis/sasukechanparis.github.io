@@ -1510,6 +1510,10 @@
   const legalModalContent = document.getElementById('legal-modal-content');
   const legalModalCloseButton = document.getElementById('btn-legal-modal-close');
   const legalModalCloseFooterButton = document.getElementById('btn-legal-modal-close-footer');
+  const contactModalOverlay = document.getElementById('contact-modal-overlay');
+  const contactModalCloseButton = document.getElementById('btn-contact-modal-close');
+  const contactModalCloseFooterButton = document.getElementById('btn-contact-modal-close-footer');
+  const contactModalSubmitButton = document.getElementById('btn-contact-submit');
   const legalRegionTabs = Array.from(document.querySelectorAll('[data-legal-region]'));
   const legalRegionGlobalTab = document.getElementById('legal-region-tab-global');
   const legalRegionJapanTab = document.getElementById('legal-region-tab-japan');
@@ -1666,8 +1670,7 @@
     const legalContactEmail = getLegalLocaleTextOrFallback('legalContactEmail', '')
       || window.LOCALE?.ja?.legalContactEmail
       || '';
-    const studioBrandName = normalizeStudioName(currentStudioName || getCloudValue(STUDIO_NAME_KEY, getLocalValue(STUDIO_NAME_KEY, '')))
-      || 'Sasuke Photography';
+    const legalServiceName = getLegalLocaleTextOrFallback('legalServiceName', '本サービス');
     const defaultTitle = normalizedType === 'privacy' ? 'Privacy Policy' : 'Terms of Service';
     const fallbackContentKey = normalizedType === 'privacy' ? 'privacyModalContent' : 'termsModalContent';
     const rawContent = getLegalLocaleTextOrFallback(contentKey, getLegalLocaleTextOrFallback(fallbackContentKey, ''));
@@ -1678,7 +1681,7 @@
     legalModalContent.innerHTML = buildLegalModalBodyHtml(
       interpolateLegalTemplate(rawContent, {
         contactEmail: legalContactEmail,
-        brandName: studioBrandName,
+        brandName: legalServiceName,
       })
     );
   }
@@ -1715,7 +1718,99 @@
     setLegalRegion(region);
   }
 
+  function resetContactModalForm() {
+    const nameInput = document.getElementById('contact-form-name');
+    const emailInput = document.getElementById('contact-form-email');
+    const categorySelect = document.getElementById('contact-form-category');
+    const subjectInput = document.getElementById('contact-form-subject');
+    const messageInput = document.getElementById('contact-form-message');
+    if (nameInput) nameInput.value = '';
+    if (emailInput) emailInput.value = '';
+    if (categorySelect) categorySelect.value = 'question';
+    if (subjectInput) subjectInput.value = '';
+    if (messageInput) messageInput.value = '';
+  }
+
+  function openContactModal() {
+    if (!contactModalOverlay) return;
+    contactModalOverlay.style.display = 'flex';
+    window.requestAnimationFrame(() => {
+      contactModalOverlay.classList.add('active');
+    });
+  }
+
+  function closeContactModal() {
+    if (!contactModalOverlay) return;
+    contactModalOverlay.classList.remove('active');
+    window.setTimeout(() => {
+      if (!contactModalOverlay.classList.contains('active')) {
+        contactModalOverlay.style.display = 'none';
+      }
+    }, 220);
+  }
+
+  async function handleContactSubmit(event) {
+    event?.preventDefault?.();
+    const name = String(document.getElementById('contact-form-name')?.value || '').trim();
+    const email = String(document.getElementById('contact-form-email')?.value || '').trim();
+    const category = String(document.getElementById('contact-form-category')?.value || 'question').trim() || 'question';
+    const subject = String(document.getElementById('contact-form-subject')?.value || '').trim();
+    const message = String(document.getElementById('contact-form-message')?.value || '').trim();
+
+    if (!subject || !message) {
+      showToast(t('contactValidation'), 'error');
+      return;
+    }
+
+    const user = window.FirebaseService?.getCurrentUser?.();
+    if (!user || typeof window.FirebaseService?.saveSupportTicket !== 'function') {
+      showToast(t('contactLoginRequired'), 'error');
+      return;
+    }
+
+    const normalizedCategory = ['bug', 'question', 'feature_request'].includes(category)
+      ? category
+      : 'question';
+    const messageBody = [
+      name ? `${t('contactNameLabel')}: ${name}` : '',
+      email ? `${t('contactEmailLabel')}: ${email}` : '',
+      '',
+      message,
+    ].filter(Boolean).join('\n');
+
+    setActionButtonLoadingState(
+      contactModalSubmitButton,
+      true,
+      getLocaleTextOrFallback('btnSaving', '保存中...')
+    );
+    try {
+      await window.FirebaseService.saveSupportTicket({
+        subject,
+        category: normalizedCategory,
+        message: messageBody,
+        language: currentLang,
+        currency: currentCurrency,
+        osInfo: getClientOsInfo(),
+        status: 'pending',
+        ai_draft_reply: '',
+      });
+      resetContactModalForm();
+      closeContactModal();
+      showToast(t('contactSubmitSuccess'));
+    } catch (err) {
+      console.error('Contact ticket submit failed', err);
+      showToast(t('contactSubmitFailed'), 'error');
+    } finally {
+      setActionButtonLoadingState(
+        contactModalSubmitButton,
+        false,
+        getLocaleTextOrFallback('btnSaving', '保存中...')
+      );
+    }
+  }
+
   window.closeLegalModal = closeLegalModal;
+  window.closeContactModal = closeContactModal;
 
   function applyMinimalSafeModeUI() {
     if (!SAFE_MODE_MINIMAL_BOOT) return;
@@ -8028,6 +8123,12 @@
     document.querySelectorAll('[data-legal-doc]').forEach((link, index) => {
       bindEventOnce(link, 'click', handleLegalDocLinkClick, `legal-doc-link-${index}`);
     });
+    document.querySelectorAll('[data-contact-link]').forEach((link, index) => {
+      bindEventOnce(link, 'click', (event) => {
+        event.preventDefault();
+        openContactModal();
+      }, `contact-link-${index}`);
+    });
     legalRegionTabs.forEach((button, index) => {
       bindEventOnce(button, 'click', handleLegalRegionTabClick, `legal-region-tab-${index}`);
     });
@@ -8039,7 +8140,14 @@
     bindEventOnce(document, 'keydown', (event) => {
       if (event.key !== 'Escape') return;
       if (legalModalOverlay?.classList.contains('active')) closeLegalModal();
+      if (contactModalOverlay?.classList.contains('active')) closeContactModal();
     }, 'legal-modal-escape');
+    bindEventOnce(contactModalCloseButton, 'click', closeContactModal, 'contact-modal-close-top');
+    bindEventOnce(contactModalCloseFooterButton, 'click', closeContactModal, 'contact-modal-close-footer');
+    bindEventOnce(contactModalSubmitButton, 'click', handleContactSubmit, 'contact-submit');
+    bindEventOnce(contactModalOverlay, 'click', (event) => {
+      if (event?.target?.id === 'contact-modal-overlay') closeContactModal();
+    }, 'contact-modal-overlay-close');
     bindSettingsTabListeners();
   }
 
