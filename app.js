@@ -343,7 +343,8 @@
     mirrorToIndexedDB(`local:${key}`, value);
   }
 
-  function saveCloudValue(key, value) {
+  function saveCloudValue(key, value, options = {}) {
+    const propagateError = !!options?.propagateError;
     State.setJSON(key, value);
     mirrorToIndexedDB(`local:${key}`, value);
     mirrorToIndexedDB(`cloud:${key}`, value);
@@ -353,17 +354,23 @@
     try {
       const maybePromise = window.FirebaseService?.saveKey?.(key, value);
       if (maybePromise && typeof maybePromise.then === 'function') {
-        maybePromise.then(() => {
+        return maybePromise.then(() => {
           if (window.FirebaseService?.getCurrentUser?.()) setCloudSyncIndicator('ready');
           else setCloudSyncIndicator('local');
+          return true;
         }).catch((err) => {
           console.error(`Failed to save ${key}`, err);
           setCloudSyncIndicator('error');
+          if (propagateError) throw err;
+          return false;
         });
       }
+      return Promise.resolve(true);
     } catch (err) {
       console.error(`Failed to save ${key}`, err);
       setCloudSyncIndicator('error');
+      if (propagateError) return Promise.reject(err);
+      return Promise.resolve(false);
     }
   }
 
@@ -1057,7 +1064,14 @@
   function loadCustomers() {
     const loaded = getCloudValue(STORAGE_KEY, []);
     const records = Array.isArray(loaded) ? loaded : [];
-    return withCurrentUserId(records).map((record) => {
+    const currentUid = String(window.FirebaseService?.getCurrentUser?.()?.uid || '').trim();
+    const scopedRecords = currentUid
+      ? records.filter((record) => {
+        const ownerUid = String(record?.userId || '').trim();
+        return !ownerUid || ownerUid === currentUid;
+      })
+      : records;
+    return withCurrentUserId(scopedRecords).map((record) => {
       const normalizedExtraChargeItems = normalizeExtraChargeItems(record?.extraChargeItems);
       const fallbackExpense = toSafeNumber(record?.planCost, toSafeNumber(record?.planDetails?.planCost, 0))
         + normalizedExtraChargeItems.reduce((sum, item) => sum + toSafeNumber(item?.cost, 0), 0);
@@ -1078,7 +1092,7 @@
     return records.map((record) => ({ ...record, userId: uid }));
   }
 
-  function saveCustomers(data) {
+  function saveCustomers(data, options = {}) {
     const records = Array.isArray(data) ? data : [];
     const normalized = records.map((record) => {
       const normalizedExtraChargeItems = normalizeExtraChargeItems(record?.extraChargeItems);
@@ -1094,7 +1108,7 @@
         hairMakeupPrice: toSafeNumber(record?.hairMakeupPrice, 0),
       };
     });
-    saveCloudValue(STORAGE_KEY, withCurrentUserId(normalized));
+    return saveCloudValue(STORAGE_KEY, withCurrentUserId(normalized), options);
   }
 
   function loadOptions() {
@@ -1555,8 +1569,11 @@
     const normalizedType = normalizeLegalDocType(type);
     activeLegalDocType = normalizedType;
     const { titleKey, contentKey } = getLegalDocTranslationKeys(normalizedType);
+    const legalContactEmail = getLocaleTextOrFallback('legalContactEmail', '')
+      || window.LOCALE?.ja?.legalContactEmail
+      || '';
     legalModalTitle.textContent = t(titleKey);
-    legalModalContent.innerHTML = buildLegalModalBodyHtml(t(contentKey));
+    legalModalContent.innerHTML = buildLegalModalBodyHtml(t(contentKey, { contactEmail: legalContactEmail }));
   }
 
   function openLegalModal(type = 'terms') {
@@ -4983,122 +5000,231 @@
     }, 300);
   };
 
-  window.saveCustomer = function () {
+  function hasCloudAuthenticatedUser() {
+    return !!window.FirebaseService?.getCurrentUser?.()?.uid && getLocalValue(LOCAL_GUEST_MODE_KEY, false) !== true;
+  }
+
+  function cloneCustomerSnapshot(records = customers) {
+    try {
+      if (typeof structuredClone === 'function') return structuredClone(records);
+      return JSON.parse(JSON.stringify(records));
+    } catch {
+      return Array.isArray(records) ? records.map((record) => ({ ...(record || {}) })) : [];
+    }
+  }
+
+  function normalizeOperationErrorCode(err) {
+    return String(err?.code || err?.name || '').trim().toLowerCase();
+  }
+
+  function buildCustomerOperationErrorMessage(operationType, err) {
+    const code = normalizeOperationErrorCode(err);
+    if (code.includes('permission-denied') || code.includes('forbidden')) {
+      return getLocaleTextOrFallback('msgErrorPermissionDenied', '権限がありません。アクセス権をご確認ください。');
+    }
+    if (code.includes('unauthenticated') || code.includes('requires-auth') || code.includes('auth/')) {
+      return getLocaleTextOrFallback('msgErrorAuthRequired', 'ログイン状態を確認してください。再ログイン後にお試しください。');
+    }
+    if (
+      code.includes('network')
+      || code.includes('unavailable')
+      || code.includes('timeout')
+      || code.includes('deadline-exceeded')
+    ) {
+      return getLocaleTextOrFallback('msgErrorNetwork', '通信に失敗しました。ネットワーク接続を確認して再度お試しください。');
+    }
+    if (operationType === 'delete') {
+      return getLocaleTextOrFallback('msgCustomerDeleteFailed', '顧客データの削除に失敗しました。');
+    }
+    return getLocaleTextOrFallback('msgCustomerSaveFailed', '顧客データの保存に失敗しました。');
+  }
+
+  function setActionButtonLoadingState(button, isLoading, loadingText = '') {
+    if (!button) return;
+    if (isLoading) {
+      if (!button.dataset.originalText) {
+        button.dataset.originalText = button.textContent || '';
+      }
+      button.disabled = true;
+      button.classList.add('is-loading');
+      if (loadingText) button.textContent = loadingText;
+      return;
+    }
+    button.disabled = false;
+    button.classList.remove('is-loading');
+    if (button.dataset.originalText) {
+      button.textContent = button.dataset.originalText;
+    }
+  }
+
+  function assertCustomerWriteAccess(record = null) {
+    const currentUid = String(window.FirebaseService?.getCurrentUser?.()?.uid || '').trim();
+    if (!currentUid || !record || typeof record !== 'object') return;
+    const ownerUid = String(record.userId || '').trim();
+    if (ownerUid && ownerUid !== currentUid) {
+      const err = new Error('Cross-user write operation blocked.');
+      err.code = 'permission-denied';
+      throw err;
+    }
+  }
+
+  window.saveCustomer = async function () {
+    const saveButton = document.getElementById('btn-save');
+    if (saveButton?.disabled) return;
     const name = $('#form-customerName').value.trim();
     if (!name) { showToast(t('msgEnterName'), 'error'); return; }
+    const operationType = editingId ? 'update' : 'create';
     const previousCustomer = editingId
       ? (customers.find((entry) => entry.id === editingId) || null)
       : null;
+    const customersSnapshot = cloneCustomerSnapshot(customers);
 
-    const data = {};
-    fields.forEach(f => {
-      const el = $(`#form-${f.key}`);
-      if (!el) return;
-      if (f.type === 'checkbox') data[f.key] = el.checked;
-      else if (f.type === 'number') data[f.key] = el.value ? Number(el.value) : null;
-      else data[f.key] = el.value || '';
-    });
-    if (!isFormFieldVisible('assignedTo') && !String(data.assignedTo || '').trim()) {
-      data.assignedTo = resolveDefaultAssignedToValue();
+    if (editingId) assertCustomerWriteAccess(previousCustomer);
+    setActionButtonLoadingState(
+      saveButton,
+      true,
+      getLocaleTextOrFallback('btnSaving', '保存中...')
+    );
+
+    try {
+      const data = {};
+      fields.forEach(f => {
+        const el = $(`#form-${f.key}`);
+        if (!el) return;
+        if (f.type === 'checkbox') data[f.key] = el.checked;
+        else if (f.type === 'number') data[f.key] = el.value ? Number(el.value) : null;
+        else data[f.key] = el.value || '';
+      });
+      if (!isFormFieldVisible('assignedTo') && !String(data.assignedTo || '').trim()) {
+        data.assignedTo = resolveDefaultAssignedToValue();
+      }
+      data.workflowStatus = normalizeWorkflowStatus(data.workflowStatus);
+
+      const customFields = {};
+      loadCustomFieldDefinitions().forEach(field => {
+        const el = $(`#custom-field-${field.id}`);
+        if (el && el.value.trim()) customFields[field.id] = el.value.trim();
+      });
+      data.customFields = customFields;
+
+      const bookingConflict = findDoubleBookingConflict(data.shootingDate, editingId || '');
+      if (bookingConflict) {
+        const conflictCustomerName = String(bookingConflict.customer?.customerName || '—');
+        const conflictLocation = String(bookingConflict.customer?.location || t('icsUnset'));
+        const conflictTime = `${bookingConflict.slot.startLabel}〜${bookingConflict.slot.endLabel}`;
+        const proceed = window.confirm(t('doubleBookingConfirm', {
+          customer: conflictCustomerName,
+          date: bookingConflict.slot.dateKey,
+          time: conflictTime,
+          location: conflictLocation,
+        }));
+        if (!proceed) return;
+      }
+
+      const planSelect = $('#form-plan');
+      const selectedPlan = findPlanMasterByValue(planSelect?.value || '');
+      if (selectedPlan) {
+        data.planMasterId = selectedPlan.name;
+        data.plan = selectedPlan.name;
+      } else {
+        data.planMasterId = data.plan || '';
+      }
+
+      const planNameInput = $('#form-plan-name');
+      const adjustmentInput = $('#form-price-adjustment');
+      const totalPriceInput = $('#form-total-price');
+      const revenueInput = $('#form-revenue');
+      const expenseInput = $('#form-expense');
+      const planRevenue = getPlanBasePriceValue();
+      const planCost = toSafeNumber(getPlanBaseCostValue(), toSafeNumber(selectedPlan?.cost, 0));
+      const extraChargeItems = collectDynamicChargeItems();
+      rememberDynamicItemDetails(extraChargeItems);
+      const extraChargeBreakdown = extraChargeItems.reduce((sum, item) => {
+        sum.revenue += toSafeNumber(item.revenue, 0);
+        sum.cost += toSafeNumber(item.cost, 0);
+        return sum;
+      }, { revenue: 0, cost: 0 });
+      if (adjustmentInput) adjustmentInput.value = '0';
+      const totalFromBreakdown = planRevenue + extraChargeBreakdown.revenue;
+      const finalRevenue = toSafeNumber(updateGrandTotal(), totalFromBreakdown);
+      const fallbackExpense = planCost + extraChargeBreakdown.cost;
+      const finalExpense = toSafeNumber(expenseInput?.value, fallbackExpense);
+      if (expenseInput) expenseInput.value = String(finalExpense);
+      const finalProfit = finalRevenue - finalExpense;
+      if (totalPriceInput) totalPriceInput.value = String(finalRevenue);
+      if (revenueInput) revenueInput.value = String(finalRevenue);
+      updateProfitDisplay(finalProfit);
+      data.revenue = finalRevenue;
+      data.expense = finalExpense;
+      data.profit = finalProfit;
+      data.planCost = planCost;
+      data.extraChargeItems = extraChargeItems;
+      data.costumePrice = 0;
+      data.hairMakeupPrice = 0;
+      data.costume = '';
+      data.hairMakeup = '';
+
+      const rawPlanDetails = {
+        planName: planNameInput?.value?.trim() || selectedPlan?.name || '',
+        basePrice: planRevenue,
+        planCost,
+        options: '',
+        totalPrice: finalRevenue,
+      };
+      data.planDetails = normalizePlanDetails(rawPlanDetails, data.revenue);
+
+      if (editingId) {
+        const idx = customers.findIndex(c => c.id === editingId);
+        if (idx === -1) {
+          const notFoundError = new Error('Customer not found');
+          notFoundError.code = 'not-found';
+          throw notFoundError;
+        }
+        assertCustomerWriteAccess(customers[idx]);
+        customers[idx] = { ...customers[idx], ...data, updatedAt: new Date().toISOString() };
+      } else {
+        data.id = generateId();
+        data.createdAt = new Date().toISOString();
+        data.updatedAt = data.createdAt;
+        customers.push(data);
+      }
+
+      await saveCustomers(customers, { propagateError: hasCloudAuthenticatedUser() });
+
+      showToast(editingId ? t('msgUpdated') : t('msgCreated'));
+      const savedCustomerId = data.id || editingId;
+      runGoogleCalendarAutoSync(
+        savedCustomerId,
+        previousCustomer ? { ...previousCustomer } : null
+      ).catch((error) => {
+        console.error('Google Calendar sync scheduling failed', error);
+      });
+      closeModal();
+      renderTable();
+      if (calendarView.classList.contains('active')) renderCalendar();
+    } catch (err) {
+      customers = customersSnapshot;
+      saveCustomers(customers).catch(() => {});
+      const normalizedCode = normalizeOperationErrorCode(err);
+      console.error('[Customer Save] failed', {
+        operationType,
+        editingId,
+        code: normalizedCode || 'unknown',
+        message: err?.message || '',
+        error: err,
+      });
+      const userMessage = buildCustomerOperationErrorMessage(operationType, err);
+      showToast(
+        normalizedCode ? `${userMessage} (${normalizedCode})` : userMessage,
+        'error'
+      );
+    } finally {
+      setActionButtonLoadingState(
+        saveButton,
+        false,
+        getLocaleTextOrFallback('btnSaving', '保存中...')
+      );
     }
-    data.workflowStatus = normalizeWorkflowStatus(data.workflowStatus);
-
-    const customFields = {};
-    loadCustomFieldDefinitions().forEach(field => {
-      const el = $(`#custom-field-${field.id}`);
-      if (el && el.value.trim()) customFields[field.id] = el.value.trim();
-    });
-    data.customFields = customFields;
-
-    const bookingConflict = findDoubleBookingConflict(data.shootingDate, editingId || '');
-    if (bookingConflict) {
-      const conflictCustomerName = String(bookingConflict.customer?.customerName || '—');
-      const conflictLocation = String(bookingConflict.customer?.location || t('icsUnset'));
-      const conflictTime = `${bookingConflict.slot.startLabel}〜${bookingConflict.slot.endLabel}`;
-      const proceed = window.confirm(t('doubleBookingConfirm', {
-        customer: conflictCustomerName,
-        date: bookingConflict.slot.dateKey,
-        time: conflictTime,
-        location: conflictLocation,
-      }));
-      if (!proceed) return;
-    }
-
-    const planSelect = $('#form-plan');
-    const selectedPlan = findPlanMasterByValue(planSelect?.value || '');
-    if (selectedPlan) {
-      data.planMasterId = selectedPlan.name;
-      data.plan = selectedPlan.name;
-    } else {
-      data.planMasterId = data.plan || '';
-    }
-
-    const planNameInput = $('#form-plan-name');
-    const adjustmentInput = $('#form-price-adjustment');
-    const totalPriceInput = $('#form-total-price');
-    const revenueInput = $('#form-revenue');
-    const expenseInput = $('#form-expense');
-    const planRevenue = getPlanBasePriceValue();
-    const planCost = toSafeNumber(getPlanBaseCostValue(), toSafeNumber(selectedPlan?.cost, 0));
-    const extraChargeItems = collectDynamicChargeItems();
-    rememberDynamicItemDetails(extraChargeItems);
-    const extraChargeBreakdown = extraChargeItems.reduce((sum, item) => {
-      sum.revenue += toSafeNumber(item.revenue, 0);
-      sum.cost += toSafeNumber(item.cost, 0);
-      return sum;
-    }, { revenue: 0, cost: 0 });
-    if (adjustmentInput) adjustmentInput.value = '0';
-    const totalFromBreakdown = planRevenue + extraChargeBreakdown.revenue;
-    const finalRevenue = toSafeNumber(updateGrandTotal(), totalFromBreakdown);
-    const fallbackExpense = planCost + extraChargeBreakdown.cost;
-    const finalExpense = toSafeNumber(expenseInput?.value, fallbackExpense);
-    if (expenseInput) expenseInput.value = String(finalExpense);
-    const finalProfit = finalRevenue - finalExpense;
-    if (totalPriceInput) totalPriceInput.value = String(finalRevenue);
-    if (revenueInput) revenueInput.value = String(finalRevenue);
-    updateProfitDisplay(finalProfit);
-    data.revenue = finalRevenue;
-    data.expense = finalExpense;
-    data.profit = finalProfit;
-    data.planCost = planCost;
-    data.extraChargeItems = extraChargeItems;
-    data.costumePrice = 0;
-    data.hairMakeupPrice = 0;
-    data.costume = '';
-    data.hairMakeup = '';
-
-    const rawPlanDetails = {
-      planName: planNameInput?.value?.trim() || selectedPlan?.name || '',
-      basePrice: planRevenue,
-      planCost,
-      options: '',
-      totalPrice: finalRevenue,
-    };
-    data.planDetails = normalizePlanDetails(rawPlanDetails, data.revenue);
-
-    if (editingId) {
-      const idx = customers.findIndex(c => c.id === editingId);
-      if (idx !== -1) customers[idx] = { ...customers[idx], ...data, updatedAt: new Date().toISOString() };
-      showToast(t('msgUpdated'));
-    } else {
-      data.id = generateId();
-      data.createdAt = new Date().toISOString();
-      data.updatedAt = data.createdAt;
-      customers.push(data);
-      showToast(t('msgCreated'));
-    }
-
-    saveCustomers(customers);
-    const savedCustomerId = data.id || editingId;
-    runGoogleCalendarAutoSync(
-      savedCustomerId,
-      previousCustomer ? { ...previousCustomer } : null
-    ).catch((error) => {
-      console.error('Google Calendar sync scheduling failed', error);
-    });
-    closeModal();
-    renderTable();
-    if (calendarView.classList.contains('active')) renderCalendar();
   };
 
   // ===== Detail Panel =====
@@ -5175,14 +5301,52 @@
   };
   window.closeConfirm = window.closeConfirmModal;
 
-  function handleConfirmDeleteClick() {
+  async function handleConfirmDeleteClick() {
     if (deletingId) {
-      customers = customers.filter(c => c.id !== deletingId);
-      saveCustomers(customers);
-      showToast(t('msgDeleted'));
-      closeConfirmModal();
-      renderTable();
-      if (calendarView.classList.contains('active')) renderCalendar();
+      const deleteButton = document.getElementById('btn-confirm-delete');
+      if (deleteButton?.disabled) return;
+      const customersSnapshot = cloneCustomerSnapshot(customers);
+      setActionButtonLoadingState(
+        deleteButton,
+        true,
+        getLocaleTextOrFallback('btnDeleting', '削除中...')
+      );
+      try {
+        const target = customers.find(c => c.id === deletingId);
+        if (!target) {
+          const notFoundError = new Error('Customer not found');
+          notFoundError.code = 'not-found';
+          throw notFoundError;
+        }
+        assertCustomerWriteAccess(target);
+        customers = customers.filter(c => c.id !== deletingId);
+        await saveCustomers(customers, { propagateError: hasCloudAuthenticatedUser() });
+        showToast(t('msgDeleted'));
+        closeConfirmModal();
+        renderTable();
+        if (calendarView.classList.contains('active')) renderCalendar();
+      } catch (err) {
+        customers = customersSnapshot;
+        saveCustomers(customers).catch(() => {});
+        const normalizedCode = normalizeOperationErrorCode(err);
+        console.error('[Customer Delete] failed', {
+          deletingId,
+          code: normalizedCode || 'unknown',
+          message: err?.message || '',
+          error: err,
+        });
+        const userMessage = buildCustomerOperationErrorMessage('delete', err);
+        showToast(
+          normalizedCode ? `${userMessage} (${normalizedCode})` : userMessage,
+          'error'
+        );
+      } finally {
+        setActionButtonLoadingState(
+          deleteButton,
+          false,
+          getLocaleTextOrFallback('btnDeleting', '削除中...')
+        );
+      }
     }
   }
 

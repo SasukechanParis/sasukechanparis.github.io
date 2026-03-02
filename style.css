@@ -200,8 +200,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-wrap: wrap;
   gap: 10px;
   font-size: 0.82rem;
+  text-align: center;
 }
 
 .login-legal-links a {
@@ -222,11 +224,13 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-wrap: wrap;
   gap: 10px;
   margin-top: 14px;
   padding: 8px 12px;
   font-size: 0.82rem;
   color: var(--text-secondary);
+  text-align: center;
 }
 
 .app-legal-footer a {
@@ -604,6 +608,18 @@ body {
   text-overflow: ellipsis;
 }
 
+#btn-export {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#btn-export::before {
+  content: "📤";
+  font-size: 0.92em;
+  line-height: 1;
+}
+
 html[lang="fr"] .header-actions {
   gap: 6px;
 }
@@ -625,8 +641,17 @@ html[lang="fr"] .header-actions .btn-secondary,
 html[lang="fr"] .header-actions .btn-primary,
 html[lang="fr"] .header-actions select {
   padding: 0 8px;
-  font-size: 0.78rem;
+  font-size: clamp(0.72rem, 0.78vw, 0.78rem);
   max-width: 146px;
+}
+
+html[lang="fr"] .login-legal-links,
+html[lang="fr"] .app-legal-footer {
+  font-size: 0.76rem;
+}
+
+html[lang="fr"] .legal-modal .modal-title {
+  font-size: clamp(1rem, 2.15vw, 1.15rem);
 }
 
 html[lang="ja"] .header-actions .btn,
@@ -803,6 +828,12 @@ html[lang="en"] .header-actions select {
   box-shadow: var(--shadow-sm);
   transition: all var(--transition);
   white-space: nowrap;
+}
+
+.btn.is-loading {
+  opacity: 0.72;
+  cursor: wait;
+  pointer-events: none;
 }
 
 button,
@@ -2819,6 +2850,44 @@ tbody tr:hover {
   max-width: 760px;
 }
 
+.legal-region-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--bg-card) 82%, transparent);
+}
+
+.legal-region-tab {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.legal-region-tab:hover {
+  color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border-color));
+  background: color-mix(in srgb, var(--accent-glow) 60%, transparent);
+}
+
+.legal-region-tab.active {
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--accent-glow) 70%, transparent);
+}
+
 .legal-modal-content {
   max-height: min(68vh, 560px);
   overflow-y: auto;
@@ -2831,6 +2900,25 @@ tbody tr:hover {
 .legal-modal-content p {
   margin: 0 0 14px;
   white-space: pre-wrap;
+}
+
+.legal-modal-content .legal-doc-heading {
+  margin: 16px 0 8px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+}
+
+.legal-modal-content ul {
+  margin: 0 0 14px 20px;
+  padding: 0;
+  color: var(--text-primary);
+}
+
+.legal-modal-content li {
+  margin: 0 0 8px;
+  line-height: 1.65;
 }
 
 /* Modal Header */
