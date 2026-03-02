@@ -1840,7 +1840,7 @@
     } catch {
       // Ignore URL parsing failures.
     }
-    return getLocalValue(LOCAL_GUEST_MODE_KEY, false) === true;
+    return false;
   }
 
   function activateLocalGuestMode(message = '') {
@@ -8052,7 +8052,7 @@
   function handleGoogleLogoutClick() {
     isLoggedIn = false;
     mergePromptedUid = null;
-    saveLocalValue(LOCAL_GUEST_MODE_KEY, true);
+    saveLocalValue(LOCAL_GUEST_MODE_KEY, false);
     clearAdminSecurityState('not_admin');
     setCloudSyncIndicator('syncing');
     Promise.resolve(window.FirebaseService?.signOut?.())
@@ -8061,8 +8061,30 @@
       })
       .finally(() => {
         setCloudSyncIndicator('local');
-        activateLocalGuestMode(t('localGuestModeDefault'));
+        setAuthScreenState('loggedOut');
       });
+  }
+
+  async function handleRefreshClick() {
+    const refreshButton = document.getElementById('btn-refresh');
+    if (refreshButton?.disabled) return;
+    if (refreshButton) refreshButton.disabled = true;
+    try {
+      const authUser = window.FirebaseService?.getCurrentUser?.() || null;
+      if (authUser) {
+        setCloudSyncIndicator('syncing');
+        await handleAuthState(authUser);
+        showToast('最新データに更新しました。');
+        return;
+      }
+      window.location.reload();
+    } catch (err) {
+      console.error('Refresh failed', err);
+      showToast('更新に失敗したため再読み込みします。', 'error');
+      window.location.reload();
+    } finally {
+      if (refreshButton) refreshButton.disabled = false;
+    }
   }
 
   function bindCoreUIEventListeners() {
@@ -8132,6 +8154,7 @@
     bindEventOnce(document.getElementById('btn-google-login'), 'click', handleGoogleLoginClick, 'google-login-banner');
     bindEventOnce(document.getElementById('btn-google-login-screen'), 'click', handleGoogleLoginClick, 'google-login-screen');
     bindEventOnce(document.getElementById('btn-logout'), 'click', handleGoogleLogoutClick, 'google-logout');
+    bindEventOnce(document.getElementById('btn-refresh'), 'click', handleRefreshClick, 'manual-refresh');
     document.querySelectorAll('[data-legal-doc]').forEach((link, index) => {
       bindEventOnce(link, 'click', handleLegalDocLinkClick, `legal-doc-link-${index}`);
     });
@@ -8926,7 +8949,7 @@
 
         isLoggedIn = false;
         clearAdminSecurityState('not_admin');
-        if (hasGuestLocalData()) {
+        if (window.location.protocol === 'file:' && hasGuestLocalData()) {
           activateLocalGuestMode(t('localGuestModeDefault'));
           return;
         }
