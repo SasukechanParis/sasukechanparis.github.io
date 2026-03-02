@@ -232,8 +232,8 @@ body {
   justify-content: space-between;
   flex-wrap: wrap;
   width: 100%;
-  column-gap: 12px;
-  row-gap: 8px;
+  column-gap: 8px;
+  row-gap: 6px;
   margin-bottom: 0;
   padding-bottom: 14px;
   border-bottom: 1px solid var(--border-color);
@@ -244,7 +244,7 @@ body {
 .header-left {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
   flex: 1 1 auto;
 }
@@ -253,7 +253,7 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
   margin-left: auto;
   flex: 0 1 auto;
@@ -445,7 +445,7 @@ body {
 .header-auth-meta {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   min-width: 0;
   flex: 0 1 auto;
   justify-content: flex-end;
@@ -455,16 +455,16 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 52px;
-  height: 24px;
-  padding: 0 8px;
+  min-width: 46px;
+  height: 22px;
+  padding: 0 7px;
   border-radius: 999px;
   border: 1px solid var(--border-color);
   background: color-mix(in srgb, var(--primary-color) 14%, transparent);
   color: var(--primary-color);
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
   line-height: 1;
   white-space: nowrap;
 }
@@ -492,10 +492,6 @@ body {
   line-height: 34px;
   font-size: clamp(0.74rem, 1.0vw, 0.82rem);
   flex-shrink: 1;
-}
-
-.header-actions #btn-header-logout {
-  display: none !important;
 }
 
 .header-actions select {
@@ -577,23 +573,6 @@ html[lang="fr"] .header-actions select {
   }
 }
 
-#btn-header-logout {
-  height: 34px;
-  line-height: 34px;
-  padding: 0 10px;
-  gap: 4px;
-  flex: 0 0 auto;
-}
-
-#btn-header-logout .btn-icon {
-  font-size: 0.9rem;
-  line-height: 1;
-}
-
-#btn-header-logout .btn-text {
-  font-size: 0.76rem;
-}
-
 @media (max-width: 1380px) and (min-width: 769px) {
   .app-header {
     gap: 8px;
@@ -627,21 +606,10 @@ html[lang="fr"] .header-actions select {
     padding: 0;
   }
 
-  #btn-header-logout {
-    width: 34px;
-    min-width: 34px;
-    padding: 0;
-    justify-content: center;
-  }
-
-  #btn-header-logout .btn-text {
-    display: none;
-  }
-
   .header-plan-badge {
     min-width: 44px;
     padding: 0 6px;
-    font-size: 0.68rem;
+    font-size: 0.64rem;
   }
 }
 
@@ -2045,7 +2013,7 @@ tbody tr:hover {
   .app-header {
     position: relative;
     flex-direction: row;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
@@ -2055,6 +2023,15 @@ tbody tr:hover {
   .header-left {
     flex: 1 1 auto;
     gap: 6px;
+    min-width: 0;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+
+  .header-left::-webkit-scrollbar {
+    display: none;
   }
 
   .header-right {
@@ -2094,8 +2071,7 @@ tbody tr:hover {
     height: 32px;
   }
 
-  .cloud-sync-indicator,
-  #btn-header-logout {
+  .cloud-sync-indicator {
     width: 32px;
     min-width: 32px;
     height: 32px;
@@ -2103,15 +2079,14 @@ tbody tr:hover {
     justify-content: center;
   }
 
-  .cloud-sync-label,
-  #btn-header-logout .btn-text {
+  .cloud-sync-label {
     display: none;
   }
 
   .header-plan-badge {
-    min-width: 42px;
+    min-width: 40px;
     padding: 0 6px;
-    font-size: 0.66rem;
+    font-size: 0.62rem;
   }
 
   .mobile-header-menu-btn {
@@ -2168,17 +2143,6 @@ tbody tr:hover {
     justify-content: flex-start;
     padding: 0 12px;
     font-size: 0.82rem;
-  }
-
-  .header-actions #btn-header-logout {
-    width: 100%;
-    min-width: 0;
-    justify-content: flex-start;
-    padding: 0 12px;
-  }
-
-  .header-actions #btn-header-logout .btn-text {
-    display: inline;
   }
 
   .list-columns-trigger {

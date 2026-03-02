@@ -6310,7 +6310,6 @@
     bindEventOnce(document.getElementById('btn-google-login'), 'click', handleGoogleLoginClick, 'google-login-banner');
     bindEventOnce(document.getElementById('btn-google-login-screen'), 'click', handleGoogleLoginClick, 'google-login-screen');
     bindEventOnce(document.getElementById('btn-logout'), 'click', handleGoogleLogoutClick, 'google-logout');
-    bindEventOnce(document.getElementById('btn-header-logout'), 'click', handleGoogleLogoutClick, 'google-logout-header');
     bindSettingsTabListeners();
   }
 
@@ -6568,15 +6567,8 @@
   }
 
   function updateHeaderAuthUi(user = null) {
-    const headerLogout = document.getElementById('btn-header-logout');
     const headerPlanBadge = document.getElementById('header-plan-badge');
-    const isGuest = getLocalValue(LOCAL_GUEST_MODE_KEY, false) === true;
     const hasUser = !!user;
-    if (headerLogout) {
-      headerLogout.style.display = hasUser && !isGuest ? '' : 'none';
-      headerLogout.title = t('logout');
-      headerLogout.setAttribute('aria-label', t('logout'));
-    }
     if (headerPlanBadge) {
       headerPlanBadge.style.display = hasUser ? 'inline-flex' : 'none';
     }
