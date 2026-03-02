@@ -30,6 +30,7 @@ import {
 const GOOGLE_OAUTH_ACCESS_TOKEN_KEY = 'photocrm_google_oauth_access_token';
 const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
 const GOOGLE_CALENDAR_READ_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
+const SUPPORT_CONTACT_EMAIL = 'pholio.support@icloud.com';
 const USER_PLAN_KEY = 'photocrm_user_plan';
 const USER_BILLING_PROFILE_KEY = 'photocrm_user_billing_profile';
 const ADMIN_EMAILS = new Set(['sasuke.photographe@gmail.com']);
@@ -1888,6 +1889,7 @@ window.FirebaseService = {
       subject: String(safePayload.subject || '').trim(),
       category,
       message: String(safePayload.message || '').trim(),
+      notifyTo: String(safePayload.notifyTo || SUPPORT_CONTACT_EMAIL).trim() || SUPPORT_CONTACT_EMAIL,
       language: String(safePayload.language || ''),
       currency: String(safePayload.currency || ''),
       osInfo: {

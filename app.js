@@ -1,4 +1,4 @@
-// ===== PhotoCRM - Application Logic =====
+// ===== Pholio - Application Logic =====
 
 (function () {
   'use strict';
@@ -1721,13 +1721,9 @@
   function resetContactModalForm() {
     const nameInput = document.getElementById('contact-form-name');
     const emailInput = document.getElementById('contact-form-email');
-    const categorySelect = document.getElementById('contact-form-category');
-    const subjectInput = document.getElementById('contact-form-subject');
     const messageInput = document.getElementById('contact-form-message');
     if (nameInput) nameInput.value = '';
     if (emailInput) emailInput.value = '';
-    if (categorySelect) categorySelect.value = 'question';
-    if (subjectInput) subjectInput.value = '';
     if (messageInput) messageInput.value = '';
   }
 
@@ -1753,11 +1749,9 @@
     event?.preventDefault?.();
     const name = String(document.getElementById('contact-form-name')?.value || '').trim();
     const email = String(document.getElementById('contact-form-email')?.value || '').trim();
-    const category = String(document.getElementById('contact-form-category')?.value || 'question').trim() || 'question';
-    const subject = String(document.getElementById('contact-form-subject')?.value || '').trim();
     const message = String(document.getElementById('contact-form-message')?.value || '').trim();
 
-    if (!subject || !message) {
+    if (!message) {
       showToast(t('contactValidation'), 'error');
       return;
     }
@@ -1768,9 +1762,7 @@
       return;
     }
 
-    const normalizedCategory = ['bug', 'question', 'feature_request'].includes(category)
-      ? category
-      : 'question';
+    const supportSubject = getLocaleTextOrFallback('contactSubjectDefault', 'General Inquiry');
     const messageBody = [
       name ? `${t('contactNameLabel')}: ${name}` : '',
       email ? `${t('contactEmailLabel')}: ${email}` : '',
@@ -1785,9 +1777,10 @@
     );
     try {
       await window.FirebaseService.saveSupportTicket({
-        subject,
-        category: normalizedCategory,
+        subject: supportSubject,
+        category: 'question',
         message: messageBody,
+        notifyTo: getLegalLocaleTextOrFallback('legalContactEmail', 'pholio.support@icloud.com'),
         language: currentLang,
         currency: currentCurrency,
         osInfo: getClientOsInfo(),
@@ -7506,6 +7499,7 @@
       subject,
       category,
       message,
+      notifyTo: getLegalLocaleTextOrFallback('legalContactEmail', 'pholio.support@icloud.com'),
       language: currentLang,
       currency: currentCurrency,
       osInfo: getClientOsInfo(),

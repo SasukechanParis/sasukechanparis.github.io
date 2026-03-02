@@ -1,0 +1,27 @@
+{
+  "hosting": [
+    {
+      "target": "pholio",
+      "public": ".",
+      "ignore": [
+        "firebase.json",
+        ".firebaserc",
+        "firestore.rules",
+        ".github/**",
+        "**/.*",
+        "**/node_modules/**",
+        "**/*.bak",
+        "**/*firebase-adminsdk*.json",
+        "README.md",
+        "HANDOFF_DOCUMENT.md",
+        "PHASE*.md"
+      ],
+      "rewrites": [
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
+      ]
+    }
+  ]
+}
