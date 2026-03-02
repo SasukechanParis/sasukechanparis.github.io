@@ -79,11 +79,6 @@
         <button class="btn btn-secondary btn-sm" id="btn-export" title="売上集計 (CSV)" data-i18n="exportCsv"
           data-i18n-title="exportCsv">売上集計 (CSV)</button>
       </div>
-      <div class="header-right">
-        <button class="btn btn-secondary btn-sm" id="btn-header-logout" style="display:none;" title="ログアウト">
-          <span class="btn-text" data-i18n="logout">ログアウト</span>
-        </button>
-      </div>
     </header>
 
     <!-- ===== Dashboard ===== -->
@@ -648,6 +643,7 @@
         <div class="settings-tabs">
           <button class="settings-tab-btn active" data-tab="menu" data-i18n="settings">General</button>
           <button class="settings-tab-btn" data-tab="profile" data-i18n="billingProfileTab">Billing Profile</button>
+          <button class="settings-tab-btn" data-tab="plan" data-i18n="settingsPlanTab">Plan</button>
           <button class="settings-tab-btn" data-tab="invoice" data-i18n="invoiceSettings">Invoice & Tax</button>
           <button class="settings-tab-btn" data-tab="contract">契約書設定</button>
           <button class="settings-tab-btn" data-tab="team" data-i18n="teamManager">Team</button>
@@ -690,6 +686,10 @@
             </div>
             <button class="btn btn-primary" id="btn-save-billing-profile" data-i18n="billingSaveButton" style="width:100%; margin-top: 12px;">請求プロフィールを保存</button>
           </div>
+        </div>
+
+        <div class="settings-tab-content" id="settings-content-plan">
+          <div id="settings-plan-content-container"></div>
         </div>
 
         <div class="settings-tab-content" id="settings-content-invoice">

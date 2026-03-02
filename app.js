@@ -574,6 +574,121 @@
     return t('settingsSubscriptionSelectButton');
   }
 
+  function getSubscriptionPlanEntries() {
+    return [
+      {
+        key: 'free',
+        name: t('settingsSubscriptionFreeName'),
+        price: t('settingsSubscriptionFreePrice'),
+        summary: t('settingsSubscriptionFreeSummary', { limit: String(FREE_PLAN_LIMIT) }),
+      },
+      {
+        key: 'individual',
+        name: t('settingsSubscriptionIndividualName'),
+        price: t('settingsSubscriptionIndividualPrice'),
+        summary: t('settingsSubscriptionIndividualSummary'),
+      },
+      {
+        key: 'small_team',
+        name: t('settingsSubscriptionSmallTeamName'),
+        price: t('settingsSubscriptionSmallTeamPrice'),
+        summary: t('settingsSubscriptionSmallTeamSummary'),
+      },
+      {
+        key: 'medium_team',
+        name: t('settingsSubscriptionMediumTeamName'),
+        price: t('settingsSubscriptionMediumTeamPrice'),
+        summary: t('settingsSubscriptionMediumTeamSummary'),
+      },
+      {
+        key: 'enterprise',
+        name: t('settingsSubscriptionEnterpriseName'),
+        price: t('settingsSubscriptionEnterprisePrice'),
+        summary: t('settingsSubscriptionEnterpriseSummary'),
+      },
+    ];
+  }
+
+  function renderSubscriptionPlanSectionHtml(sectionId = 'settings-subscription-plan-section') {
+    const normalizedCurrentPlan = normalizeUserPlan(currentUserPlan);
+    const currentPlanBadgeText = getPlanBadgeText(normalizedCurrentPlan);
+    const currentTeamMemberCount = getCurrentTeamMemberCount();
+    const currentPlanEstimate = calculatePlanEstimate(normalizedCurrentPlan, currentTeamMemberCount);
+    const estimateSummaryText = getPlanEstimateSummaryText(normalizedCurrentPlan, currentTeamMemberCount);
+    const estimateExtraText = currentPlanEstimate.extraMembers > 0
+      ? t('settingsSubscriptionExtraMembers', { count: String(currentPlanEstimate.extraMembers) })
+      : '';
+    const estimateEnterpriseNoticeText = currentPlanEstimate.requiresEnterprise
+      ? t('settingsSubscriptionEnterpriseLimitNotice', { limit: String(currentPlanEstimate.maxMembers || 15) })
+      : '';
+    const estimateAddonPolicyText = normalizedCurrentPlan === 'small_team'
+      ? t('settingsSubscriptionAddonPerMember', { price: formatPlanMonthlyPrice(getPlanConfig('small_team').extraMemberPrice) })
+      : '';
+
+    const subscriptionPlanRows = getSubscriptionPlanEntries().map((planEntry) => {
+      const isCurrent = normalizedCurrentPlan === planEntry.key;
+      const isEnterpriseContact = planEntry.key === 'enterprise' && !isCurrent;
+      const actionLabel = isCurrent
+        ? t('settingsSubscriptionCurrentButton')
+        : (isEnterpriseContact ? t('settingsSubscriptionContactButton') : getSubscriptionActionLabel(planEntry.key, normalizedCurrentPlan));
+      return `
+        <div class="subscription-plan-card ${isCurrent ? 'is-current' : ''}">
+          <div class="subscription-plan-meta">
+            <div class="subscription-plan-name">${escapeHtml(planEntry.name || planEntry.key)}</div>
+            <div class="subscription-plan-price">${escapeHtml(planEntry.price || '')}</div>
+            <div class="subscription-plan-summary">${escapeHtml(planEntry.summary || '')}</div>
+          </div>
+          <button
+            type="button"
+            class="btn btn-secondary btn-sm subscription-plan-action-btn"
+            ${isEnterpriseContact
+              ? `data-subscription-contact="${escapeHtml(planEntry.key)}"`
+              : `data-subscription-plan-target="${escapeHtml(planEntry.key)}"`}
+            ${isCurrent ? 'disabled' : ''}
+          >${escapeHtml(actionLabel)}</button>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="settings-section" id="${escapeHtml(sectionId)}">
+        <h3>${escapeHtml(t('settingsSubscriptionSection'))}</h3>
+        <p class="settings-detail-empty">${escapeHtml(t('settingsSubscriptionDescription'))}</p>
+        <div class="settings-item subscription-current-row">
+          <span>${escapeHtml(t('settingsSubscriptionCurrentPlanLabel'))}</span>
+          <span class="header-plan-badge" data-plan="${escapeHtml(normalizedCurrentPlan)}">${escapeHtml(currentPlanBadgeText)}</span>
+        </div>
+        <div class="settings-detail-empty">${escapeHtml(t('settingsSubscriptionRegisteredMembers', { count: String(currentTeamMemberCount) }))}</div>
+        <div class="settings-detail-empty">${escapeHtml(estimateSummaryText)}</div>
+        ${estimateExtraText ? `<div class="settings-detail-empty">${escapeHtml(estimateExtraText)}</div>` : ''}
+        ${estimateAddonPolicyText ? `<div class="settings-detail-empty">${escapeHtml(estimateAddonPolicyText)}</div>` : ''}
+        ${estimateEnterpriseNoticeText ? `<div class="settings-detail-empty">${escapeHtml(estimateEnterpriseNoticeText)}</div>` : ''}
+        <div class="subscription-plan-list">${subscriptionPlanRows}</div>
+        <div class="subscription-plan-footer">
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-subscription-plan-details">${escapeHtml(t('settingsSubscriptionDetailsLink'))}</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function bindSubscriptionPlanSectionEvents(container, prefix = 'subscription-plan') {
+    if (!container) return;
+    container.querySelectorAll('button[data-subscription-plan-target]').forEach((button) => {
+      const targetPlan = String(button.dataset.subscriptionPlanTarget || '').trim();
+      bindEventOnce(button, 'click', () => {
+        if (!targetPlan) return;
+        handleSubscriptionPlanSelect(targetPlan);
+      }, `${prefix}-select-${targetPlan}`);
+    });
+    container.querySelectorAll('button[data-subscription-contact]').forEach((button) => {
+      const target = String(button.dataset.subscriptionContact || '').trim() || 'enterprise';
+      bindEventOnce(button, 'click', () => {
+        handleSubscriptionPlanContactClick(target);
+      }, `${prefix}-contact-${target}`);
+    });
+    bindEventOnce(container.querySelector('#btn-subscription-plan-details'), 'click', handleSubscriptionPlanDetailsClick, `${prefix}-details-open`);
+  }
+
   function getPlanConfig(plan = currentUserPlan) {
     const normalized = normalizeUserPlan(plan);
     return PLAN_CONFIG[normalized] || PLAN_CONFIG.free;
@@ -4866,76 +4981,9 @@
     const container = $('#settings-list');
     if (!container) return;
     container.innerHTML = '';
-    const normalizedCurrentPlan = normalizeUserPlan(currentUserPlan);
-    const currentPlanBadgeText = getPlanBadgeText(normalizedCurrentPlan);
-    const currentTeamMemberCount = getCurrentTeamMemberCount();
-    const currentPlanEstimate = calculatePlanEstimate(normalizedCurrentPlan, currentTeamMemberCount);
-    const estimateSummaryText = getPlanEstimateSummaryText(normalizedCurrentPlan, currentTeamMemberCount);
-    const estimateExtraText = currentPlanEstimate.extraMembers > 0
-      ? t('settingsSubscriptionExtraMembers', { count: String(currentPlanEstimate.extraMembers) })
-      : '';
-    const estimateEnterpriseNoticeText = currentPlanEstimate.requiresEnterprise
-      ? t('settingsSubscriptionEnterpriseLimitNotice', { limit: String(currentPlanEstimate.maxMembers || 15) })
-      : '';
-    const estimateAddonPolicyText = normalizedCurrentPlan === 'small_team'
-      ? t('settingsSubscriptionAddonPerMember', { price: formatPlanMonthlyPrice(getPlanConfig('small_team').extraMemberPrice) })
-      : '';
-    const subscriptionPlans = [
-      {
-        key: 'free',
-        name: t('settingsSubscriptionFreeName'),
-        price: t('settingsSubscriptionFreePrice'),
-        summary: t('settingsSubscriptionFreeSummary', { limit: String(FREE_PLAN_LIMIT) }),
-      },
-      {
-        key: 'individual',
-        name: t('settingsSubscriptionIndividualName'),
-        price: t('settingsSubscriptionIndividualPrice'),
-        summary: t('settingsSubscriptionIndividualSummary'),
-      },
-      {
-        key: 'small_team',
-        name: t('settingsSubscriptionSmallTeamName'),
-        price: t('settingsSubscriptionSmallTeamPrice'),
-        summary: t('settingsSubscriptionSmallTeamSummary'),
-      },
-      {
-        key: 'medium_team',
-        name: t('settingsSubscriptionMediumTeamName'),
-        price: t('settingsSubscriptionMediumTeamPrice'),
-        summary: t('settingsSubscriptionMediumTeamSummary'),
-      },
-      {
-        key: 'enterprise',
-        name: t('settingsSubscriptionEnterpriseName'),
-        price: t('settingsSubscriptionEnterprisePrice'),
-        summary: t('settingsSubscriptionEnterpriseSummary'),
-      },
-    ];
-    const subscriptionPlanRows = subscriptionPlans.map((planEntry) => {
-      const isCurrent = normalizedCurrentPlan === planEntry.key;
-      const isEnterpriseContact = planEntry.key === 'enterprise' && !isCurrent;
-      const actionLabel = isCurrent
-        ? t('settingsSubscriptionCurrentButton')
-        : (isEnterpriseContact ? t('settingsSubscriptionContactButton') : getSubscriptionActionLabel(planEntry.key, normalizedCurrentPlan));
-      return `
-        <div class="subscription-plan-card ${isCurrent ? 'is-current' : ''}">
-          <div class="subscription-plan-meta">
-            <div class="subscription-plan-name">${escapeHtml(planEntry.name || planEntry.key)}</div>
-            <div class="subscription-plan-price">${escapeHtml(planEntry.price || '')}</div>
-            <div class="subscription-plan-summary">${escapeHtml(planEntry.summary || '')}</div>
-          </div>
-          <button
-            type="button"
-            class="btn btn-secondary btn-sm subscription-plan-action-btn"
-            ${isEnterpriseContact
-              ? `data-subscription-contact="${escapeHtml(planEntry.key)}"`
-              : `data-subscription-plan-target="${escapeHtml(planEntry.key)}"`}
-            ${isCurrent ? 'disabled' : ''}
-          >${escapeHtml(actionLabel)}</button>
-        </div>
-      `;
-    }).join('');
+    const currencyOptionRows = Object.entries(CURRENCY_CONFIG).map(([code, config]) => `
+      <option value="${escapeHtml(code)}" ${currentCurrency === code ? 'selected' : ''}>${escapeHtml(`${code} (${config.symbol})`)}</option>
+    `).join('');
 
     const planRows = planMaster.length === 0
       ? `<div class="settings-item"><span>${escapeHtml(t('settingsPlanEmpty'))}</span></div>`
@@ -5069,22 +5117,13 @@
     `).join('');
 
     container.innerHTML = `
-      <div class="settings-section" id="settings-subscription-plan-section">
-        <h3>${escapeHtml(t('settingsSubscriptionSection'))}</h3>
-        <p class="settings-detail-empty">${escapeHtml(t('settingsSubscriptionDescription'))}</p>
-        <div class="settings-item subscription-current-row">
-          <span>${escapeHtml(t('settingsSubscriptionCurrentPlanLabel'))}</span>
-          <span class="header-plan-badge" data-plan="${escapeHtml(normalizedCurrentPlan)}">${escapeHtml(currentPlanBadgeText)}</span>
+      <div class="settings-section">
+        <h3>${escapeHtml(t('settingsCurrencySection'))}</h3>
+        <div class="settings-item dashboard-config-row">
+          <label class="dashboard-config-label" for="settings-currency-select">${escapeHtml(t('currency'))}</label>
+          <select id="settings-currency-select" class="ui-button-standard" style="min-width: 180px;">${currencyOptionRows}</select>
         </div>
-        <div class="settings-detail-empty">${escapeHtml(t('settingsSubscriptionRegisteredMembers', { count: String(currentTeamMemberCount) }))}</div>
-        <div class="settings-detail-empty">${escapeHtml(estimateSummaryText)}</div>
-        ${estimateExtraText ? `<div class="settings-detail-empty">${escapeHtml(estimateExtraText)}</div>` : ''}
-        ${estimateAddonPolicyText ? `<div class="settings-detail-empty">${escapeHtml(estimateAddonPolicyText)}</div>` : ''}
-        ${estimateEnterpriseNoticeText ? `<div class="settings-detail-empty">${escapeHtml(estimateEnterpriseNoticeText)}</div>` : ''}
-        <div class="subscription-plan-list">${subscriptionPlanRows}</div>
-        <div class="subscription-plan-footer">
-          <button type="button" class="btn btn-secondary btn-sm" id="btn-subscription-plan-details">${escapeHtml(t('settingsSubscriptionDetailsLink'))}</button>
-        </div>
+        <div class="settings-detail-empty">${escapeHtml(t('settingsCurrencyHelp'))}</div>
       </div>
       <div class="settings-section">
         <h3>${escapeHtml(t('settingsPlanSection'))}</h3>
@@ -5139,20 +5178,11 @@
     bindEventOnce(container.querySelector('#btn-plan-save'), 'click', savePlanMasterFromForm, 'plan-master-save');
     bindEventOnce(container.querySelector('#btn-plan-reset'), 'click', resetPlanMasterFormInputs, 'plan-master-reset');
     bindEventOnce(container.querySelector('#btn-dynamic-item-add'), 'click', addDynamicItemHintFromSettings, 'dynamic-item-add');
-    container.querySelectorAll('button[data-subscription-plan-target]').forEach((button) => {
-      const targetPlan = String(button.dataset.subscriptionPlanTarget || '').trim();
-      bindEventOnce(button, 'click', () => {
-        if (!targetPlan) return;
-        handleSubscriptionPlanSelect(targetPlan);
-      }, `subscription-plan-select-${targetPlan}`);
-    });
-    container.querySelectorAll('button[data-subscription-contact]').forEach((button) => {
-      const target = String(button.dataset.subscriptionContact || '').trim() || 'enterprise';
-      bindEventOnce(button, 'click', () => {
-        handleSubscriptionPlanContactClick(target);
-      }, `subscription-plan-contact-${target}`);
-    });
-    bindEventOnce(container.querySelector('#btn-subscription-plan-details'), 'click', handleSubscriptionPlanDetailsClick, 'subscription-plan-details-open');
+    bindEventOnce(container.querySelector('#settings-currency-select'), 'change', (event) => {
+      const nextCurrency = String(event?.target?.value || '').trim();
+      if (!nextCurrency) return;
+      updateCurrency(nextCurrency);
+    }, 'settings-currency-select-change');
 
     container.querySelectorAll('button[data-plan-edit]').forEach((button) => {
       const index = Number(button.dataset.planEdit);
@@ -5354,6 +5384,7 @@
         window.TeamManager.removePhotographer(p.id);
         renderTeamList();
         renderSettings();
+        renderPlanManagementSection();
         populateSelects();
         renderTable();
       };
@@ -6056,6 +6087,7 @@
     if (normalized === normalizeUserPlan(currentUserPlan)) return;
     setCurrentUserPlan(normalized, { persistCloud: true });
     renderSettings();
+    renderPlanManagementSection();
     loadBillingProfileSettings();
     showToast(t('settingsSubscriptionUpdated', { plan: getPlanBadgeText(normalized) }));
   }
@@ -6080,12 +6112,17 @@
     window.alert(detailsText);
   }
 
+  function renderPlanManagementSection() {
+    const container = document.getElementById('settings-plan-content-container');
+    if (!container) return;
+    container.innerHTML = renderSubscriptionPlanSectionHtml('settings-subscription-plan-section');
+    bindSubscriptionPlanSectionEvents(container, 'settings-plan');
+  }
+
   function openSettingsPlanManagementSection() {
     handleOpenSettingsClick();
-    const menuTabBtn = settingsOverlay?.querySelector('.settings-tab-btn[data-tab="menu"]');
-    if (menuTabBtn && !menuTabBtn.classList.contains('active')) {
-      menuTabBtn.click();
-    }
+    const planTabBtn = settingsOverlay?.querySelector('.settings-tab-btn[data-tab="plan"]');
+    if (planTabBtn && !planTabBtn.classList.contains('active')) planTabBtn.click();
     window.requestAnimationFrame(() => {
       const section = document.getElementById('settings-subscription-plan-section');
       if (!section) return;
@@ -6169,16 +6206,6 @@
     });
 
     saveTaxSettings(nextSettings);
-
-    const defaultCurrency = profile.currency;
-    if (
-      defaultCurrency
-      && CURRENCY_CONFIG[defaultCurrency]
-      && currentCurrency !== defaultCurrency
-      && shouldApplyLocaleDefaults
-    ) {
-      updateCurrency(defaultCurrency);
-    }
   }
 
   function setInvoiceAssetPreview(selector, dataUrl = '') {
@@ -6437,6 +6464,8 @@
     applyInvoiceLocaleDefaults(selected, { force: true });
     updateUITS(selected);
     if (settingsOverlay?.classList.contains('active')) {
+      renderSettings();
+      renderPlanManagementSection();
       loadInvoiceSettings();
     }
     setMobileHeaderMenuOpen(false);
@@ -6449,8 +6478,11 @@
     renderSettings();
     loadBillingProfileSettings();
     loadContractTemplateSettings();
+    renderPlanManagementSection();
     updateAdminSettingsAvailability();
-    if (isCurrentUserAdmin()) refreshAdminOverview();
+    if (isCurrentUserAdmin()) {
+      refreshAdminOverview();
+    }
     settingsOverlay?.classList.add('active');
   }
 
@@ -6484,6 +6516,7 @@
     $('#team-new-name').value = '';
     renderTeamList();
     renderSettings();
+    renderPlanManagementSection();
     populateSelects();
     showToast(t('msgMemberAdded'));
   }
@@ -6499,9 +6532,12 @@
         $(`#settings-content-${tab}`)?.classList.add('active');
         if (tab === 'invoice') loadInvoiceSettings();
         if (tab === 'profile') loadBillingProfileSettings();
+        if (tab === 'plan') renderPlanManagementSection();
         if (tab === 'contract') loadContractTemplateSettings();
         if (tab === 'team') renderTeamList();
-        if (tab === 'admin') refreshAdminOverview();
+        if (tab === 'admin') {
+          refreshAdminOverview();
+        }
       }, `settings-tab-${tabName}`);
     });
   }
@@ -6594,7 +6630,6 @@
     bindEventOnce(document.getElementById('btn-google-login'), 'click', handleGoogleLoginClick, 'google-login-banner');
     bindEventOnce(document.getElementById('btn-google-login-screen'), 'click', handleGoogleLoginClick, 'google-login-screen');
     bindEventOnce(document.getElementById('btn-logout'), 'click', handleGoogleLogoutClick, 'google-logout');
-    bindEventOnce(document.getElementById('btn-header-logout'), 'click', handleGoogleLogoutClick, 'google-logout-header');
     bindSettingsTabListeners();
   }
 
@@ -6842,7 +6877,6 @@
     tabButton.style.display = isAdmin ? '' : 'none';
 
     if (isAdmin) return;
-
     const wasAdminActive = tabButton.classList.contains('active') || tabContent.classList.contains('active');
     tabButton.classList.remove('active');
     tabContent.classList.remove('active');
@@ -6855,15 +6889,8 @@
   }
 
   function updateHeaderAuthUi(user = null) {
-    const headerLogout = document.getElementById('btn-header-logout');
     const headerPlanBadge = document.getElementById('header-plan-badge');
-    const isGuest = getLocalValue(LOCAL_GUEST_MODE_KEY, false) === true;
     const hasUser = !!user;
-    if (headerLogout) {
-      headerLogout.style.display = hasUser && !isGuest ? '' : 'none';
-      headerLogout.title = t('logout');
-      headerLogout.setAttribute('aria-label', t('logout'));
-    }
     if (headerPlanBadge) {
       headerPlanBadge.style.display = hasUser ? 'inline-flex' : 'none';
     }
