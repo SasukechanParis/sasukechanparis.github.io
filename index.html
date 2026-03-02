@@ -35,7 +35,6 @@
     <div class="auth-status" id="auth-status">🔄 ログイン状態を確認中...</div>
     <div class="auth-actions">
       <button class="btn btn-primary btn-sm" id="btn-google-login">Googleでログイン</button>
-      <button class="btn btn-secondary btn-sm" id="btn-logout" style="display:none;">ログアウト</button>
     </div>
   </div>
   <div class="app-container" id="app-container">
@@ -48,6 +47,7 @@
           <div class="brand-text-group">
             <span class="brand-wordmark">Pholio</span>
             <span class="header-plan-badge" id="header-plan-badge" data-plan="free" style="display:none;">FREE</span>
+            <span class="header-plan-usage" id="header-plan-usage" style="display:none;">残り 20件</span>
           </div>
         </div>
         <select id="languageSelect" class="btn btn-secondary btn-sm">
@@ -57,6 +57,13 @@
           <option value="zh-CN">🇨🇳 简体中文</option>
           <option value="zh-TW">🇹🇼 繁體中文</option>
           <option value="ko">🇰🇷 한국어</option>
+        </select>
+        <select id="currency-select" class="btn btn-secondary btn-sm">
+          <option value="JPY">JPY (¥)</option>
+          <option value="EUR">EUR (€)</option>
+          <option value="USD">USD ($)</option>
+          <option value="KRW">KRW (₩)</option>
+          <option value="CNY">CNY (¥)</option>
         </select>
         <div class="cloud-sync-indicator" id="cloud-sync-indicator" data-state="local" title="ローカル保存中" aria-label="ローカル保存中">
           <span class="cloud-sync-dot" aria-hidden="true"></span>
@@ -78,6 +85,7 @@
           data-i18n-title="exportIcs">カレンダー連携 (iCal)</button>
         <button class="btn btn-secondary btn-sm" id="btn-export" title="売上集計 (CSV)" data-i18n="exportCsv"
           data-i18n-title="exportCsv">売上集計 (CSV)</button>
+        <button class="btn btn-secondary btn-sm" id="btn-logout" data-i18n="logout" style="display:none;">ログアウト</button>
       </div>
     </header>
 

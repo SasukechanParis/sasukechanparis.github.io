@@ -30,7 +30,6 @@
   const USER_PLAN_KEY = 'photocrm_user_plan';
   const USER_BILLING_PROFILE_KEY = 'photocrm_user_billing_profile';
   const ENTERPRISE_CONTACT_REQUESTS_KEY = 'photocrm_enterprise_contact_requests';
-  const STRIPE_PENDING_PLAN_KEY = 'photocrm_stripe_pending_plan_update';
   const ADMIN_MANAGEMENT_EMAILS = new Set(['sasuke.photographe@gmail.com']);
   const GOOGLE_CALENDAR_DEFAULT_ID = 'sasuke.photographe@gmail.com';
   const LOCAL_GUEST_MODE_KEY = 'photocrm_local_guest_mode';
@@ -73,11 +72,6 @@
       extraMemberPrice: 0,
       maxMembers: null,
     },
-  });
-  const STRIPE_CHECKOUT_URLS = Object.freeze({
-    individual: 'https://checkout.stripe.com/c/pay/placeholder_individual',
-    small_team: 'https://checkout.stripe.com/c/pay/placeholder_small_team',
-    medium_team: 'https://checkout.stripe.com/c/pay/placeholder_medium_team',
   });
 
   const DASHBOARD_CARD_DEFINITIONS = [
@@ -774,6 +768,7 @@
 
   function updateHeaderPlanBadge() {
     const badge = document.getElementById('header-plan-badge');
+    const usageBadge = document.getElementById('header-plan-usage');
     const profileBadge = document.getElementById('profile-plan-badge');
     const profileLabel = document.getElementById('profile-plan-label');
     const plan = normalizeUserPlan(currentUserPlan);
@@ -788,6 +783,18 @@
       profileBadge.dataset.plan = plan;
     }
     if (profileLabel) profileLabel.textContent = planText;
+    if (usageBadge) {
+      if (plan === 'free') {
+        const limit = getCustomerLimitByPlan(plan);
+        const used = Array.isArray(customers) ? customers.length : 0;
+        const remaining = Math.max(0, (Number.isFinite(limit) ? limit : 0) - used);
+        usageBadge.textContent = t('planRemainingCount', { count: String(remaining) });
+        usageBadge.style.display = 'inline-flex';
+      } else {
+        usageBadge.style.display = 'none';
+        usageBadge.textContent = '';
+      }
+    }
   }
 
   function syncPlanFromStorage() {
@@ -4111,6 +4118,7 @@
 
     updateDashboard();
     updateMonthFilter();
+    updateHeaderPlanBadge();
   }
 
   function bindSortEventListeners() {
@@ -6148,7 +6156,6 @@
       handleSubscriptionPlanContactClick(normalized);
       return;
     }
-    saveLocalValue(STRIPE_PENDING_PLAN_KEY, {});
     setCurrentUserPlan(normalized, { persistCloud: true });
     renderSettings();
     renderPlanManagementSection();
@@ -6233,59 +6240,12 @@
       if (window.FirebaseService?.saveEnterpriseInquiry) {
         await window.FirebaseService.saveEnterpriseInquiry(inquiryPayload);
       }
-      showToast(t('enterpriseContactSubmitted'));
+      showToast('Success! We will contact you soon.');
       closeEnterpriseContactModal();
     } catch (err) {
       console.error('Enterprise inquiry submit failed', err);
       showToast('Inquiry submission failed. Please try again.', 'error');
     }
-  }
-
-  function getStripeCheckoutUrlForPlan(plan) {
-    const normalized = normalizeUserPlan(plan);
-    return STRIPE_CHECKOUT_URLS[normalized] || '';
-  }
-
-  function buildStripeCheckoutUrl(plan) {
-    const normalized = normalizeUserPlan(plan);
-    const baseUrl = getStripeCheckoutUrlForPlan(normalized);
-    if (!baseUrl) return '';
-
-    const checkoutUrl = new URL(baseUrl);
-    const successUrl = new URL(window.location.origin + window.location.pathname);
-    successUrl.searchParams.set('checkout_status', 'success');
-    successUrl.searchParams.set('plan', normalized);
-    const cancelUrl = new URL(window.location.href);
-    cancelUrl.searchParams.delete('checkout_status');
-    cancelUrl.searchParams.delete('stripe_success');
-    cancelUrl.searchParams.delete('plan');
-
-    checkoutUrl.searchParams.set('plan', normalized);
-    checkoutUrl.searchParams.set('currency', currentCurrency);
-    checkoutUrl.searchParams.set('lang', currentLang || 'en');
-    checkoutUrl.searchParams.set('success_url', successUrl.toString());
-    checkoutUrl.searchParams.set('cancel_url', cancelUrl.toString());
-
-    const currentUser = window.FirebaseService?.getCurrentUser?.();
-    if (currentUser?.uid) checkoutUrl.searchParams.set('client_reference_id', currentUser.uid);
-    if (currentUser?.email) checkoutUrl.searchParams.set('customer_email', currentUser.email);
-    return checkoutUrl.toString();
-  }
-
-  function openStripeCheckoutForPlan(plan) {
-    const normalized = normalizeUserPlan(plan);
-    const checkoutUrl = buildStripeCheckoutUrl(normalized);
-    if (!checkoutUrl) {
-      showToast('Stripe Checkout URL is not configured.', 'error');
-      return;
-    }
-    saveLocalValue(STRIPE_PENDING_PLAN_KEY, {
-      plan: normalized,
-      requestedAt: new Date().toISOString(),
-      currency: currentCurrency,
-      lang: currentLang || 'en',
-    });
-    window.location.assign(checkoutUrl);
   }
 
   function renderPlanManagementSection() {
@@ -6768,6 +6728,11 @@
 
   function bindCoreUIEventListeners() {
     bindEventOnce(getLanguageSelectElement(), 'change', handleLanguageSelectChange, 'lang-select-change');
+    bindEventOnce(document.getElementById('currency-select'), 'change', (event) => {
+      const nextCurrency = String(event?.target?.value || '').trim();
+      if (!nextCurrency) return;
+      updateCurrency(nextCurrency);
+    }, 'header-currency-select-change');
     bindEventOnce(document.getElementById('btn-theme'), 'click', toggleTheme, 'theme-toggle-click');
     if (ENABLE_STATS_FEATURES) {
       bindEventOnce(document.getElementById('btn-toggle-dashboard'), 'click', handleDashboardToggleButtonClick, 'dashboard-visibility-toggle');
@@ -6935,20 +6900,28 @@
   let authUnsubscribe = null;
   let cloudSyncState = 'local';
   let mergePromptedUid = null;
-  let stripeCheckoutResultHandled = false;
+
+  function getLocaleTextOrFallback(key, fallback = '') {
+    const locale = window.LOCALE?.[currentLang];
+    if (locale && Object.prototype.hasOwnProperty.call(locale, key)) {
+      const value = locale[key];
+      if (typeof value === 'string' && value) return value;
+    }
+    return fallback;
+  }
 
   function getCloudSyncStatusLabel(state) {
-    if (state === 'syncing') return t('cloudSyncStatusSyncing');
-    if (state === 'ready') return t('cloudSyncStatusReady');
-    if (state === 'error') return t('cloudSyncStatusError');
-    return t('cloudSyncStatusLocal');
+    if (state === 'syncing') return getLocaleTextOrFallback('cloudSyncStatusSyncing', 'Syncing to cloud...');
+    if (state === 'ready') return getLocaleTextOrFallback('cloudSyncStatusReady', 'Cloud synced');
+    if (state === 'error') return getLocaleTextOrFallback('cloudSyncStatusError', 'Sync error');
+    return getLocaleTextOrFallback('cloudSyncStatusLocal', 'Saved locally');
   }
 
   function getCloudSyncTooltipLabel(state, fallbackLabel = '') {
-    if (state === 'ready') return 'クラウド同期済み';
-    if (state === 'syncing') return 'クラウド同期中...';
-    if (state === 'error') return '同期エラー：再ログインしてください';
-    return fallbackLabel || 'ローカル保存中';
+    if (state === 'ready') return getLocaleTextOrFallback('cloudSyncStatusReady', 'Cloud synced');
+    if (state === 'syncing') return getLocaleTextOrFallback('cloudSyncStatusSyncing', 'Syncing to cloud...');
+    if (state === 'error') return getLocaleTextOrFallback('cloudSyncErrorRelogin', 'Sync error: please sign in again.');
+    return fallbackLabel || getLocaleTextOrFallback('cloudSyncStatusLocal', 'Saved locally');
   }
 
   function setCloudSyncIndicator(state = 'local', customMessage = '') {
@@ -7073,11 +7046,15 @@
 
   function updateHeaderAuthUi(user = null) {
     const headerPlanBadge = document.getElementById('header-plan-badge');
+    const headerPlanUsage = document.getElementById('header-plan-usage');
     const hasUser = !!user;
     if (headerPlanBadge) {
       headerPlanBadge.style.display = hasUser ? 'inline-flex' : 'none';
     }
     updateHeaderPlanBadge();
+    if (!hasUser && headerPlanUsage) {
+      headerPlanUsage.style.display = 'none';
+    }
     updateAdminSettingsAvailability();
   }
 
@@ -7096,70 +7073,12 @@
 
     setCloudSyncIndicator('syncing');
     try {
-      const mergeResult = await (
+      await (
         window.FirebaseService.autoSyncLocalDataToCloud?.()
         ?? window.FirebaseService.mergeLocalDataToCloud?.({ overwrite: false })
       );
-      if (mergeResult?.merged && ((mergeResult.customerCount || 0) > 0 || (mergeResult.expenseCount || 0) > 0)) {
-        showToast(t('cloudMergeCompleted', {
-          customers: String(mergeResult.customerCount || 0),
-          expenses: String(mergeResult.expenseCount || 0),
-        }));
-      }
     } catch (err) {
       console.error('Local merge to cloud failed', err);
-      showToast(t('cloudMergeFailed'), 'error');
-    }
-  }
-
-  function consumePendingStripeCheckoutParams() {
-    const params = new URLSearchParams(window.location.search);
-    const hasSuccess = params.get('checkout_status') === 'success' || params.get('stripe_success') === '1';
-    if (!hasSuccess) return null;
-    const directPlan = String(params.get('plan') || '').trim();
-    const pending = getLocalValue(STRIPE_PENDING_PLAN_KEY, {});
-    const pendingPlan = String(pending?.plan || '').trim();
-    const chosenPlan = directPlan || pendingPlan;
-    if (!chosenPlan) return null;
-    return {
-      plan: normalizeUserPlan(chosenPlan),
-      rawPlan: chosenPlan,
-    };
-  }
-
-  function clearStripeCheckoutParams() {
-    const currentUrl = new URL(window.location.href);
-    const keys = ['checkout_status', 'stripe_success', 'plan', 'session_id'];
-    let changed = false;
-    keys.forEach((key) => {
-      if (currentUrl.searchParams.has(key)) {
-        currentUrl.searchParams.delete(key);
-        changed = true;
-      }
-    });
-    if (changed) {
-      const nextUrl = `${currentUrl.pathname}${currentUrl.search ? `?${currentUrl.searchParams.toString()}` : ''}${currentUrl.hash || ''}`;
-      window.history.replaceState({}, document.title, nextUrl);
-    }
-  }
-
-  async function applyStripeCheckoutResultIfNeeded(user) {
-    if (stripeCheckoutResultHandled) return;
-    const pending = consumePendingStripeCheckoutParams();
-    if (!pending || !pending.plan || !user || !window.FirebaseService?.setUserPlan) return;
-    stripeCheckoutResultHandled = true;
-
-    try {
-      await window.FirebaseService.setUserPlan(pending.plan);
-      setCurrentUserPlan(pending.plan, { persistCloud: false });
-      showToast(t('settingsSubscriptionUpdated', { plan: getPlanBadgeText(pending.plan) }));
-    } catch (err) {
-      console.error('Stripe checkout plan sync failed', err);
-      showToast('Plan update failed. Please contact support.', 'error');
-    } finally {
-      saveLocalValue(STRIPE_PENDING_PLAN_KEY, {});
-      clearStripeCheckoutParams();
-      if (settingsOverlay?.classList.contains('active')) renderPlanManagementSection();
     }
   }
 
@@ -7218,7 +7137,7 @@
       if (logoutBtn) logoutBtn.style.display = '';
       if (authScreen) authScreen.style.display = 'none';
       if (loginScreen) loginScreen.style.display = 'none';
-      if (authBanner) authBanner.style.display = 'flex';
+      if (authBanner) authBanner.style.display = 'none';
       if (appContainer) appContainer.style.display = 'block';
       updateHeaderAuthUi(user);
       setCloudSyncIndicator('syncing', `${t('cloudSyncStatusSyncing')} (${userName})`);
@@ -7317,7 +7236,6 @@
           setCloudSyncIndicator('syncing', `${t('cloudSyncStatusSyncing')} (${userName})`);
           maybeMergeGuestDataToCloud(user)
             .then(() => handleAuthState(user))
-            .then(() => applyStripeCheckoutResultIfNeeded(user))
             .then(() => setCloudSyncIndicator('ready'))
             .catch((err) => {
               console.error('Auth update error:', err);

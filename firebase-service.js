@@ -856,6 +856,31 @@ window.FirebaseService = {
     return buildAdminUserOverview(auth.currentUser);
   },
 
+  async saveEnterpriseInquiry(payload = {}) {
+    await ensureInitialized();
+    const user = auth.currentUser;
+    const inquiryRef = doc(collection(db, 'inquiries'));
+    const createdAtIso = new Date().toISOString();
+    const safePayload = payload && typeof payload === 'object' ? payload : {};
+    const inquiry = {
+      id: inquiryRef.id,
+      plan: normalizeUserPlan(safePayload.plan || 'enterprise'),
+      teamName: String(safePayload.teamName || safePayload.companyName || '').trim(),
+      representativeName: String(safePayload.representativeName || '').trim(),
+      memberRange: String(safePayload.memberRange || '').trim(),
+      message: String(safePayload.message || '').trim(),
+      status: 'new',
+      source: 'pholio_app',
+      userId: user?.uid || null,
+      email: user?.email || '',
+      displayName: user?.displayName || '',
+      createdAt: serverTimestamp(),
+      createdAtIso,
+    };
+    await setDoc(inquiryRef, inquiry, { merge: true });
+    return { id: inquiryRef.id, createdAtIso };
+  },
+
   async signOut() {
     await ensureInitialized();
     setGoogleOAuthAccessToken('');

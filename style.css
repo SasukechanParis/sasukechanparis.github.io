@@ -233,8 +233,8 @@ body {
   flex-wrap: nowrap;
   position: relative;
   width: 100%;
-  column-gap: 8px;
-  row-gap: 6px;
+  column-gap: 16px;
+  row-gap: 8px;
   margin-bottom: 0;
   padding-right: 0;
   padding-bottom: 8px;
@@ -246,7 +246,7 @@ body {
 .header-left {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   min-width: 0;
   flex: 0 1 auto;
 }
@@ -261,7 +261,7 @@ body {
   justify-content: flex-start;
   flex: 0 0 auto;
   gap: 8px;
-  margin-right: 12px;
+  margin-right: 16px;
 }
 
 .brand-text-group {
@@ -269,7 +269,7 @@ body {
   flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .brand-logo-image {
@@ -293,24 +293,33 @@ body {
 .header-left #languageSelect {
   min-width: 120px;
   max-width: 176px;
-  height: 34px;
-  line-height: 34px;
-  padding: 0 10px;
+  height: 32px;
+  line-height: 32px;
+  padding: 0 8px;
   font-size: 0.76rem;
 }
 
+.header-left #currency-select {
+  min-width: 102px;
+  max-width: 136px;
+  height: 32px;
+  line-height: 32px;
+  padding: 0 8px;
+  font-size: 0.74rem;
+}
+
 .header-left #btn-settings {
-  height: 34px;
-  line-height: 34px;
-  padding: 0 10px;
+  height: 32px;
+  line-height: 32px;
+  padding: 0 8px;
   font-size: 0.76rem;
   flex: 0 0 auto;
 }
 
 .header-left .theme-toggle {
-  width: 34px;
-  min-width: 34px;
-  height: 34px;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
   padding: 0;
   line-height: 1;
 }
@@ -431,7 +440,7 @@ body {
   flex-wrap: nowrap;
   justify-content: flex-start;
   margin-left: 0;
-  gap: 6px;
+  gap: 8px;
   align-items: center;
   row-gap: 0;
   flex: 0 0 auto;
@@ -452,16 +461,19 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 40px;
-  height: 19px;
-  padding: 0 6px;
+  min-width: 42px;
+  height: 20px;
+  padding: 0 8px;
   border-radius: 999px;
-  border: 1px solid var(--border-color);
-  background: color-mix(in srgb, var(--primary-color) 14%, transparent);
-  color: var(--primary-color);
-  font-size: 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 35%, var(--border-color));
+  background: linear-gradient(135deg,
+      color-mix(in srgb, var(--primary-color) 18%, #ffffff) 0%,
+      color-mix(in srgb, var(--primary-color) 9%, transparent) 100%);
+  color: color-mix(in srgb, var(--primary-color) 88%, #111827);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 2px 8px -6px rgba(31, 41, 55, 0.55);
+  font-size: 0.58rem;
   font-weight: 700;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.045em;
   line-height: 1;
   white-space: nowrap;
 }
@@ -490,6 +502,21 @@ body {
   border-color: color-mix(in srgb, #7c3aed 45%, var(--border-color));
 }
 
+.header-plan-usage {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--bg-card) 86%, transparent);
+  color: var(--text-muted);
+  font-size: 0.63rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .header-actions .btn,
 .header-actions .ui-button-standard,
 .header-actions .theme-toggle,
@@ -497,8 +524,8 @@ body {
 .header-actions .btn-primary {
   min-width: fit-content;
   padding: 0 10px;
-  height: 34px;
-  line-height: 34px;
+  height: 32px;
+  line-height: 32px;
   font-size: clamp(0.74rem, 1.0vw, 0.82rem);
   flex-shrink: 1;
 }
@@ -1441,6 +1468,16 @@ tbody tr:hover {
 #customer-table th[data-column-key="revenue"],
 #customer-table td[data-column-key="revenue"] {
   min-width: 96px;
+}
+
+#customer-table td[data-column-key="customerName"] {
+  font-weight: 650;
+  color: var(--text-primary);
+}
+
+#customer-table td[data-column-key="revenue"] {
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
 #customer-table th[data-column-key="paymentChecked"],
