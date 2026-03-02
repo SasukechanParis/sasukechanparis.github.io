@@ -693,6 +693,7 @@
         <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:20px;" data-i18n="settingsDesc">
           各フィールドの選択肢をカスタマイズできます。追加した選択肢は登録フォームのドロップダウンに反映されます。
         </p>
+        <div class="admin-security-status-mini" id="admin-security-status-mini" data-i18n="adminSecurityStatusOnline">Status: Online</div>
         <div class="admin-device-warning" id="admin-device-warning" style="display:none;"></div>
         <div class="data-protection-status-wrap">
           <div class="data-protection-status" id="data-protection-status">ステータス：デバイス内に自動保護中（セーフティバックアップ有効）</div>
@@ -1093,6 +1094,14 @@
       </div>
       <div class="modal-body">
         <p class="help-text" data-i18n="adminTotpSetupScanHint">QRコードをスキャンするか、下のシークレットキーを認証アプリに入力してください。</p>
+        <div class="totp-qr-wrap">
+          <div class="totp-qr-frame">
+            <img id="admin-totp-qr-image" alt="TOTP QR" style="display:none;">
+          </div>
+          <p class="help-text totp-qr-fallback" id="admin-totp-qr-fallback" data-i18n="adminTotpQrFallback">
+            QRコードを表示できない場合は、otpauth URI をコピーして手動追加してください。
+          </p>
+        </div>
         <div class="form-group">
           <label for="admin-totp-secret" data-i18n="adminTotpSecretLabel">シークレットキー</label>
           <input type="text" id="admin-totp-secret" readonly value="">

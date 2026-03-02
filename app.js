@@ -529,8 +529,16 @@
     setCloudSyncIndicator(cloudSyncState);
     updateAdminTotpControlsVisibility();
     if (isCurrentUserAdmin() && !canAccessAdminPanel()) {
-      const warningMessage = getAdminSecurityWarningMessage(adminSecurityContext.reason);
-      if (warningMessage) setAdminDeviceWarning(warningMessage, 'error');
+      const normalizedReason = String(adminSecurityContext.reason || '').trim().toLowerCase();
+      if (normalizedReason === 'admin_security_init_failed') {
+        setAdminDeviceWarning('');
+        setAdminSecurityStatusMini('error');
+      } else {
+        const warningMessage = getAdminSecurityWarningMessage(adminSecurityContext.reason);
+        if (warningMessage) setAdminDeviceWarning(warningMessage, 'error');
+      }
+    } else {
+      setAdminSecurityStatusMini('online');
     }
   }
 
@@ -1500,9 +1508,11 @@
     setAuthScreenState('loggedIn', { displayName: 'Guest (Local Mode)' });
     const authStatus = document.getElementById('auth-status');
     const loginBtn = document.getElementById('btn-google-login');
+    const loginScreenBtn = document.getElementById('btn-google-login-screen');
     const logoutBtn = document.getElementById('btn-logout');
     if (authStatus) authStatus.textContent = message || t('localGuestModeDefault');
     if (loginBtn) loginBtn.style.display = '';
+    if (loginScreenBtn) loginScreenBtn.style.display = '';
     if (logoutBtn) logoutBtn.style.display = 'none';
     setCloudSyncIndicator('local');
     updateHeaderAuthUi({ displayName: 'Guest (Local Mode)' });
@@ -6559,6 +6569,25 @@
     warningEl.style.display = 'block';
   }
 
+  function setAdminSecurityStatusMini(state = 'online') {
+    const statusEl = document.getElementById('admin-security-status-mini');
+    if (!statusEl) return;
+    const normalized = String(state || 'online').trim().toLowerCase();
+    const adminVisible = isCurrentUserAdmin() || !!adminSecurityContext.isAdmin;
+    statusEl.classList.remove('is-error', 'is-online');
+    if (!adminVisible) {
+      statusEl.style.display = 'none';
+      return;
+    }
+    if (normalized === 'error') {
+      statusEl.textContent = t('adminSecurityStatusOfflineError');
+      statusEl.classList.add('is-error');
+      return;
+    }
+    statusEl.textContent = t('adminSecurityStatusOnline');
+    statusEl.classList.add('is-online');
+  }
+
   function getAdminSecurityWarningMessage(reason = '') {
     const normalizedReason = String(reason || '').trim().toLowerCase();
     if (normalizedReason === 'mfa_required') return t('adminMfaRequiredWarning');
@@ -6591,8 +6620,11 @@
       deviceId: String(safeMetadata.deviceId || '').trim(),
       hasFirebaseService: !!window.FirebaseService,
     };
-    console.error(`[AdminSecurity] ${detail.context} failed`, err);
-    console.log('[AdminSecurity][detail]', detail);
+    console.error(
+      `[Admin Debug] Error Code: ${detail.code || 'unknown'} | Context: ${detail.context} | Message: ${detail.message || 'n/a'} | Reason: ${detail.reason || 'n/a'}`,
+      err
+    );
+    console.log('[Admin Debug] Detail:', detail);
   }
 
   function canAccessAdminPanel() {
@@ -6734,9 +6766,16 @@
     };
     if (reason === 'not_admin') {
       setAdminDeviceWarning('');
+      setAdminSecurityStatusMini('online');
     } else {
       const warningMessage = getAdminSecurityWarningMessage(reason);
-      setAdminDeviceWarning(warningMessage, warningMessage ? 'error' : 'warning');
+      if (String(reason || '').trim().toLowerCase() === 'admin_security_init_failed') {
+        setAdminDeviceWarning('');
+        setAdminSecurityStatusMini('error');
+      } else {
+        setAdminDeviceWarning(warningMessage, warningMessage ? 'error' : 'warning');
+        setAdminSecurityStatusMini('online');
+      }
     }
   }
 
@@ -7031,7 +7070,6 @@
   async function initializeAdminSecurityForUser(user) {
     adminDeviceContextCache = null;
     adminDeviceState = { approved: [], pending: [] };
-    lastKnownAuthUserEmail = String(user?.email || lastKnownAuthUserEmail || '').trim();
     updateAdminTotpControlsVisibility();
     if (!user || !isAdminEmail(user.email)) {
       clearAdminSecurityState('not_admin');
@@ -7056,8 +7094,9 @@
     } catch (err) {
       deviceContextBypassed = true;
       logAdminSecurityInitError('buildAdminDeviceContext', err, { reason: 'device_context_unavailable' });
-      setAdminDeviceWarning(t('adminSecurityInitFailed'), 'warning');
-      console.log('[AdminSecurity][detail]', {
+      setAdminDeviceWarning('');
+      setAdminSecurityStatusMini('error');
+      console.log('[Admin Debug] Detail:', {
         context: 'device_context_fallback_active',
         reason: 'device_context_unavailable',
         deviceId: device.deviceId,
@@ -7085,7 +7124,8 @@
         sessionToken: '',
         sessionExpiresAtMs: 0,
       };
-      setAdminDeviceWarning(getAdminSecurityWarningMessage('admin_security_init_failed'), 'error');
+      setAdminDeviceWarning('');
+      setAdminSecurityStatusMini('error');
       updateAdminSettingsAvailability();
       updateAdminTotpControlsVisibility();
       return;
@@ -7115,6 +7155,7 @@
         };
         persistAdminSecureSession(adminSecurityContext.sessionToken, adminSecurityContext.sessionExpiresAtMs);
         setAdminDeviceWarning('');
+        setAdminSecurityStatusMini('online');
         startAdminSessionMonitor();
       } else {
         stopAdminSessionMonitor();
@@ -7133,8 +7174,14 @@
         };
         const warningMessage = getAdminSecurityWarningMessage(adminSecurityContext.reason);
         const warningType = adminSecurityContext.reason === 'mfa_required' ? 'warning' : 'error';
-        setAdminDeviceWarning(warningMessage, warningType);
-        console.log('[AdminSecurity][bootstrap-result]', {
+        if (String(adminSecurityContext.reason || '').trim().toLowerCase() === 'admin_security_init_failed') {
+          setAdminDeviceWarning('');
+          setAdminSecurityStatusMini('error');
+        } else {
+          setAdminDeviceWarning(warningMessage, warningType);
+          setAdminSecurityStatusMini('online');
+        }
+        console.log('[Admin Debug] bootstrap-result:', {
           allowed: !!bootstrap?.allowed,
           authorized: !!bootstrap?.authorized,
           reason: adminSecurityContext.reason,
@@ -7143,10 +7190,13 @@
           mfaVerified: !!mfa.verified,
           enrolledFactorCount: Number(mfa.enrolledFactorCount) || 0,
         });
-        if (warningMessage) showToast(warningMessage, warningType === 'warning' ? 'warning' : 'error');
+        if (warningMessage && String(adminSecurityContext.reason || '').trim().toLowerCase() !== 'admin_security_init_failed') {
+          showToast(warningMessage, warningType === 'warning' ? 'warning' : 'error');
+        }
       }
       if (deviceContextBypassed) {
-        setAdminDeviceWarning(t('adminSecurityInitFailed'), 'warning');
+        setAdminDeviceWarning('');
+        setAdminSecurityStatusMini('error');
       }
       renderAdminDeviceTableRows();
       updateAdminSettingsAvailability();
@@ -7171,7 +7221,8 @@
         sessionToken: '',
         sessionExpiresAtMs: 0,
       };
-      setAdminDeviceWarning(getAdminSecurityWarningMessage('admin_security_init_failed'), 'error');
+      setAdminDeviceWarning('');
+      setAdminSecurityStatusMini('error');
       updateAdminSettingsAvailability();
       updateAdminTotpControlsVisibility();
     }
@@ -7634,8 +7685,14 @@
       refreshAdminOverview();
       refreshAdminDeviceList();
     } else if (isCurrentUserAdmin()) {
-      const warning = getAdminSecurityWarningMessage(adminSecurityContext.reason);
-      if (warning) setAdminDeviceWarning(warning, 'error');
+      const normalizedReason = String(adminSecurityContext.reason || '').trim().toLowerCase();
+      if (normalizedReason === 'admin_security_init_failed') {
+        setAdminDeviceWarning('');
+        setAdminSecurityStatusMini('error');
+      } else {
+        const warning = getAdminSecurityWarningMessage(adminSecurityContext.reason);
+        if (warning) setAdminDeviceWarning(warning, 'error');
+      }
     }
     settingsOverlay?.classList.add('active');
   }
@@ -7989,7 +8046,6 @@
   let adminSessionActivityBound = false;
   let adminSessionLastTouchedAt = 0;
   let mfaLoginChallengeInfo = null;
-  let lastKnownAuthUserEmail = '';
 
   function getLocaleTextOrFallback(key, fallback = '') {
     const locale = window.LOCALE?.[currentLang];
@@ -8039,10 +8095,8 @@
   }
 
   function isCurrentUserAdmin() {
-    const currentUserEmail = window.FirebaseService?.getCurrentUser?.()?.email || '';
-    const cachedEmail = lastKnownAuthUserEmail || '';
-    const effectiveEmail = String(currentUserEmail || cachedEmail).trim();
-    if (effectiveEmail) return isAdminEmail(effectiveEmail);
+    const currentUserEmail = String(window.FirebaseService?.getCurrentUser?.()?.email || '').trim();
+    if (currentUserEmail) return isAdminEmail(currentUserEmail);
     if (typeof window.FirebaseService?.isCurrentUserAdmin === 'function') {
       try {
         return !!window.FirebaseService.isCurrentUserAdmin();
@@ -8379,12 +8433,21 @@
     const hasAdminAccess = canAccessAdminPanel();
     tabButton.style.display = hasAdminAccess ? '' : 'none';
     if (isAdmin && !hasAdminAccess) {
-      const warning = getAdminSecurityWarningMessage(adminSecurityContext.reason);
-      setAdminDeviceWarning(warning, warning ? 'error' : 'warning');
+      const normalizedReason = String(adminSecurityContext.reason || '').trim().toLowerCase();
+      const warning = getAdminSecurityWarningMessage(normalizedReason);
+      if (normalizedReason === 'admin_security_init_failed') {
+        setAdminDeviceWarning('');
+        setAdminSecurityStatusMini('error');
+      } else {
+        setAdminDeviceWarning(warning, warning ? 'error' : 'warning');
+        setAdminSecurityStatusMini('online');
+      }
     } else if (!isAdmin) {
       setAdminDeviceWarning('');
+      setAdminSecurityStatusMini('online');
     } else {
       setAdminDeviceWarning('');
+      setAdminSecurityStatusMini('online');
     }
 
     if (hasAdminAccess) return;
@@ -8454,11 +8517,13 @@
     const authBanner = document.getElementById('auth-banner');
     const authStatus = document.getElementById('auth-status');
     const loginBtn = document.getElementById('btn-google-login');
+    const loginScreenBtn = document.getElementById('btn-google-login-screen');
     const logoutBtn = document.getElementById('btn-logout');
 
     if (state === 'checking') {
       if (authStatus) authStatus.textContent = t('authChecking');
       if (loginBtn) loginBtn.style.display = 'none';
+      if (loginScreenBtn) loginScreenBtn.style.display = 'none';
       if (logoutBtn) logoutBtn.style.display = 'none';
       if (authScreen) authScreen.style.display = 'none';
       if (loginScreen) loginScreen.style.display = 'none';
@@ -8471,11 +8536,11 @@
 
     if (state === 'loggedOut') {
       isLoggedIn = false;
-      lastKnownAuthUserEmail = '';
       clearAdminSecurityState('not_admin');
       setCurrentUserPlan('free', { persistCloud: false });
       if (authStatus) authStatus.textContent = t('authLoggedOutPrompt');
       if (loginBtn) loginBtn.style.display = '';
+      if (loginScreenBtn) loginScreenBtn.style.display = '';
       if (logoutBtn) logoutBtn.style.display = 'none';
       if (authScreenRoot) authScreenRoot.style.display = 'block';
       if (authScreen) authScreen.style.display = 'block';
@@ -8490,10 +8555,10 @@
 
     if (state === 'loggedIn') {
       const userName = getAuthDisplayName(user);
-      lastKnownAuthUserEmail = String(user?.email || lastKnownAuthUserEmail || '').trim();
       syncPlanFromStorage();
       if (authStatus) authStatus.textContent = t('authLoggedInAs', { user: userName });
       if (loginBtn) loginBtn.style.display = 'none';
+      if (loginScreenBtn) loginScreenBtn.style.display = 'none';
       if (logoutBtn) logoutBtn.style.display = '';
       if (authScreen) authScreen.style.display = 'none';
       if (loginScreen) loginScreen.style.display = 'none';
@@ -8620,7 +8685,8 @@
                 sessionToken: '',
                 sessionExpiresAtMs: 0,
               };
-              setAdminDeviceWarning(getAdminSecurityWarningMessage('admin_security_init_failed'), 'error');
+              setAdminDeviceWarning('');
+              setAdminSecurityStatusMini('error');
               updateAdminSettingsAvailability();
               updateAdminTotpControlsVisibility();
             } else {

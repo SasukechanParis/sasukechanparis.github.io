@@ -3575,6 +3575,23 @@ html[lang="fr"] .modal-footer .btn {
   line-height: 1.45;
 }
 
+.admin-security-status-mini {
+  display: none;
+  margin: -6px 0 10px;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.admin-security-status-mini.is-error {
+  display: block;
+  color: #b45309;
+}
+
+.admin-security-status-mini.is-online {
+  display: block;
+}
+
 .admin-device-warning.is-warning {
   background: color-mix(in srgb, #f59e0b 13%, var(--bg-input));
   border-color: color-mix(in srgb, #f59e0b 42%, var(--border-color));
@@ -3602,6 +3619,36 @@ html[lang="fr"] .modal-footer .btn {
 
 #admin-mfa-settings-section {
   margin-bottom: 14px;
+}
+
+.totp-qr-wrap {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.totp-qr-frame {
+  width: 220px;
+  height: 220px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+#admin-totp-qr-image {
+  width: 220px;
+  height: 220px;
+  object-fit: contain;
+}
+
+.totp-qr-fallback {
+  margin: 0;
+  text-align: center;
 }
 
 #admin-totp-secret,
