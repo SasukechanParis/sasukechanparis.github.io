@@ -3195,6 +3195,13 @@ tbody tr:hover {
   margin-bottom: 10px;
 }
 
+.subscription-beta-note {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  margin-top: -4px;
+  margin-bottom: 10px;
+}
+
 .subscription-plan-list {
   display: grid;
   gap: 8px;

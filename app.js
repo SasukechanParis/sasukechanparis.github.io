@@ -368,6 +368,17 @@
     return document.getElementById('languageSelect') || document.getElementById('lang-select');
   }
 
+  function getLanguageOptionDefinitions() {
+    return [
+      { code: 'ja', label: '🇯🇵 日本語' },
+      { code: 'en', label: '🇺🇸 English' },
+      { code: 'fr', label: '🇫🇷 Français' },
+      { code: 'zh-CN', label: '🇨🇳 简体中文' },
+      { code: 'zh-TW', label: '🇹🇼 繁體中文' },
+      { code: 'ko', label: '🇰🇷 한국어' },
+    ];
+  }
+
   function getHeroMetricLabelByLang(key) {
     if (key === 'monthlyNetProfit') {
       return t('heroMetricMonthlyNetProfit');
@@ -664,6 +675,7 @@
       <div class="settings-section" id="${escapeHtml(sectionId)}">
         <h3>${escapeHtml(t('settingsSubscriptionSection'))}</h3>
         <p class="settings-detail-empty">${escapeHtml(t('settingsSubscriptionDescription'))}</p>
+        <p class="settings-detail-empty subscription-beta-note">${escapeHtml(t('settingsSubscriptionBetaNote'))}</p>
         <div class="settings-item subscription-current-row">
           <span>${escapeHtml(t('settingsSubscriptionCurrentPlanLabel'))}</span>
           <span class="header-plan-badge" data-plan="${escapeHtml(normalizedCurrentPlan)}">${escapeHtml(currentPlanBadgeText)}</span>
@@ -4995,6 +5007,14 @@
     const container = $('#settings-list');
     if (!container) return;
     container.innerHTML = '';
+    const languageOptionRows = getLanguageOptionDefinitions().map(({ code, label }) => {
+      const allowed = canUseLanguageByPlan(code, currentUserPlan);
+      return `
+      <option value="${escapeHtml(code)}" ${currentLang === code ? 'selected' : ''} ${allowed ? '' : 'disabled'}>
+        ${escapeHtml(label)}
+      </option>
+    `;
+    }).join('');
     const currencyOptionRows = Object.entries(CURRENCY_CONFIG).map(([code, config]) => `
       <option value="${escapeHtml(code)}" ${currentCurrency === code ? 'selected' : ''}>${escapeHtml(`${code} (${config.symbol})`)}</option>
     `).join('');
@@ -5132,6 +5152,14 @@
 
     container.innerHTML = `
       <div class="settings-section">
+        <h3>${escapeHtml(t('settingsLanguageSection'))}</h3>
+        <div class="settings-item dashboard-config-row">
+          <label class="dashboard-config-label" for="settings-language-select">${escapeHtml(t('settingsLanguageLabel'))}</label>
+          <select id="settings-language-select" class="ui-button-standard" style="min-width: 180px;">${languageOptionRows}</select>
+        </div>
+        <div class="settings-detail-empty">${escapeHtml(t('settingsLanguageHelp'))}</div>
+      </div>
+      <div class="settings-section">
         <h3>${escapeHtml(t('settingsCurrencySection'))}</h3>
         <div class="settings-item dashboard-config-row">
           <label class="dashboard-config-label" for="settings-currency-select">${escapeHtml(t('currency'))}</label>
@@ -5192,6 +5220,23 @@
     bindEventOnce(container.querySelector('#btn-plan-save'), 'click', savePlanMasterFromForm, 'plan-master-save');
     bindEventOnce(container.querySelector('#btn-plan-reset'), 'click', resetPlanMasterFormInputs, 'plan-master-reset');
     bindEventOnce(container.querySelector('#btn-dynamic-item-add'), 'click', addDynamicItemHintFromSettings, 'dynamic-item-add');
+    bindEventOnce(container.querySelector('#settings-language-select'), 'change', (event) => {
+      const nextLang = String(event?.target?.value || '').trim();
+      if (!nextLang) return;
+      if (!canUseLanguageByPlan(nextLang, currentUserPlan)) {
+        showToast(t('planFeatureLanguageLocked') || 'Upgrade required to use this language.', 'error');
+        const select = container.querySelector('#settings-language-select');
+        if (select) select.value = currentLang;
+        return;
+      }
+      applyInvoiceLocaleDefaults(nextLang, { force: true });
+      updateUITS(nextLang);
+      if (settingsOverlay?.classList.contains('active')) {
+        renderSettings();
+        renderPlanManagementSection();
+        loadInvoiceSettings();
+      }
+    }, 'settings-language-select-change');
     bindEventOnce(container.querySelector('#settings-currency-select'), 'change', (event) => {
       const nextCurrency = String(event?.target?.value || '').trim();
       if (!nextCurrency) return;
@@ -6103,10 +6148,7 @@
       handleSubscriptionPlanContactClick(normalized);
       return;
     }
-    if (normalized !== 'free') {
-      openStripeCheckoutForPlan(normalized);
-      return;
-    }
+    saveLocalValue(STRIPE_PENDING_PLAN_KEY, {});
     setCurrentUserPlan(normalized, { persistCloud: true });
     renderSettings();
     renderPlanManagementSection();
