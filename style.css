@@ -494,10 +494,18 @@ body {
   border-color: color-mix(in srgb, #0ea5e9 45%, var(--border-color));
 }
 
-.header-plan-badge[data-plan="team"] {
+.header-plan-badge[data-plan="team"],
+.header-plan-badge[data-plan="small_team"],
+.header-plan-badge[data-plan="medium_team"] {
   background: color-mix(in srgb, #10b981 16%, transparent);
   color: #059669;
   border-color: color-mix(in srgb, #10b981 45%, var(--border-color));
+}
+
+.header-plan-badge[data-plan="enterprise"] {
+  background: color-mix(in srgb, #7c3aed 16%, transparent);
+  color: #6d28d9;
+  border-color: color-mix(in srgb, #7c3aed 45%, var(--border-color));
 }
 
 .header-actions .btn,
@@ -3249,6 +3257,18 @@ tbody tr:hover {
   margin-top: 2px;
   font-size: 0.82rem;
   color: var(--text-muted);
+}
+
+.subscription-plan-summary {
+  margin-top: 2px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.subscription-plan-footer {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .subscription-plan-action-btn[disabled] {

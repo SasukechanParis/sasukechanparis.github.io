@@ -496,14 +496,15 @@
 
   function normalizeUserPlan(plan) {
     const normalized = String(plan || '').trim().toLowerCase();
-    if (normalized === 'team') return 'team';
+    if (normalized === 'team' || normalized === 'small-team' || normalized === 'smallteam') return 'small_team';
+    if (normalized === 'medium-team' || normalized === 'mediumteam') return 'medium_team';
     if (normalized === 'individual' || normalized === 'pro') return 'individual';
+    if (normalized === 'enterprise' || normalized === 'ent') return 'enterprise';
     return 'free';
   }
 
   function hasPaidPlanAccess(plan = currentUserPlan) {
-    const normalized = normalizeUserPlan(plan);
-    return normalized === 'individual' || normalized === 'team';
+    return normalizeUserPlan(plan) !== 'free';
   }
 
   function getCustomerLimitByPlan(plan = currentUserPlan) {
@@ -518,14 +519,18 @@
 
   function getPlanBadgeText(plan = currentUserPlan) {
     const normalized = normalizeUserPlan(plan);
-    if (normalized === 'team') return 'TEAM';
+    if (normalized === 'small_team') return 'TEAM S';
+    if (normalized === 'medium_team') return 'TEAM M';
+    if (normalized === 'enterprise') return 'ENTERPRISE';
     if (normalized === 'individual') return 'PRO';
     return 'FREE';
   }
 
   function getPlanTier(plan = currentUserPlan) {
     const normalized = normalizeUserPlan(plan);
-    if (normalized === 'team') return 2;
+    if (normalized === 'enterprise') return 4;
+    if (normalized === 'medium_team') return 3;
+    if (normalized === 'small_team') return 2;
     if (normalized === 'individual') return 1;
     return 0;
   }
@@ -534,7 +539,7 @@
     const targetTier = getPlanTier(targetPlan);
     const currentTier = getPlanTier(currentPlan);
     if (targetTier > currentTier) return t('settingsSubscriptionUpgradeButton');
-    return t('settingsSubscriptionChangeButton');
+    return t('settingsSubscriptionSelectButton');
   }
 
   function updateHeaderPlanBadge() {
@@ -4784,14 +4789,30 @@
         summary: t('settingsSubscriptionIndividualSummary'),
       },
       {
-        key: 'team',
-        name: t('settingsSubscriptionTeamName'),
-        price: t('settingsSubscriptionTeamPrice'),
-        summary: t('settingsSubscriptionTeamSummary'),
+        key: 'small_team',
+        name: t('settingsSubscriptionSmallTeamName'),
+        price: t('settingsSubscriptionSmallTeamPrice'),
+        summary: t('settingsSubscriptionSmallTeamSummary'),
+      },
+      {
+        key: 'medium_team',
+        name: t('settingsSubscriptionMediumTeamName'),
+        price: t('settingsSubscriptionMediumTeamPrice'),
+        summary: t('settingsSubscriptionMediumTeamSummary'),
+      },
+      {
+        key: 'enterprise',
+        name: t('settingsSubscriptionEnterpriseName'),
+        price: t('settingsSubscriptionEnterprisePrice'),
+        summary: t('settingsSubscriptionEnterpriseSummary'),
       },
     ];
     const subscriptionPlanRows = subscriptionPlans.map((planEntry) => {
       const isCurrent = normalizedCurrentPlan === planEntry.key;
+      const isEnterpriseContact = planEntry.key === 'enterprise' && !isCurrent;
+      const actionLabel = isCurrent
+        ? t('settingsSubscriptionCurrentButton')
+        : (isEnterpriseContact ? t('settingsSubscriptionContactButton') : getSubscriptionActionLabel(planEntry.key, normalizedCurrentPlan));
       return `
         <div class="subscription-plan-card ${isCurrent ? 'is-current' : ''}">
           <div class="subscription-plan-meta">
@@ -4802,9 +4823,11 @@
           <button
             type="button"
             class="btn btn-secondary btn-sm subscription-plan-action-btn"
-            data-subscription-plan-target="${escapeHtml(planEntry.key)}"
+            ${isEnterpriseContact
+              ? `data-subscription-contact="${escapeHtml(planEntry.key)}"`
+              : `data-subscription-plan-target="${escapeHtml(planEntry.key)}"`}
             ${isCurrent ? 'disabled' : ''}
-          >${escapeHtml(isCurrent ? t('settingsSubscriptionCurrentButton') : getSubscriptionActionLabel(planEntry.key, normalizedCurrentPlan))}</button>
+          >${escapeHtml(actionLabel)}</button>
         </div>
       `;
     }).join('');
@@ -5012,6 +5035,12 @@
         if (!targetPlan) return;
         handleSubscriptionPlanSelect(targetPlan);
       }, `subscription-plan-select-${targetPlan}`);
+    });
+    container.querySelectorAll('button[data-subscription-contact]').forEach((button) => {
+      const target = String(button.dataset.subscriptionContact || '').trim() || 'enterprise';
+      bindEventOnce(button, 'click', () => {
+        handleSubscriptionPlanContactClick(target);
+      }, `subscription-plan-contact-${target}`);
     });
     bindEventOnce(container.querySelector('#btn-subscription-plan-details'), 'click', handleSubscriptionPlanDetailsClick, 'subscription-plan-details-open');
 
@@ -5920,13 +5949,22 @@
     showToast(t('settingsSubscriptionUpdated', { plan: getPlanBadgeText(normalized) }));
   }
 
+  function handleSubscriptionPlanContactClick(targetPlan = 'enterprise') {
+    const subject = encodeURIComponent('Pholio Enterprise Plan Inquiry');
+    const body = encodeURIComponent(`Plan: ${targetPlan}\n\nPlease contact me about upgrading.`);
+    window.location.href = `mailto:sasuke.photographe@gmail.com?subject=${subject}&body=${body}`;
+    showToast(t('settingsSubscriptionContactOpened'));
+  }
+
   function handleSubscriptionPlanDetailsClick() {
     const detailsText = [
       t('settingsSubscriptionDetailsModalTitle'),
       '',
       `• ${t('settingsSubscriptionFreeName')} (${t('settingsSubscriptionFreePrice')}): ${t('settingsSubscriptionFreeSummary', { limit: String(FREE_PLAN_LIMIT) })}`,
       `• ${t('settingsSubscriptionIndividualName')} (${t('settingsSubscriptionIndividualPrice')}): ${t('settingsSubscriptionIndividualSummary')}`,
-      `• ${t('settingsSubscriptionTeamName')} (${t('settingsSubscriptionTeamPrice')}): ${t('settingsSubscriptionTeamSummary')}`,
+      `• ${t('settingsSubscriptionSmallTeamName')} (${t('settingsSubscriptionSmallTeamPrice')}): ${t('settingsSubscriptionSmallTeamSummary')}`,
+      `• ${t('settingsSubscriptionMediumTeamName')} (${t('settingsSubscriptionMediumTeamPrice')}): ${t('settingsSubscriptionMediumTeamSummary')}`,
+      `• ${t('settingsSubscriptionEnterpriseName')} (${t('settingsSubscriptionEnterprisePrice')}): ${t('settingsSubscriptionEnterpriseSummary')}`,
     ].join('\n');
     window.alert(detailsText);
   }
@@ -6600,7 +6638,9 @@
 
   function formatAdminPlanLabel(plan) {
     const normalized = normalizeUserPlan(plan);
-    if (normalized === 'team') return 'TEAM';
+    if (normalized === 'small_team') return 'TEAM S';
+    if (normalized === 'medium_team') return 'TEAM M';
+    if (normalized === 'enterprise') return 'ENTERPRISE';
     if (normalized === 'individual') return 'PRO';
     return 'FREE';
   }
@@ -6616,13 +6656,14 @@
     const stats = safeOverview.stats && typeof safeOverview.stats === 'object' ? safeOverview.stats : {};
     const planCounts = stats.planCounts && typeof stats.planCounts === 'object'
       ? stats.planCounts
-      : { free: 0, individual: 0, team: 0 };
+      : { free: 0, individual: 0, small_team: 0, medium_team: 0, enterprise: 0 };
     const users = Array.isArray(safeOverview.users) ? safeOverview.users : [];
     const totalUsers = Number(stats.totalUsers) || users.length || 0;
     const totalProjects = Number(stats.totalProjects) || 0;
+    const teamCount = (Number(planCounts.small_team) || 0) + (Number(planCounts.medium_team) || 0) + (Number(planCounts.enterprise) || 0);
 
     totalUsersEl.textContent = String(totalUsers);
-    planCountsEl.textContent = `FREE ${Number(planCounts.free) || 0} / PRO ${Number(planCounts.individual) || 0} / TEAM ${Number(planCounts.team) || 0}`;
+    planCountsEl.textContent = `FREE ${Number(planCounts.free) || 0} / PRO ${Number(planCounts.individual) || 0} / TEAM ${teamCount}`;
     totalProjectsEl.textContent = String(totalProjects);
 
     if (users.length === 0) {
@@ -6714,28 +6755,12 @@
     if (mergePromptedUid === user.uid) return;
     mergePromptedUid = user.uid;
 
-    const localSummary = window.FirebaseService.getLocalDataSummary?.();
-    if (!localSummary?.hasLocalData) return;
-
-    let cloudSummary = { projects: 0, expenses: 0, hasCloudData: false, latestUpdatedAtMs: 0 };
-    try {
-      cloudSummary = await window.FirebaseService.getCloudDataSummary?.() || cloudSummary;
-    } catch (err) {
-      console.warn('Failed to fetch cloud summary before merge', err);
-    }
-
-    const localUpdatedAtMs = Number(localSummary.latestUpdatedAtMs) || 0;
-    const cloudUpdatedAtMs = Number(cloudSummary.latestUpdatedAtMs) || 0;
-    const hasCloudData = !!cloudSummary.hasCloudData;
-    const shouldOverwrite = hasCloudData && localUpdatedAtMs > 0 && localUpdatedAtMs > cloudUpdatedAtMs;
-    const shouldMerge = !hasCloudData
-      || shouldOverwrite
-      || (hasCloudData && localUpdatedAtMs === 0 && ((localSummary.customers || 0) > 0 || (localSummary.expenses || 0) > 0));
-    if (!shouldMerge) return;
-
     setCloudSyncIndicator('syncing');
     try {
-      const mergeResult = await window.FirebaseService.mergeLocalDataToCloud?.({ overwrite: shouldOverwrite });
+      const mergeResult = await (
+        window.FirebaseService.autoSyncLocalDataToCloud?.()
+        ?? window.FirebaseService.mergeLocalDataToCloud?.({ overwrite: false })
+      );
       if (mergeResult?.merged && ((mergeResult.customerCount || 0) > 0 || (mergeResult.expenseCount || 0) > 0)) {
         showToast(t('cloudMergeCompleted', {
           customers: String(mergeResult.customerCount || 0),

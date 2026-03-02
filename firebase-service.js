@@ -26,7 +26,7 @@ const USER_PLAN_KEY = 'photocrm_user_plan';
 const USER_BILLING_PROFILE_KEY = 'photocrm_user_billing_profile';
 const ADMIN_EMAILS = new Set(['sasuke.photographe@gmail.com']);
 const DEFAULT_USER_PLAN = 'free';
-const VALID_USER_PLANS = new Set(['free', 'individual', 'team']);
+const VALID_USER_PLANS = new Set(['free', 'individual', 'small_team', 'medium_team', 'enterprise']);
 
 const firebaseConfig = {
   apiKey: 'AIzaSyD6fb5NWN0bAe0vW1Z9piQxv9aYE0e-tGs',
@@ -260,6 +260,10 @@ function hasLocalData(payload) {
 
 function normalizeUserPlan(plan) {
   const normalized = String(plan || '').trim().toLowerCase();
+  if (normalized === 'team' || normalized === 'small-team' || normalized === 'smallteam') return 'small_team';
+  if (normalized === 'medium-team' || normalized === 'mediumteam') return 'medium_team';
+  if (normalized === 'pro') return 'individual';
+  if (normalized === 'ent') return 'enterprise';
   return VALID_USER_PLANS.has(normalized) ? normalized : DEFAULT_USER_PLAN;
 }
 
@@ -350,14 +354,14 @@ async function buildAdminUserOverview(user) {
       stats: {
         totalUsers: 0,
         totalProjects: 0,
-        planCounts: { free: 0, individual: 0, team: 0 },
+        planCounts: { free: 0, individual: 0, small_team: 0, medium_team: 0, enterprise: 0 },
       },
     };
   }
 
   const snap = await getDocs(adminUserSummariesCol());
   const users = [];
-  const planCounts = { free: 0, individual: 0, team: 0 };
+  const planCounts = { free: 0, individual: 0, small_team: 0, medium_team: 0, enterprise: 0 };
   let totalProjects = 0;
 
   snap.forEach((docSnap) => {
@@ -371,7 +375,8 @@ async function buildAdminUserOverview(user) {
       plan,
       projectCount,
     });
-    planCounts[plan] += 1;
+    if (Object.prototype.hasOwnProperty.call(planCounts, plan)) planCounts[plan] += 1;
+    else planCounts.free += 1;
     totalProjects += projectCount;
   });
 
@@ -485,7 +490,7 @@ async function migrateLocalDataToCloud(user, options = {}) {
     customerCount: customers.length,
     expenseCount: expenses.length,
     overwrite,
-    source: 'localStorage_manual_merge',
+    source: String(options.source || 'localStorage_manual_merge'),
   }, { merge: true });
 
   const profileSyncResults = await Promise.allSettled([
@@ -510,6 +515,37 @@ async function migrateLocalDataToCloud(user, options = {}) {
     expenseCount: expenses.length,
     overwrite,
     hadLocalData: hasLocalData(payload),
+  };
+}
+
+async function autoSyncLocalDataWithCloud(user) {
+  const localSummary = buildLocalDataSummary();
+  if (!localSummary.hasLocalData) {
+    return { merged: false, reason: 'no_local_data', customerCount: 0, expenseCount: 0, overwrite: false };
+  }
+
+  const cloudSummary = await getCloudDataSummary(user.uid);
+  const localUpdatedAtMs = Number(localSummary.latestUpdatedAtMs) || 0;
+  const cloudUpdatedAtMs = Number(cloudSummary.latestUpdatedAtMs) || 0;
+  const hasCloudData = !!cloudSummary.hasCloudData;
+
+  const shouldOverwrite = hasCloudData && localUpdatedAtMs > 0 && localUpdatedAtMs > cloudUpdatedAtMs;
+  const shouldMerge = !hasCloudData
+    || shouldOverwrite
+    || (hasCloudData && localUpdatedAtMs === 0 && (localSummary.customers > 0 || localSummary.expenses > 0));
+
+  if (!shouldMerge) {
+    return { merged: false, reason: 'cloud_newer', customerCount: 0, expenseCount: 0, overwrite: false };
+  }
+
+  const result = await migrateLocalDataToCloud(user, {
+    overwrite: shouldOverwrite,
+    source: 'localStorage_auto_sync',
+  });
+  return {
+    merged: true,
+    reason: shouldOverwrite ? 'local_newer_overwrite' : 'auto_merged',
+    ...result,
   };
 }
 
@@ -723,8 +759,26 @@ window.FirebaseService = {
   async getCloudDataSummary() {
     await ensureInitialized();
     const user = auth.currentUser;
-    if (!user) return { projects: 0, legacyClients: 0, expenses: 0, hasCloudData: false };
+    if (!user) {
+      return {
+        projects: 0,
+        legacyClients: 0,
+        expenses: 0,
+        hasCloudData: false,
+        latestUpdatedAtMs: 0,
+        latestUpdatedAt: '',
+      };
+    }
     return getCloudDataSummary(user.uid);
+  },
+
+  async autoSyncLocalDataToCloud() {
+    await ensureInitialized();
+    const user = auth.currentUser;
+    if (!user) return { merged: false, reason: 'not_logged_in' };
+    const result = await autoSyncLocalDataWithCloud(user);
+    if (result?.merged) await loadCloudDataForUser(user);
+    return result;
   },
 
   async mergeLocalDataToCloud(options = {}) {
