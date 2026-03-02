@@ -42,16 +42,13 @@
 
     <!-- ===== Header ===== -->
     <header class="app-header">
-      <div class="logo">
-        <div class="brand-unit">
-          <img src="iconpholio.png" alt="Pholio" class="brand-logo-image" />
-          <span class="brand-wordmark">Pholio</span>
+      <div class="header-left">
+        <div class="logo">
+          <div class="brand-unit">
+            <img src="iconpholio.png" alt="Pholio" class="brand-logo-image" />
+            <span class="brand-wordmark">Pholio</span>
+          </div>
         </div>
-      </div>
-      <button class="mobile-header-menu-btn" id="btn-mobile-header-menu" type="button" aria-expanded="false"
-        data-i18n-title="mobileMenu" data-i18n-aria-label="mobileMenu">⚙️</button>
-      <div class="header-actions">
-        <!-- Language Switcher -->
         <select id="languageSelect" class="btn btn-secondary btn-sm">
           <option value="en">🇺🇸 English</option>
           <option value="ja">🇯🇵 日本語</option>
@@ -60,17 +57,24 @@
           <option value="zh-TW">🇹🇼 繁體中文</option>
           <option value="ko">🇰🇷 한국어</option>
         </select>
-
-        <div class="cloud-sync-indicator" id="cloud-sync-indicator" data-state="local">
+        <div class="cloud-sync-indicator" id="cloud-sync-indicator" data-state="local" title="ローカル保存中" aria-label="ローカル保存中">
           <span class="cloud-sync-dot" aria-hidden="true"></span>
           <span class="cloud-sync-label" id="cloud-sync-label" data-i18n="cloudSyncStatusLocal">ローカル保存中</span>
         </div>
-        <div class="header-user-badge" id="header-user-badge" style="display:none;">
-          <img class="header-user-avatar" id="header-user-avatar" alt="" />
-          <span class="header-user-name" id="header-user-name"></span>
-        </div>
         <button class="theme-toggle" id="btn-theme" title="Toggle Theme">🌙</button>
-        <button class="btn btn-secondary btn-sm" id="btn-header-logout" style="display:none;" data-i18n="logout">ログアウト</button>
+      </div>
+      <div class="header-right">
+        <div class="header-auth-meta">
+          <span class="header-plan-badge" id="header-plan-badge" data-plan="free" style="display:none;">FREE</span>
+          <button class="btn btn-secondary btn-sm" id="btn-header-logout" style="display:none;" title="ログアウト">
+            <span class="btn-icon" aria-hidden="true">↩</span>
+            <span class="btn-text" data-i18n="logout">ログアウト</span>
+          </button>
+        </div>
+        <button class="mobile-header-menu-btn" id="btn-mobile-header-menu" type="button" aria-expanded="false"
+          data-i18n-title="mobileMenu" data-i18n-aria-label="mobileMenu">⚙️</button>
+      </div>
+      <div class="header-actions">
         <button class="btn btn-secondary btn-sm" id="btn-settings" title="Settings" data-i18n="settingsHeader" data-i18n-title="settings">⚙
           Settings</button>
         <button class="btn btn-secondary btn-sm" id="btn-sync-export" title="バックアップ (JSON)" data-i18n="exportSync"
@@ -646,12 +650,49 @@
         </div>
         <div class="settings-tabs">
           <button class="settings-tab-btn active" data-tab="menu" data-i18n="settings">General</button>
+          <button class="settings-tab-btn" data-tab="profile" data-i18n="billingProfileTab">Billing Profile</button>
           <button class="settings-tab-btn" data-tab="invoice" data-i18n="invoiceSettings">Invoice & Tax</button>
           <button class="settings-tab-btn" data-tab="contract">契約書設定</button>
           <button class="settings-tab-btn" data-tab="team" data-i18n="teamManager">Team</button>
+          <button class="settings-tab-btn" data-tab="admin" id="settings-tab-admin" data-i18n="adminPanelTab" style="display:none;">Admin</button>
         </div>
         <div class="settings-tab-content active" id="settings-content-menu">
           <div class="settings-list" id="settings-list"></div>
+        </div>
+
+        <div class="settings-tab-content" id="settings-content-profile">
+          <div class="settings-section">
+            <h3 data-i18n="billingProfileTitle">請求プロフィール</h3>
+            <p class="help-text" data-i18n="billingProfileHelp">請求書に使う請求先情報を設定します。</p>
+            <div class="billing-plan-row">
+              <span data-i18n="billingCurrentPlanLabel">現在のプラン</span>
+              <span class="header-plan-badge" id="profile-plan-badge" data-plan="free">FREE</span>
+              <span class="billing-plan-text" id="profile-plan-label">FREE</span>
+            </div>
+            <div class="form-group">
+              <label for="profile-full-name" data-i18n="billingFullNameLabel">屋号 / 氏名</label>
+              <input type="text" id="profile-full-name" data-i18n-placeholder="billingFullNamePlaceholder" placeholder="例: Pholio Studio">
+            </div>
+            <div class="form-group">
+              <label for="profile-address" data-i18n="billingAddressLabel">住所</label>
+              <textarea id="profile-address" style="min-height: 72px;" data-i18n-placeholder="billingAddressPlaceholder" placeholder="例: 東京都渋谷区..."></textarea>
+            </div>
+            <div class="form-group-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+              <div class="form-group">
+                <label for="profile-siret-number" data-i18n="billingSiretLabel">SIRET番号</label>
+                <input type="text" id="profile-siret-number" data-i18n-placeholder="billingSiretPlaceholder" placeholder="123 456 789 00012">
+              </div>
+              <div class="form-group">
+                <label for="profile-registration-number" data-i18n="billingRegistrationLabel">登録番号（T番号）</label>
+                <input type="text" id="profile-registration-number" data-i18n-placeholder="billingRegistrationPlaceholder" placeholder="T1234567890123">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="profile-email" data-i18n="billingEmailLabel">メールアドレス</label>
+              <input type="email" id="profile-email" data-i18n-placeholder="billingEmailPlaceholder" placeholder="example@pholio.app">
+            </div>
+            <button class="btn btn-primary" id="btn-save-billing-profile" data-i18n="billingSaveButton" style="width:100%; margin-top: 12px;">請求プロフィールを保存</button>
+          </div>
         </div>
 
         <div class="settings-tab-content" id="settings-content-invoice">
@@ -711,6 +752,31 @@
               <label data-i18n="bankInfo">Bank Information (optional)</label>
               <textarea id="invoice-bank" style="min-height: 80px;"></textarea>
             </div>
+            <div class="settings-section" id="invoice-legal-section">
+              <h3 id="invoice-legal-section-title">法定情報</h3>
+              <p class="help-text" id="invoice-legal-caption">言語に応じた法定項目を入力してください。</p>
+              <div id="invoice-legal-fields"></div>
+            </div>
+            <div class="form-group">
+              <label>ロゴ画像（任意）</label>
+              <div class="invoice-asset-row">
+                <input type="file" id="invoice-logo-upload" accept="image/*">
+                <button class="btn btn-secondary btn-sm" type="button" id="btn-clear-invoice-logo">ロゴ削除</button>
+              </div>
+              <div class="invoice-asset-preview-wrap">
+                <img id="invoice-logo-preview" class="invoice-asset-preview" alt="Invoice Logo Preview" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label>印影（任意）</label>
+              <div class="invoice-asset-row">
+                <input type="file" id="invoice-stamp-upload" accept="image/*">
+                <button class="btn btn-secondary btn-sm" type="button" id="btn-clear-invoice-stamp">印影削除</button>
+              </div>
+              <div class="invoice-asset-preview-wrap">
+                <img id="invoice-stamp-preview" class="invoice-asset-preview invoice-asset-stamp" alt="Invoice Stamp Preview" />
+              </div>
+            </div>
             <div class="form-group">
               <label for="invoice-template" data-i18n="invoiceTemplate">Invoice Template</label>
               <select id="invoice-template">
@@ -738,6 +804,45 @@
                 </select>
                 <button class="btn btn-primary btn-sm" id="btn-team-add" data-i18n="addMember">Add</button>
               </div>
+            </div>
+          </div>
+        </div>
+        <div class="settings-tab-content" id="settings-content-admin">
+          <div class="settings-section">
+            <h3 data-i18n="adminPanelTitle">管理者ダッシュボード</h3>
+            <p class="help-text" data-i18n="adminPanelDesc">ユーザーの機密データに触れずに運営統計のみ確認できます。</p>
+            <div class="admin-summary-grid">
+              <div class="admin-summary-card">
+                <span class="admin-summary-label" data-i18n="adminStatTotalUsers">総ユーザー数</span>
+                <strong id="admin-stat-total-users">0</strong>
+              </div>
+              <div class="admin-summary-card">
+                <span class="admin-summary-label" data-i18n="adminStatPlanBreakdown">プラン別契約数</span>
+                <strong id="admin-stat-plan-counts">FREE 0 / PRO 0 / TEAM 0</strong>
+              </div>
+              <div class="admin-summary-card">
+                <span class="admin-summary-label" data-i18n="adminStatTotalProjects">総案件作成数</span>
+                <strong id="admin-stat-total-projects">0</strong>
+              </div>
+            </div>
+            <div style="display:flex; justify-content:flex-end; margin-top:12px;">
+              <button class="btn btn-secondary btn-sm" id="btn-admin-refresh" data-i18n="adminRefreshButton">更新</button>
+            </div>
+            <div class="admin-user-table-wrap">
+              <table class="admin-user-table">
+                <thead>
+                  <tr>
+                    <th data-i18n="adminUserEmail">メールアドレス</th>
+                    <th data-i18n="adminUserPlan">プラン</th>
+                    <th data-i18n="adminUserProjectCount">案件数</th>
+                  </tr>
+                </thead>
+                <tbody id="admin-user-list-body">
+                  <tr>
+                    <td colspan="3" data-i18n="adminNoData">データがありません</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -938,6 +1043,7 @@
           <div class="form-group">
             <label data-i18n="dueDate">Due Date</label>
             <input type="date" id="invoice-due-date">
+            <button class="btn btn-secondary btn-sm invoice-date-helper-btn" type="button" id="btn-invoice-due-plus14">+14日を自動入力</button>
           </div>
         </div>
         <div class="invoice-item-header">
@@ -963,7 +1069,29 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeInvoiceBuilderModal()" data-i18n="cancel">Cancel</button>
-        <button class="btn btn-primary" id="btn-generate-custom-invoice" data-i18n="invoiceGeneratePdfButton">📄 Generate PDF</button>
+        <button class="btn btn-secondary" id="btn-preview-custom-invoice">👁 印刷プレビュー</button>
+        <button class="btn btn-primary" id="btn-generate-custom-invoice" data-i18n="invoiceGeneratePdfButton">📄 PDF保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Invoice Preview Modal -->
+  <div class="modal-overlay" id="invoice-preview-modal" style="display:none;">
+    <div class="modal invoice-preview-modal">
+      <div class="modal-header">
+        <h3 class="modal-title">
+          <span class="modal-icon">🖨️</span>
+          印刷用プレビュー
+        </h3>
+        <button class="btn-close" onclick="closeInvoicePreviewModal()">✕</button>
+      </div>
+      <div class="modal-body invoice-preview-body">
+        <iframe id="invoice-preview-frame" class="invoice-preview-frame" title="Invoice Preview"></iframe>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeInvoicePreviewModal()">閉じる</button>
+        <button class="btn btn-secondary" id="btn-print-invoice-preview">印刷</button>
+        <button class="btn btn-primary" id="btn-download-invoice-preview-pdf">PDF保存</button>
       </div>
     </div>
   </div>

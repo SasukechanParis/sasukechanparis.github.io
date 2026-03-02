@@ -22,6 +22,11 @@ import {
 const GOOGLE_OAUTH_ACCESS_TOKEN_KEY = 'photocrm_google_oauth_access_token';
 const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
 const GOOGLE_CALENDAR_READ_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
+const USER_PLAN_KEY = 'photocrm_user_plan';
+const USER_BILLING_PROFILE_KEY = 'photocrm_user_billing_profile';
+const ADMIN_EMAILS = new Set(['sasuke.photographe@gmail.com']);
+const DEFAULT_USER_PLAN = 'free';
+const VALID_USER_PLANS = new Set(['free', 'individual', 'team']);
 
 const firebaseConfig = {
   apiKey: 'AIzaSyD6fb5NWN0bAe0vW1Z9piQxv9aYE0e-tGs',
@@ -48,6 +53,8 @@ const SETTINGS_KEYS = [
   'photocrm_form_field_visibility',
   'photocrm_google_calendar_auto_sync',
   'photocrm_google_calendar_selected_id',
+  USER_PLAN_KEY,
+  USER_BILLING_PROFILE_KEY,
   'preferred_view',
 ];
 
@@ -135,6 +142,10 @@ function userMetaRef(uid) {
   return doc(db, 'users', uid, 'meta', 'state');
 }
 
+function userRootRef(uid) {
+  return doc(db, 'users', uid);
+}
+
 function userMigrationRef(uid) {
   return doc(db, 'users', uid, 'meta', 'migration');
 }
@@ -157,6 +168,14 @@ function userLegacyClientsCol(uid) {
 
 function userExpensesCol(uid) {
   return collection(db, 'users', uid, 'expenses');
+}
+
+function adminUserSummaryRef(uid) {
+  return doc(db, 'admin_user_summaries', uid);
+}
+
+function adminUserSummariesCol() {
+  return collection(db, 'admin_user_summaries');
 }
 
 async function overwriteCollection(collectionRef, records) {
@@ -196,6 +215,135 @@ function hasLocalData(payload) {
     if (value && typeof value === 'object') return Object.keys(value).length > 0;
     return value !== undefined && value !== null && value !== '';
   });
+}
+
+function normalizeUserPlan(plan) {
+  const normalized = String(plan || '').trim().toLowerCase();
+  return VALID_USER_PLANS.has(normalized) ? normalized : DEFAULT_USER_PLAN;
+}
+
+function normalizeEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
+function isAdminEmail(email) {
+  return ADMIN_EMAILS.has(normalizeEmail(email));
+}
+
+function isAdminUser(user) {
+  return isAdminEmail(user?.email);
+}
+
+function sanitizeBillingProfile(raw) {
+  const src = raw && typeof raw === 'object' ? raw : {};
+  return {
+    fullName: String(src.fullName || '').trim(),
+    address: String(src.address || '').trim(),
+    siretNumber: String(src.siretNumber || '').trim(),
+    invoiceRegistrationNumber: String(src.invoiceRegistrationNumber || '').trim(),
+    email: String(src.email || '').trim(),
+  };
+}
+
+function getCachedPlan() {
+  return normalizeUserPlan(cache.plan || cache[USER_PLAN_KEY] || DEFAULT_USER_PLAN);
+}
+
+function getCachedProjectCount() {
+  return Array.isArray(cache.photocrm_customers) ? cache.photocrm_customers.length : 0;
+}
+
+async function syncUserProfileDoc(user, options = {}) {
+  if (!user?.uid) return;
+  const billingProfile = sanitizeBillingProfile(options.billingProfile ?? cache[USER_BILLING_PROFILE_KEY]);
+  const baseEmail = String(options.email || billingProfile.email || user.email || '').trim();
+  const email = baseEmail || `${user.uid}@unknown.local`;
+  const fullName = String(options.fullName || billingProfile.fullName || user.displayName || '').trim();
+  const plan = normalizeUserPlan(options.plan || getCachedPlan());
+
+  await setDoc(userRootRef(user.uid), {
+    userId: user.uid,
+    uid: user.uid,
+    email,
+    displayName: String(user.displayName || '').trim(),
+    photoURL: String(user.photoURL || '').trim(),
+    fullName,
+    companyName: fullName,
+    address: billingProfile.address,
+    siretNumber: billingProfile.siretNumber,
+    invoiceRegistrationNumber: billingProfile.invoiceRegistrationNumber,
+    plan,
+    billingProfile: {
+      ...billingProfile,
+      email,
+    },
+    __updatedAt: serverTimestamp(),
+  }, { merge: true });
+}
+
+async function syncAdminUserSummary(user, options = {}) {
+  if (!user?.uid) return;
+  const billingProfile = sanitizeBillingProfile(options.billingProfile ?? cache[USER_BILLING_PROFILE_KEY]);
+  const baseEmail = String(options.email || billingProfile.email || user.email || '').trim();
+  const email = baseEmail || `${user.uid}@unknown.local`;
+  const plan = normalizeUserPlan(options.plan || getCachedPlan());
+  const numericProjectCount = Number(options.projectCount);
+  const projectCount = Number.isFinite(numericProjectCount)
+    ? Math.max(0, Math.floor(numericProjectCount))
+    : getCachedProjectCount();
+
+  await setDoc(adminUserSummaryRef(user.uid), {
+    userId: user.uid,
+    email,
+    plan,
+    projectCount,
+    __updatedAt: serverTimestamp(),
+  }, { merge: true });
+}
+
+async function buildAdminUserOverview(user) {
+  if (!isAdminUser(user)) {
+    return {
+      allowed: false,
+      users: [],
+      stats: {
+        totalUsers: 0,
+        totalProjects: 0,
+        planCounts: { free: 0, individual: 0, team: 0 },
+      },
+    };
+  }
+
+  const snap = await getDocs(adminUserSummariesCol());
+  const users = [];
+  const planCounts = { free: 0, individual: 0, team: 0 };
+  let totalProjects = 0;
+
+  snap.forEach((docSnap) => {
+    const data = docSnap.data() || {};
+    const email = String(data.email || '').trim();
+    const plan = normalizeUserPlan(data.plan || DEFAULT_USER_PLAN);
+    const projectCount = Math.max(0, Math.floor(Number(data.projectCount) || 0));
+    users.push({
+      uid: docSnap.id,
+      email,
+      plan,
+      projectCount,
+    });
+    planCounts[plan] += 1;
+    totalProjects += projectCount;
+  });
+
+  users.sort((a, b) => a.email.localeCompare(b.email));
+  return {
+    allowed: true,
+    users,
+    stats: {
+      totalUsers: users.length,
+      totalProjects,
+      planCounts,
+    },
+  };
 }
 
 function buildLocalDataSummary(payload = localMigrationPayload()) {
@@ -247,6 +395,7 @@ async function migrateLocalDataToCloud(user, options = {}) {
   const payload = localMigrationPayload();
   const uid = user.uid;
   const overwrite = options.overwrite === true;
+  const normalizedPlan = normalizeUserPlan(payload[USER_PLAN_KEY] || payload.plan || DEFAULT_USER_PLAN);
 
   const customers = normalizeRecordsForUser(payload.photocrm_customers || [], uid);
   const expenses = normalizeRecordsForUser(payload.photocrm_expenses || [], uid);
@@ -265,11 +414,13 @@ async function migrateLocalDataToCloud(user, options = {}) {
   SETTINGS_KEYS.forEach((key) => {
     if (payload[key] !== undefined) settings[key] = payload[key];
   });
+  settings[USER_PLAN_KEY] = normalizeUserPlan(settings[USER_PLAN_KEY] || normalizedPlan);
 
   await syncSettingsToCloud(uid, settings);
 
   await setDoc(userMetaRef(uid), {
     ...settings,
+    plan: settings[USER_PLAN_KEY],
     userId: uid,
     __updatedAt: serverTimestamp(),
   }, { merge: true });
@@ -282,6 +433,23 @@ async function migrateLocalDataToCloud(user, options = {}) {
     overwrite,
     source: 'localStorage_manual_merge',
   }, { merge: true });
+
+  const profileSyncResults = await Promise.allSettled([
+    syncUserProfileDoc(user, {
+      plan: settings[USER_PLAN_KEY],
+      billingProfile: settings[USER_BILLING_PROFILE_KEY],
+    }),
+    syncAdminUserSummary(user, {
+      plan: settings[USER_PLAN_KEY],
+      projectCount: customers.length,
+      billingProfile: settings[USER_BILLING_PROFILE_KEY],
+    }),
+  ]);
+  profileSyncResults.forEach((result) => {
+    if (result.status === 'rejected') {
+      console.warn('Post-migration profile sync failed', result.reason);
+    }
+  });
 
   return {
     customerCount: customers.length,
@@ -327,8 +495,50 @@ async function loadCloudDataForUser(user) {
     photocrm_expenses: expenseSnap.docs.map((entry) => ({ id: entry.id, ...entry.data(), userId: uid })),
   };
 
+  const rawPlan = loaded.plan || loaded[USER_PLAN_KEY] || settingsFromCollection[USER_PLAN_KEY] || '';
+  const normalizedPlan = normalizeUserPlan(rawPlan || DEFAULT_USER_PLAN);
+  const hadPersistedPlan = Boolean(rawPlan);
+  loaded.plan = normalizedPlan;
+  loaded[USER_PLAN_KEY] = normalizedPlan;
+
+  if (!hadPersistedPlan || rawPlan !== normalizedPlan || !settingsFromCollection[USER_PLAN_KEY]) {
+    setDoc(userMetaRef(uid), {
+      userId: uid,
+      plan: normalizedPlan,
+      [USER_PLAN_KEY]: normalizedPlan,
+      __updatedAt: serverTimestamp(),
+    }, { merge: true }).catch((err) => {
+      console.warn('Failed to backfill user plan metadata', err);
+    });
+    setDoc(userSettingsDoc(uid, USER_PLAN_KEY), {
+      key: USER_PLAN_KEY,
+      value: normalizedPlan,
+      userId: uid,
+      __updatedAt: serverTimestamp(),
+    }, { merge: true }).catch((err) => {
+      console.warn('Failed to backfill user plan setting', err);
+    });
+  }
+
   Object.keys(cache).forEach((key) => delete cache[key]);
   Object.assign(cache, loaded);
+
+  const profileSyncResults = await Promise.allSettled([
+    syncUserProfileDoc(user, {
+      plan: normalizedPlan,
+      billingProfile: loaded[USER_BILLING_PROFILE_KEY],
+    }),
+    syncAdminUserSummary(user, {
+      plan: normalizedPlan,
+      projectCount: Array.isArray(loaded.photocrm_customers) ? loaded.photocrm_customers.length : 0,
+      billingProfile: loaded[USER_BILLING_PROFILE_KEY],
+    }),
+  ]);
+  profileSyncResults.forEach((result) => {
+    if (result.status === 'rejected') {
+      console.warn('Profile sync after cloud load failed', result.reason);
+    }
+  });
   return loaded;
 }
 
@@ -343,34 +553,58 @@ async function ensureCloudData(user) {
 }
 
 async function updateKey(user, key, value) {
-  cache[key] = value;
+  const normalizedValue = key === USER_PLAN_KEY ? normalizeUserPlan(value) : value;
+  cache[key] = normalizedValue;
 
   if (key === 'photocrm_customers') {
-    const customers = normalizeRecordsForUser(value, user.uid);
+    const customers = normalizeRecordsForUser(normalizedValue, user.uid);
     await overwriteCollection(userProjectsCol(user.uid), customers);
+    await syncAdminUserSummary(user, { projectCount: customers.length });
     return;
   }
 
   if (key === 'photocrm_expenses') {
-    const expenses = normalizeRecordsForUser(value, user.uid);
+    const expenses = normalizeRecordsForUser(normalizedValue, user.uid);
     await overwriteCollection(userExpensesCol(user.uid), expenses);
     return;
   }
 
-  const metaPromise = setDoc(userMetaRef(user.uid), {
+  const metaPayload = {
     userId: user.uid,
-    [key]: value,
+    [key]: normalizedValue,
     __updatedAt: serverTimestamp(),
-  }, { merge: true });
+  };
+  if (key === USER_PLAN_KEY) {
+    metaPayload.plan = normalizedValue;
+    cache.plan = normalizedValue;
+  }
+  const metaPromise = setDoc(userMetaRef(user.uid), metaPayload, { merge: true });
 
   if (SETTINGS_KEYS.includes(key)) {
     const settingsPromise = setDoc(userSettingsDoc(user.uid, key), {
       key,
-      value,
+      value: normalizedValue,
       userId: user.uid,
       __updatedAt: serverTimestamp(),
     }, { merge: true });
     await Promise.all([metaPromise, settingsPromise]);
+    if (key === USER_PLAN_KEY || key === USER_BILLING_PROFILE_KEY) {
+      const syncResults = await Promise.allSettled([
+        syncUserProfileDoc(user, {
+          plan: key === USER_PLAN_KEY ? normalizedValue : undefined,
+          billingProfile: key === USER_BILLING_PROFILE_KEY ? normalizedValue : undefined,
+        }),
+        syncAdminUserSummary(user, {
+          plan: key === USER_PLAN_KEY ? normalizedValue : undefined,
+          billingProfile: key === USER_BILLING_PROFILE_KEY ? normalizedValue : undefined,
+        }),
+      ]);
+      syncResults.forEach((result) => {
+        if (result.status === 'rejected') {
+          console.warn(`Profile sync failed after saving ${key}`, result.reason);
+        }
+      });
+    }
     return;
   }
 
@@ -409,6 +643,23 @@ window.FirebaseService = {
 
   getAllCachedData() {
     return { ...cache };
+  },
+
+  getUserPlan() {
+    return normalizeUserPlan(cache.plan || cache[USER_PLAN_KEY] || DEFAULT_USER_PLAN);
+  },
+
+  async setUserPlan(plan) {
+    await ensureInitialized();
+    const user = auth.currentUser;
+    const normalizedPlan = normalizeUserPlan(plan);
+    if (!user) {
+      cache.plan = normalizedPlan;
+      cache[USER_PLAN_KEY] = normalizedPlan;
+      return normalizedPlan;
+    }
+    await updateKey(user, USER_PLAN_KEY, normalizedPlan);
+    return normalizedPlan;
   },
 
   getLocalDataSummary() {
@@ -468,6 +719,15 @@ window.FirebaseService = {
     const result = await signInWithPopup(auth, provider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
     setGoogleOAuthAccessToken(credential?.accessToken || '');
+    const syncResults = await Promise.allSettled([
+      syncUserProfileDoc(result.user),
+      syncAdminUserSummary(result.user),
+    ]);
+    syncResults.forEach((syncResult) => {
+      if (syncResult.status === 'rejected') {
+        console.warn('Post-login profile sync failed', syncResult.reason);
+      }
+    });
     return result;
   },
 
@@ -477,6 +737,15 @@ window.FirebaseService = {
 
   getGoogleAccessToken() {
     return String(googleOAuthAccessToken || '');
+  },
+
+  isCurrentUserAdmin() {
+    return isAdminUser(auth.currentUser);
+  },
+
+  async getAdminUserOverview() {
+    await ensureInitialized();
+    return buildAdminUserOverview(auth.currentUser);
   },
 
   async signOut() {
