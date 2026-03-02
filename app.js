@@ -28,6 +28,8 @@
   const GOOGLE_CALENDAR_AUTO_SYNC_KEY = 'photocrm_google_calendar_auto_sync';
   const GOOGLE_CALENDAR_SELECTED_ID_KEY = 'photocrm_google_calendar_selected_id';
   const USER_PLAN_KEY = 'photocrm_user_plan';
+  const USER_BILLING_PROFILE_KEY = 'photocrm_user_billing_profile';
+  const ADMIN_MANAGEMENT_EMAILS = new Set(['sasuke.photographe@gmail.com']);
   const GOOGLE_CALENDAR_DEFAULT_ID = 'sasuke.photographe@gmail.com';
   const LOCAL_GUEST_MODE_KEY = 'photocrm_local_guest_mode';
   const IDB_MIRROR_DB_NAME = 'PholioDB';
@@ -205,6 +207,7 @@
       GOOGLE_CALENDAR_AUTO_SYNC_KEY,
       GOOGLE_CALENDAR_SELECTED_ID_KEY,
       USER_PLAN_KEY,
+      USER_BILLING_PROFILE_KEY,
     ];
   }
 
@@ -522,11 +525,20 @@
 
   function updateHeaderPlanBadge() {
     const badge = document.getElementById('header-plan-badge');
-    if (!badge) return;
+    const profileBadge = document.getElementById('profile-plan-badge');
+    const profileLabel = document.getElementById('profile-plan-label');
     const plan = normalizeUserPlan(currentUserPlan);
-    badge.textContent = getPlanBadgeText(plan);
-    badge.dataset.plan = plan;
-    badge.title = `Plan: ${getPlanBadgeText(plan)}`;
+    const planText = getPlanBadgeText(plan);
+    if (badge) {
+      badge.textContent = planText;
+      badge.dataset.plan = plan;
+      badge.title = `Plan: ${planText}`;
+    }
+    if (profileBadge) {
+      profileBadge.textContent = planText;
+      profileBadge.dataset.plan = plan;
+    }
+    if (profileLabel) profileLabel.textContent = planText;
   }
 
   function syncPlanFromStorage() {
@@ -670,6 +682,7 @@
     if (State.getRaw(PLAN_MASTER_KEY, null) === null) State.setJSON(PLAN_MASTER_KEY, []);
     if (State.getRaw(OPTIONS_KEY, null) === null) State.setJSON(OPTIONS_KEY, DEFAULT_OPTIONS);
     if (State.getRaw(USER_PLAN_KEY, null) === null) State.setJSON(USER_PLAN_KEY, 'free');
+    if (State.getRaw(USER_BILLING_PROFILE_KEY, null) === null) State.setJSON(USER_BILLING_PROFILE_KEY, {});
   }
 
   // ===== Storage Helpers =====
@@ -2422,6 +2435,38 @@
     });
   }
 
+  function getBillingProfileDefaults() {
+    return {
+      fullName: '',
+      address: '',
+      siretNumber: '',
+      invoiceRegistrationNumber: '',
+      email: '',
+    };
+  }
+
+  function getBillingProfile() {
+    const defaults = getBillingProfileDefaults();
+    const saved = getCloudValue(USER_BILLING_PROFILE_KEY, {});
+    if (!saved || typeof saved !== 'object') return defaults;
+    return { ...defaults, ...saved };
+  }
+
+  function saveBillingProfile(profile) {
+    const defaults = getBillingProfileDefaults();
+    const sanitized = {
+      ...defaults,
+      ...(profile && typeof profile === 'object' ? profile : {}),
+    };
+    saveCloudValue(USER_BILLING_PROFILE_KEY, {
+      fullName: String(sanitized.fullName || '').trim(),
+      address: String(sanitized.address || '').trim(),
+      siretNumber: String(sanitized.siretNumber || '').trim(),
+      invoiceRegistrationNumber: String(sanitized.invoiceRegistrationNumber || '').trim(),
+      email: String(sanitized.email || '').trim(),
+    });
+  }
+
   function buildExportSnapshot(backupType = 'manual') {
     return {
       customers,
@@ -2440,6 +2485,7 @@
       expenses: getExpenses(),
       taxSettings: getTaxSettings(),
       invoiceSenderProfile: getInvoiceSenderProfile(),
+      billingProfile: getBillingProfile(),
       theme: currentTheme,
       language: currentLang,
       currency: currentCurrency,
@@ -5045,6 +5091,7 @@
         if (typeof data.heroMetricsVisible === 'boolean') setHeroMetricsVisibility(data.heroMetricsVisible);
         if (typeof data.googleCalendarAutoSyncEnabled === 'boolean') setGoogleCalendarAutoSyncEnabled(data.googleCalendarAutoSyncEnabled);
         if (typeof data.googleCalendarSelectedId === 'string') setGoogleCalendarSelectedId(data.googleCalendarSelectedId);
+        if (data.billingProfile && typeof data.billingProfile === 'object') saveBillingProfile(data.billingProfile);
         if (typeof data.contractTemplateText === 'string') saveContractTemplate(data.contractTemplateText);
         reloadRuntimeStateFromStorage();
         applyHeroMetricsConfig();
@@ -5927,6 +5974,47 @@
     if (stampInput) stampInput.value = '';
   }
 
+  function loadBillingProfileSettings() {
+    const profile = getBillingProfile();
+    const userEmail = String(window.FirebaseService?.getCurrentUser?.()?.email || '').trim();
+    const fullNameInput = $('#profile-full-name');
+    const addressInput = $('#profile-address');
+    const siretInput = $('#profile-siret-number');
+    const registrationInput = $('#profile-registration-number');
+    const emailInput = $('#profile-email');
+    const planBadge = $('#profile-plan-badge');
+    const planLabel = $('#profile-plan-label');
+    const currentPlanText = getPlanBadgeText(currentUserPlan);
+
+    if (fullNameInput) fullNameInput.value = profile.fullName || '';
+    if (addressInput) addressInput.value = profile.address || '';
+    if (siretInput) siretInput.value = profile.siretNumber || '';
+    if (registrationInput) registrationInput.value = profile.invoiceRegistrationNumber || '';
+    if (emailInput) emailInput.value = profile.email || userEmail;
+    if (planBadge) {
+      planBadge.textContent = currentPlanText;
+      planBadge.dataset.plan = normalizeUserPlan(currentUserPlan);
+    }
+    if (planLabel) planLabel.textContent = currentPlanText;
+  }
+
+  function handleSaveBillingProfile() {
+    const fullName = $('#profile-full-name')?.value || '';
+    const address = $('#profile-address')?.value || '';
+    const siretNumber = $('#profile-siret-number')?.value || '';
+    const invoiceRegistrationNumber = $('#profile-registration-number')?.value || '';
+    const email = $('#profile-email')?.value || '';
+
+    saveBillingProfile({
+      fullName,
+      address,
+      siretNumber,
+      invoiceRegistrationNumber,
+      email,
+    });
+    showToast(t('billingProfileSaved') || t('msgSettingsSaved'));
+  }
+
   function handleTaxEnabledChange(e) {
     $('#tax-options').style.display = e.target.checked ? 'block' : 'none';
   }
@@ -6093,7 +6181,10 @@
     setListColumnsMenuOpen(false);
     setMobileHeaderMenuOpen(false);
     renderSettings();
+    loadBillingProfileSettings();
     loadContractTemplateSettings();
+    updateAdminSettingsAvailability();
+    if (isCurrentUserAdmin()) refreshAdminOverview();
     settingsOverlay?.classList.add('active');
   }
 
@@ -6123,8 +6214,10 @@
         const tab = btn.dataset.tab;
         $(`#settings-content-${tab}`)?.classList.add('active');
         if (tab === 'invoice') loadInvoiceSettings();
+        if (tab === 'profile') loadBillingProfileSettings();
         if (tab === 'contract') loadContractTemplateSettings();
         if (tab === 'team') renderTeamList();
+        if (tab === 'admin') refreshAdminOverview();
       }, `settings-tab-${tabName}`);
     });
   }
@@ -6241,6 +6334,8 @@
     bindEventOnce($('#tax-enabled'), 'change', handleTaxEnabledChange, 'tax-enabled-change');
     bindEventOnce($('#tax-label'), 'change', handleTaxLabelChange, 'tax-label-change');
     bindEventOnce($('#btn-save-invoice-settings'), 'click', handleSaveInvoiceSettings, 'tax-settings-save');
+    bindEventOnce(document.getElementById('btn-save-billing-profile'), 'click', handleSaveBillingProfile, 'billing-profile-save');
+    bindEventOnce(document.getElementById('btn-admin-refresh'), 'click', refreshAdminOverview, 'admin-overview-refresh');
     bindEventOnce(document.getElementById('btn-save-contract-template'), 'click', handleSaveContractTemplate, 'contract-template-save');
     bindEventOnce(document.getElementById('btn-contract-preset-standard'), 'click', () => applyContractTemplatePreset('standard'), 'contract-preset-standard');
     bindEventOnce(document.getElementById('btn-contract-preset-bridal'), 'click', () => applyContractTemplatePreset('bridal'), 'contract-preset-bridal');
@@ -6370,6 +6465,108 @@
     return String(user?.displayName || user?.email || t('authLoggedInUserFallback'));
   }
 
+  function normalizeEmail(value) {
+    return String(value || '').trim().toLowerCase();
+  }
+
+  function isAdminEmail(email) {
+    return ADMIN_MANAGEMENT_EMAILS.has(normalizeEmail(email));
+  }
+
+  function isCurrentUserAdmin() {
+    if (typeof window.FirebaseService?.isCurrentUserAdmin === 'function') {
+      return !!window.FirebaseService.isCurrentUserAdmin();
+    }
+    const email = window.FirebaseService?.getCurrentUser?.()?.email || '';
+    return isAdminEmail(email);
+  }
+
+  function formatAdminPlanLabel(plan) {
+    const normalized = normalizeUserPlan(plan);
+    if (normalized === 'team') return 'TEAM';
+    if (normalized === 'individual') return 'PRO';
+    return 'FREE';
+  }
+
+  function renderAdminOverview(overview) {
+    const totalUsersEl = document.getElementById('admin-stat-total-users');
+    const planCountsEl = document.getElementById('admin-stat-plan-counts');
+    const totalProjectsEl = document.getElementById('admin-stat-total-projects');
+    const tableBody = document.getElementById('admin-user-list-body');
+    if (!totalUsersEl || !planCountsEl || !totalProjectsEl || !tableBody) return;
+
+    const safeOverview = overview && typeof overview === 'object' ? overview : {};
+    const stats = safeOverview.stats && typeof safeOverview.stats === 'object' ? safeOverview.stats : {};
+    const planCounts = stats.planCounts && typeof stats.planCounts === 'object'
+      ? stats.planCounts
+      : { free: 0, individual: 0, team: 0 };
+    const users = Array.isArray(safeOverview.users) ? safeOverview.users : [];
+    const totalUsers = Number(stats.totalUsers) || users.length || 0;
+    const totalProjects = Number(stats.totalProjects) || 0;
+
+    totalUsersEl.textContent = String(totalUsers);
+    planCountsEl.textContent = `FREE ${Number(planCounts.free) || 0} / PRO ${Number(planCounts.individual) || 0} / TEAM ${Number(planCounts.team) || 0}`;
+    totalProjectsEl.textContent = String(totalProjects);
+
+    if (users.length === 0) {
+      tableBody.innerHTML = `<tr><td colspan="3">${escapeHtml(t('adminNoData'))}</td></tr>`;
+      return;
+    }
+
+    tableBody.innerHTML = users.map((user) => `
+      <tr>
+        <td>${escapeHtml(user.email || '—')}</td>
+        <td>${escapeHtml(formatAdminPlanLabel(user.plan))}</td>
+        <td>${escapeHtml(String(Number(user.projectCount) || 0))}</td>
+      </tr>
+    `).join('');
+  }
+
+  async function refreshAdminOverview() {
+    if (!isCurrentUserAdmin()) return;
+    if (!window.FirebaseService?.getAdminUserOverview) return;
+
+    const tableBody = document.getElementById('admin-user-list-body');
+    if (tableBody) {
+      tableBody.innerHTML = `<tr><td colspan="3">${escapeHtml(t('adminLoading'))}</td></tr>`;
+    }
+    try {
+      const overview = await window.FirebaseService.getAdminUserOverview();
+      if (!overview?.allowed) return;
+      renderAdminOverview(overview);
+      const compactUsers = Array.isArray(overview.users)
+        ? overview.users.map((user) => ({ email: user.email, plan: formatAdminPlanLabel(user.plan), projectCount: user.projectCount }))
+        : [];
+      console.log('Admin user overview:', compactUsers);
+    } catch (err) {
+      console.error('Admin overview load failed', err);
+      if (tableBody) {
+        tableBody.innerHTML = `<tr><td colspan="3">${escapeHtml(t('adminLoadFailed'))}</td></tr>`;
+      }
+    }
+  }
+
+  function updateAdminSettingsAvailability() {
+    const tabButton = document.getElementById('settings-tab-admin');
+    const tabContent = document.getElementById('settings-content-admin');
+    if (!tabButton || !tabContent) return;
+
+    const isAdmin = isCurrentUserAdmin();
+    tabButton.style.display = isAdmin ? '' : 'none';
+
+    if (isAdmin) return;
+
+    const wasAdminActive = tabButton.classList.contains('active') || tabContent.classList.contains('active');
+    tabButton.classList.remove('active');
+    tabContent.classList.remove('active');
+    if (wasAdminActive) {
+      const menuTab = settingsOverlay?.querySelector('.settings-tab-btn[data-tab="menu"]');
+      const menuContent = document.getElementById('settings-content-menu');
+      if (menuTab) menuTab.classList.add('active');
+      if (menuContent) menuContent.classList.add('active');
+    }
+  }
+
   function updateHeaderAuthUi(user = null) {
     const headerLogout = document.getElementById('btn-header-logout');
     const headerPlanBadge = document.getElementById('header-plan-badge');
@@ -6384,6 +6581,7 @@
       headerPlanBadge.style.display = hasUser ? 'inline-flex' : 'none';
     }
     updateHeaderPlanBadge();
+    updateAdminSettingsAvailability();
   }
 
   function hasGuestLocalData() {

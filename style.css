@@ -3092,6 +3092,86 @@ tbody tr:hover {
   font-size: 0.95rem;
 }
 
+.billing-plan-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  font-size: 0.82rem;
+}
+
+.billing-plan-text {
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.admin-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-summary-card {
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  border-radius: 10px;
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.admin-summary-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.admin-summary-card strong {
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.admin-user-table-wrap {
+  margin-top: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  overflow: auto;
+  background: var(--bg-primary);
+}
+
+.admin-user-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.admin-user-table th,
+.admin-user-table td {
+  padding: 9px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+  white-space: nowrap;
+  font-size: 0.85rem;
+}
+
+.admin-user-table th {
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-input);
+}
+
+.admin-user-table tr:last-child td {
+  border-bottom: none;
+}
+
+@media (max-width: 768px) {
+  .admin-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .data-protection-status {
   display: inline-flex;
   align-items: center;
