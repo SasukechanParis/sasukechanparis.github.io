@@ -30,6 +30,7 @@
   const USER_PLAN_KEY = 'photocrm_user_plan';
   const USER_BILLING_PROFILE_KEY = 'photocrm_user_billing_profile';
   const ENTERPRISE_CONTACT_REQUESTS_KEY = 'photocrm_enterprise_contact_requests';
+  const SUPPORT_REPLY_NOTICE_SEEN_KEY = 'photocrm_support_reply_notice_seen';
   const ADMIN_MANAGEMENT_EMAILS = new Set(['sasuke.photographe@gmail.com']);
   const GOOGLE_CALENDAR_DEFAULT_ID = 'sasuke.photographe@gmail.com';
   const LOCAL_GUEST_MODE_KEY = 'photocrm_local_guest_mode';
@@ -1773,6 +1774,13 @@
     if (!val) return '—';
     const d = new Date(val);
     return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  function formatDateTime(val) {
+    if (!val) return '—';
+    const d = new Date(val);
+    if (Number.isNaN(d.getTime())) return '—';
+    return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   }
   const CURRENCY_CONFIG = {
     USD: { symbol: '$', locale: 'en-US' },
@@ -6928,6 +6936,9 @@
         if (tab === 'plan') renderPlanManagementSection();
         if (tab === 'contract') loadContractTemplateSettings();
         if (tab === 'team') renderTeamList();
+        if (tab === 'support') {
+          refreshMySupportReplies({ notify: false });
+        }
         if (tab === 'admin') {
           refreshAdminOverview();
         }
@@ -7074,6 +7085,9 @@
     bindEventOnce($('#btn-save-invoice-settings'), 'click', handleSaveInvoiceSettings, 'tax-settings-save');
     bindEventOnce(document.getElementById('btn-save-billing-profile'), 'click', handleSaveBillingProfile, 'billing-profile-save');
     bindEventOnce(document.getElementById('btn-admin-refresh'), 'click', refreshAdminOverview, 'admin-overview-refresh');
+    bindEventOnce(document.getElementById('btn-admin-support-refresh'), 'click', refreshAdminSupportTickets, 'admin-support-refresh');
+    bindEventOnce(document.getElementById('admin-support-ticket-list-body'), 'click', handleAdminSupportTicketListClick, 'admin-support-list-click');
+    bindEventOnce(document.getElementById('btn-admin-support-reply'), 'click', handleAdminSupportReplySubmit, 'admin-support-reply');
     bindEventOnce(document.getElementById('btn-save-contract-template'), 'click', handleSaveContractTemplate, 'contract-template-save');
     bindEventOnce(document.getElementById('btn-contract-preset-standard'), 'click', () => applyContractTemplatePreset('standard'), 'contract-preset-standard');
     bindEventOnce(document.getElementById('btn-contract-preset-bridal'), 'click', () => applyContractTemplatePreset('bridal'), 'contract-preset-bridal');
@@ -7172,6 +7186,8 @@
   let authUnsubscribe = null;
   let cloudSyncState = 'local';
   let mergePromptedUid = null;
+  let adminSupportTickets = [];
+  let selectedAdminSupportTicketId = '';
 
   function getLocaleTextOrFallback(key, fallback = '') {
     const locale = window.LOCALE?.[currentLang];
@@ -7237,6 +7253,214 @@
     return 'FREE';
   }
 
+  function getSupportStatusLabel(status) {
+    return status === 'replied' ? t('adminSupportStatusReplied') : t('adminSupportStatusPending');
+  }
+
+  function getSupportCategoryLabel(category) {
+    const normalized = String(category || '').trim().toLowerCase();
+    if (normalized === 'question') return t('supportCategoryQuestion');
+    if (normalized === 'feature_request') return t('supportCategoryFeatureRequest');
+    return t('supportCategoryBug');
+  }
+
+  function renderAdminSupportTicketDetail(ticketId = '') {
+    const detailSubjectEl = document.getElementById('admin-support-detail-subject');
+    const detailMessageEl = document.getElementById('admin-support-detail-message');
+    const aiDraftInput = document.getElementById('admin-support-ai-draft');
+    const replyInput = document.getElementById('admin-support-reply');
+    const sendButton = document.getElementById('btn-admin-support-reply');
+    const ticket = adminSupportTickets.find((item) => item.id === ticketId) || null;
+
+    if (!ticket) {
+      if (detailSubjectEl) detailSubjectEl.textContent = t('adminSupportSelectTicket');
+      if (detailMessageEl) detailMessageEl.textContent = '—';
+      if (aiDraftInput) aiDraftInput.value = '';
+      if (replyInput) replyInput.value = '';
+      if (sendButton) sendButton.disabled = true;
+      selectedAdminSupportTicketId = '';
+      return;
+    }
+
+    selectedAdminSupportTicketId = ticket.id;
+    if (detailSubjectEl) {
+      const subject = ticket.subject || '—';
+      const meta = `${getSupportCategoryLabel(ticket.category)} · ${formatDateTime(ticket.createdAtIso)}`;
+      detailSubjectEl.textContent = `${subject} (${meta})`;
+    }
+    if (detailMessageEl) detailMessageEl.textContent = ticket.message || '—';
+    if (aiDraftInput) aiDraftInput.value = ticket.ai_draft_reply || '';
+    if (replyInput) {
+      const existingReply = ticket?.admin_reply?.message || ticket.user_notification_message || '';
+      replyInput.value = existingReply || ticket.ai_draft_reply || '';
+    }
+    if (sendButton) sendButton.disabled = false;
+  }
+
+  function renderAdminSupportTicketList(tickets = []) {
+    const tableBody = document.getElementById('admin-support-ticket-list-body');
+    if (!tableBody) return;
+
+    if (!Array.isArray(tickets) || tickets.length === 0) {
+      tableBody.innerHTML = `<tr><td colspan="4">${escapeHtml(t('adminSupportNoData'))}</td></tr>`;
+      renderAdminSupportTicketDetail('');
+      return;
+    }
+
+    tableBody.innerHTML = tickets.map((ticket) => {
+      const isActive = ticket.id === selectedAdminSupportTicketId;
+      const status = String(ticket.status || 'pending').trim().toLowerCase();
+      const statusClass = status === 'replied' ? 'admin-ticket-status-replied' : 'admin-ticket-status-pending';
+      const statusLabel = getSupportStatusLabel(status);
+      const userLabel = ticket.displayName || ticket.email || ticket.userId || '—';
+      return `
+        <tr data-ticket-id="${escapeHtml(ticket.id)}" class="${isActive ? 'active' : ''}">
+          <td><span class="admin-ticket-status ${statusClass}">${escapeHtml(statusLabel)}</span></td>
+          <td title="${escapeHtml(ticket.email || userLabel)}">${escapeHtml(userLabel)}</td>
+          <td>${escapeHtml(getSupportCategoryLabel(ticket.category))}</td>
+          <td>${escapeHtml(formatDateTime(ticket.createdAtIso))}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const stillExists = tickets.some((ticket) => ticket.id === selectedAdminSupportTicketId);
+    const targetId = stillExists ? selectedAdminSupportTicketId : tickets[0]?.id || '';
+    renderAdminSupportTicketDetail(targetId);
+  }
+
+  function handleAdminSupportTicketListClick(event) {
+    const row = event?.target?.closest?.('tr[data-ticket-id]');
+    if (!row) return;
+    const ticketId = String(row.dataset.ticketId || '').trim();
+    if (!ticketId) return;
+    selectedAdminSupportTicketId = ticketId;
+    renderAdminSupportTicketList(adminSupportTickets);
+  }
+
+  async function refreshAdminSupportTickets() {
+    if (!isCurrentUserAdmin()) return;
+    if (!window.FirebaseService?.getAdminSupportTickets) return;
+
+    const tableBody = document.getElementById('admin-support-ticket-list-body');
+    if (tableBody) {
+      tableBody.innerHTML = `<tr><td colspan="4">${escapeHtml(t('adminLoading'))}</td></tr>`;
+    }
+
+    try {
+      const result = await window.FirebaseService.getAdminSupportTickets();
+      if (!result?.allowed) return;
+      adminSupportTickets = Array.isArray(result.tickets) ? result.tickets : [];
+      renderAdminSupportTicketList(adminSupportTickets);
+    } catch (err) {
+      console.error('Admin support tickets load failed', err);
+      if (tableBody) {
+        tableBody.innerHTML = `<tr><td colspan="4">${escapeHtml(t('adminSupportLoadFailed'))}</td></tr>`;
+      }
+    }
+  }
+
+  async function handleAdminSupportReplySubmit() {
+    const ticketId = String(selectedAdminSupportTicketId || '').trim();
+    if (!ticketId) {
+      showToast(t('adminSupportSelectTicket'), 'error');
+      return;
+    }
+    const aiDraftInput = document.getElementById('admin-support-ai-draft');
+    const replyInput = document.getElementById('admin-support-reply');
+    const sendButton = document.getElementById('btn-admin-support-reply');
+    const aiDraftReply = String(aiDraftInput?.value || '').trim();
+    const replyMessage = String(replyInput?.value || '').trim();
+    if (!replyMessage) {
+      showToast(t('adminSupportReplyValidation'), 'error');
+      return;
+    }
+
+    if (sendButton) sendButton.disabled = true;
+    try {
+      await window.FirebaseService?.replySupportTicket?.(ticketId, {
+        aiDraftReply,
+        replyMessage,
+      });
+      showToast(t('adminSupportReplySent'));
+      await refreshAdminSupportTickets();
+    } catch (err) {
+      console.error('Admin support reply submit failed', err);
+      showToast(t('adminSupportLoadFailed'), 'error');
+    } finally {
+      if (sendButton) sendButton.disabled = false;
+    }
+  }
+
+  function renderSupportRepliesForCurrentUser(tickets = []) {
+    const listRoot = document.getElementById('support-reply-list');
+    if (!listRoot) return;
+
+    const repliedTickets = (Array.isArray(tickets) ? tickets : [])
+      .filter((ticket) => String(ticket?.status || '').toLowerCase() === 'replied')
+      .filter((ticket) => String(ticket?.admin_reply?.message || ticket?.user_notification_message || '').trim().length > 0)
+      .sort((a, b) => (Number(new Date(b?.repliedAtIso || b?.createdAtIso || 0).getTime()) || 0)
+        - (Number(new Date(a?.repliedAtIso || a?.createdAtIso || 0).getTime()) || 0));
+
+    if (repliedTickets.length === 0) {
+      listRoot.innerHTML = `<p class="help-text">${escapeHtml(t('supportMyRepliesEmpty'))}</p>`;
+      return;
+    }
+
+    listRoot.innerHTML = repliedTickets.map((ticket) => {
+      const subject = ticket.subject || '—';
+      const repliedAt = formatDateTime(ticket.repliedAtIso || ticket.createdAtIso);
+      const replyText = ticket.admin_reply?.message || ticket.user_notification_message || '';
+      return `
+        <div class="support-reply-item">
+          <div class="support-reply-item-head">
+            <span>${escapeHtml(t('supportReplyFromAdmin'))}</span>
+            <span>${escapeHtml(t('supportReplyAt'))}: ${escapeHtml(repliedAt)}</span>
+          </div>
+          <div class="support-reply-item-subject">${escapeHtml(subject)}</div>
+          <div class="support-reply-item-body">${escapeHtml(replyText)}</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  async function refreshMySupportReplies(options = {}) {
+    const { notify = false } = options;
+    const user = window.FirebaseService?.getCurrentUser?.();
+    if (!user || !window.FirebaseService?.getMySupportTickets) {
+      renderSupportRepliesForCurrentUser([]);
+      return;
+    }
+    try {
+      const result = await window.FirebaseService.getMySupportTickets();
+      const tickets = Array.isArray(result?.tickets) ? result.tickets : [];
+      renderSupportRepliesForCurrentUser(tickets);
+
+      if (!notify) return;
+      const replied = tickets.filter((ticket) => (
+        String(ticket?.status || '').toLowerCase() === 'replied'
+        && String(ticket?.admin_reply?.message || ticket?.user_notification_message || '').trim().length > 0
+      ));
+      if (replied.length === 0) return;
+
+      const seenMap = getLocalValue(SUPPORT_REPLY_NOTICE_SEEN_KEY, {});
+      const nextSeenMap = seenMap && typeof seenMap === 'object' ? { ...seenMap } : {};
+      const unseen = replied.filter((ticket) => {
+        const version = String(ticket.repliedAtIso || ticket.updatedAtIso || ticket.createdAtIso || '');
+        return !nextSeenMap[ticket.id] || nextSeenMap[ticket.id] !== version;
+      });
+      if (unseen.length === 0) return;
+
+      showToast(t('supportReplyAvailable', { count: String(unseen.length) }));
+      unseen.forEach((ticket) => {
+        const version = String(ticket.repliedAtIso || ticket.updatedAtIso || ticket.createdAtIso || '');
+        nextSeenMap[ticket.id] = version;
+      });
+      saveLocalValue(SUPPORT_REPLY_NOTICE_SEEN_KEY, nextSeenMap);
+    } catch (err) {
+      console.error('Support replies load failed', err);
+    }
+  }
+
   function renderAdminOverview(overview) {
     const totalUsersEl = document.getElementById('admin-stat-total-users');
     const planCountsEl = document.getElementById('admin-stat-plan-counts');
@@ -7284,10 +7508,7 @@
       const overview = await window.FirebaseService.getAdminUserOverview();
       if (!overview?.allowed) return;
       renderAdminOverview(overview);
-      const compactUsers = Array.isArray(overview.users)
-        ? overview.users.map((user) => ({ email: user.email, plan: formatAdminPlanLabel(user.plan), projectCount: user.projectCount }))
-        : [];
-      console.log('Admin user overview:', compactUsers);
+      await refreshAdminSupportTickets();
     } catch (err) {
       console.error('Admin overview load failed', err);
       if (tableBody) {
@@ -7397,6 +7618,7 @@
       if (authBanner) authBanner.style.display = 'none';
       if (appContainer) appContainer.style.display = 'none';
       updateHeaderAuthUi(null);
+      renderSupportRepliesForCurrentUser([]);
       setCloudSyncIndicator('local');
       return;
     }
@@ -7440,6 +7662,7 @@
       syncCalendarFilterControls();
       if (calendarView.classList.contains('active')) renderCalendar();
       setCloudSyncIndicator('ready');
+      refreshMySupportReplies({ notify: true });
     } catch (err) {
       console.error('Cloud data load failed', err);
       showToast(t('cloudDataLoadFailed'));

@@ -3495,6 +3495,121 @@ html[lang="fr"] .modal-footer .btn {
   border-bottom: none;
 }
 
+.admin-support-table tbody tr {
+  cursor: pointer;
+}
+
+.admin-support-table tbody tr:hover {
+  background: color-mix(in srgb, var(--primary-color) 8%, var(--bg-input));
+}
+
+.admin-support-table tbody tr.active {
+  background: color-mix(in srgb, var(--primary-color) 14%, var(--bg-input));
+}
+
+.admin-ticket-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.admin-ticket-status-pending {
+  color: #b45309;
+  border-color: color-mix(in srgb, #f59e0b 45%, var(--border-color));
+  background: color-mix(in srgb, #f59e0b 15%, var(--bg-input));
+}
+
+.admin-ticket-status-replied {
+  color: #166534;
+  border-color: color-mix(in srgb, #22c55e 42%, var(--border-color));
+  background: color-mix(in srgb, #22c55e 14%, var(--bg-input));
+}
+
+.admin-support-detail {
+  margin-top: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-primary);
+  padding: 12px;
+}
+
+.admin-support-detail h4 {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+}
+
+.admin-support-detail-meta {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.admin-support-message-box {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-input);
+  padding: 10px;
+  white-space: pre-wrap;
+  line-height: 1.45;
+  font-size: 0.84rem;
+  color: var(--text-primary);
+  min-height: 80px;
+}
+
+.support-reply-section {
+  margin-top: 14px;
+  border-top: 1px solid var(--border-color);
+  padding-top: 12px;
+}
+
+.support-reply-section h4 {
+  margin: 0 0 8px;
+  font-size: 0.88rem;
+}
+
+.support-reply-list {
+  display: grid;
+  gap: 8px;
+}
+
+.support-reply-item {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-input);
+  padding: 9px 10px;
+}
+
+.support-reply-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.support-reply-item-subject {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.support-reply-item-body {
+  margin-top: 5px;
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
 @media (max-width: 768px) {
   .admin-summary-grid {
     grid-template-columns: 1fr;

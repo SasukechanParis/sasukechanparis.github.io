@@ -883,6 +883,12 @@
               <textarea id="support-ticket-message" style="min-height: 130px;" data-i18n-placeholder="supportMessagePlaceholder" placeholder="内容を入力"></textarea>
             </div>
             <button class="btn btn-primary" id="btn-support-submit" data-i18n="supportSubmitButton">送信</button>
+            <div class="support-reply-section">
+              <h4 data-i18n="supportMyRepliesTitle">管理者からの返信</h4>
+              <div class="support-reply-list" id="support-reply-list">
+                <p class="help-text" data-i18n="supportMyRepliesEmpty">返信はまだありません。</p>
+              </div>
+            </div>
           </div>
         </div>
         <div class="settings-tab-content" id="settings-content-admin">
@@ -921,6 +927,51 @@
                   </tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+          <div class="settings-section">
+            <h3 data-i18n="adminSupportSectionTitle">サポート管理</h3>
+            <p class="help-text" data-i18n="adminSupportSectionDesc">support_tickets の問い合わせを確認し、返信を管理します。</p>
+            <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
+              <button class="btn btn-secondary btn-sm" id="btn-admin-support-refresh" data-i18n="adminSupportRefresh">更新</button>
+            </div>
+            <div class="admin-user-table-wrap">
+              <table class="admin-user-table admin-support-table">
+                <thead>
+                  <tr>
+                    <th data-i18n="adminSupportStatus">ステータス</th>
+                    <th data-i18n="adminSupportUser">ユーザー</th>
+                    <th data-i18n="adminSupportCategory">カテゴリー</th>
+                    <th data-i18n="adminSupportReceivedAt">受信日時</th>
+                  </tr>
+                </thead>
+                <tbody id="admin-support-ticket-list-body">
+                  <tr>
+                    <td colspan="4" data-i18n="adminSupportNoData">問い合わせはありません</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="admin-support-detail" id="admin-support-detail">
+              <h4 data-i18n="adminSupportDetailTitle">返信作成</h4>
+              <div class="admin-support-detail-meta">
+                <span id="admin-support-detail-subject">—</span>
+              </div>
+              <div class="form-group">
+                <label data-i18n="adminSupportMessage">問い合わせ内容</label>
+                <div class="admin-support-message-box" id="admin-support-detail-message">—</div>
+              </div>
+              <div class="form-group">
+                <label for="admin-support-ai-draft" data-i18n="adminSupportAiDraft">AI生成の下書き</label>
+                <textarea id="admin-support-ai-draft" style="min-height: 110px;" data-i18n-placeholder="adminSupportAiDraftPlaceholder" placeholder="AI draft"></textarea>
+              </div>
+              <div class="form-group">
+                <label for="admin-support-reply" data-i18n="adminSupportReply">返信文</label>
+                <textarea id="admin-support-reply" style="min-height: 130px;" data-i18n-placeholder="adminSupportReplyPlaceholder" placeholder="Reply"></textarea>
+              </div>
+              <div style="display:flex; justify-content:flex-end;">
+                <button class="btn btn-primary" id="btn-admin-support-reply" data-i18n="adminSupportSend">送信</button>
+              </div>
             </div>
           </div>
         </div>
