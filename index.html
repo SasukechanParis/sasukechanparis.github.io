@@ -29,6 +29,11 @@
       <h1>Pholio</h1>
       <p>クラウド同期を利用するにはGoogleログインが必要です。</p>
       <button class="btn btn-primary btn-lg" id="btn-google-login-screen">Googleでログイン</button>
+      <div class="login-legal-links">
+        <a href="#" id="login-terms-link" data-i18n="termsLink">利用規約</a>
+        <span class="login-legal-separator">·</span>
+        <a href="#" id="login-privacy-link" data-i18n="privacyLink">プライバシーポリシー</a>
+      </div>
     </div>
   </div>
   <div class="auth-banner" id="auth-banner">
@@ -45,7 +50,7 @@
         <div class="logo">
           <img src="iconpholio.png" alt="Pholio" class="brand-logo-image" />
           <div class="brand-text-group">
-            <span class="brand-wordmark">Pholio</span>
+            <span class="brand-wordmark" id="brand-wordmark">Pholio</span>
             <span class="header-plan-badge" id="header-plan-badge" data-plan="free" style="display:none;">FREE</span>
             <span class="header-plan-usage" id="header-plan-usage" style="display:none;">残り 20件</span>
           </div>
@@ -257,6 +262,7 @@
     <div class="list-view active" id="list-view">
       <div class="toolbar">
         <button class="btn btn-primary toolbar-add-btn" id="btn-add" data-i18n="addCustomer">＋ 新規登録</button>
+        <button class="btn btn-secondary btn-sm toolbar-csv-btn" id="btn-export-list-csv" data-i18n="exportCustomersCsv">CSV書き出し</button>
         <div class="search-box">
           <span class="search-icon">🔍</span>
           <input type="text" id="search-input" placeholder="お客様名・連絡先で検索..." data-i18n-placeholder="searchPlaceholder" />

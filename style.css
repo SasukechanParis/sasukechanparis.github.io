@@ -195,6 +195,29 @@ body {
   margin: 10px 0 24px;
 }
 
+.login-legal-links {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 0.82rem;
+}
+
+.login-legal-links a {
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.login-legal-links a:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+}
+
+.login-legal-separator {
+  color: var(--text-muted);
+}
+
 .auth-banner {
   display: flex;
   justify-content: space-between;
@@ -1089,6 +1112,13 @@ html[lang="fr"] .stat-label {
   min-height: 38px;
   height: 38px;
   padding: 0 14px;
+}
+
+.toolbar-csv-btn {
+  flex: 0 0 auto;
+  min-height: 38px;
+  height: 38px;
+  white-space: nowrap;
 }
 
 .search-box {

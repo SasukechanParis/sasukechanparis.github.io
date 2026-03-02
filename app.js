@@ -29,6 +29,7 @@
   const GOOGLE_CALENDAR_SELECTED_ID_KEY = 'photocrm_google_calendar_selected_id';
   const USER_PLAN_KEY = 'photocrm_user_plan';
   const USER_BILLING_PROFILE_KEY = 'photocrm_user_billing_profile';
+  const STUDIO_NAME_KEY = 'photocrm_studio_name';
   const ENTERPRISE_CONTACT_REQUESTS_KEY = 'photocrm_enterprise_contact_requests';
   const SUPPORT_REPLY_NOTICE_SEEN_KEY = 'photocrm_support_reply_notice_seen';
   const ADMIN_MANAGEMENT_EMAILS = new Set(['sasuke.photographe@gmail.com']);
@@ -255,6 +256,7 @@
       GOOGLE_CALENDAR_SELECTED_ID_KEY,
       USER_PLAN_KEY,
       USER_BILLING_PROFILE_KEY,
+      STUDIO_NAME_KEY,
       ENTERPRISE_CONTACT_REQUESTS_KEY,
     ];
   }
@@ -371,6 +373,9 @@
   let currentUserPlan = normalizeUserPlan(
     getCloudValue(USER_PLAN_KEY, getCloudValue('plan', getLocalValue(USER_PLAN_KEY, 'free')))
   );
+  let currentStudioName = normalizeStudioName(
+    getCloudValue(STUDIO_NAME_KEY, getLocalValue(STUDIO_NAME_KEY, ''))
+  );
 
   function getLanguageSelectElements() {
     const elements = [
@@ -383,6 +388,28 @@
 
   function getLanguageSelectElement() {
     return getLanguageSelectElements()[0] || null;
+  }
+
+  function normalizeStudioName(value) {
+    return String(value || '').trim().slice(0, 80);
+  }
+
+  function getStudioDisplayName() {
+    return currentStudioName || 'Pholio';
+  }
+
+  function updateHeaderBrandWordmark() {
+    const brandWordmark = document.getElementById('brand-wordmark') || document.querySelector('.brand-wordmark');
+    if (!brandWordmark) return;
+    brandWordmark.textContent = getStudioDisplayName();
+  }
+
+  function setStudioName(name, options = {}) {
+    const { persistCloud = true } = options;
+    currentStudioName = normalizeStudioName(name);
+    if (persistCloud) saveCloudValue(STUDIO_NAME_KEY, currentStudioName);
+    else saveLocalValue(STUDIO_NAME_KEY, currentStudioName);
+    updateHeaderBrandWordmark();
   }
 
   function getHeaderCurrencySelectElements() {
@@ -992,6 +1019,7 @@
     if (State.getRaw(OPTIONS_KEY, null) === null) State.setJSON(OPTIONS_KEY, DEFAULT_OPTIONS);
     if (State.getRaw(USER_PLAN_KEY, null) === null) State.setJSON(USER_PLAN_KEY, 'free');
     if (State.getRaw(USER_BILLING_PROFILE_KEY, null) === null) State.setJSON(USER_BILLING_PROFILE_KEY, {});
+    if (State.getRaw(STUDIO_NAME_KEY, null) === null) State.setJSON(STUDIO_NAME_KEY, '');
   }
 
   // ===== Storage Helpers =====
@@ -1387,7 +1415,9 @@
     formFieldVisibilityConfig = loadFormFieldVisibilityConfig();
     googleCalendarAutoSyncEnabled = loadGoogleCalendarAutoSyncEnabled();
     googleCalendarSelectedId = loadGoogleCalendarSelectedId();
+    currentStudioName = normalizeStudioName(getCloudValue(STUDIO_NAME_KEY, getLocalValue(STUDIO_NAME_KEY, '')));
     syncPlanFromStorage();
+    updateHeaderBrandWordmark();
   }
 
   // ===== DOM =====
@@ -2825,6 +2855,7 @@
       taxSettings: getTaxSettings(),
       invoiceSenderProfile: getInvoiceSenderProfile(),
       billingProfile: getBillingProfile(),
+      studioName: currentStudioName,
       theme: currentTheme,
       language: currentLang,
       currency: currentCurrency,
@@ -5480,6 +5511,23 @@
 
     container.innerHTML = `
       <div class="settings-section">
+        <h3>${escapeHtml(t('settingsStudioSection'))}</h3>
+        <div class="settings-item dashboard-config-row">
+          <label class="dashboard-config-label" for="settings-studio-name">${escapeHtml(t('settingsStudioNameLabel'))}</label>
+          <input
+            type="text"
+            id="settings-studio-name"
+            class="ui-button-standard"
+            style="min-width: 180px;"
+            value="${escapeHtml(currentStudioName)}"
+            placeholder="${escapeHtml(t('settingsStudioNamePlaceholder'))}"
+          >
+        </div>
+        <div style="display:flex; justify-content:flex-end;">
+          <button type="button" class="btn btn-primary btn-sm" id="btn-save-studio-name">${escapeHtml(t('settingsStudioNameSave'))}</button>
+        </div>
+      </div>
+      <div class="settings-section">
         <h3>${escapeHtml(t('settingsLanguageSection'))}</h3>
         <div class="settings-item dashboard-config-row">
           <label class="dashboard-config-label" for="settings-language-select">${escapeHtml(t('settingsLanguageLabel'))}</label>
@@ -5548,6 +5596,20 @@
     bindEventOnce(container.querySelector('#btn-plan-save'), 'click', savePlanMasterFromForm, 'plan-master-save');
     bindEventOnce(container.querySelector('#btn-plan-reset'), 'click', resetPlanMasterFormInputs, 'plan-master-reset');
     bindEventOnce(container.querySelector('#btn-dynamic-item-add'), 'click', addDynamicItemHintFromSettings, 'dynamic-item-add');
+    bindEventOnce(container.querySelector('#btn-save-studio-name'), 'click', () => {
+      const nameInput = container.querySelector('#settings-studio-name');
+      setStudioName(nameInput?.value || '');
+      if (nameInput) nameInput.value = currentStudioName;
+      showToast(t('settingsSaved'));
+    }, 'settings-studio-name-save');
+    bindEventOnce(container.querySelector('#settings-studio-name'), 'keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      const nameInput = container.querySelector('#settings-studio-name');
+      setStudioName(nameInput?.value || '');
+      if (nameInput) nameInput.value = currentStudioName;
+      showToast(t('settingsSaved'));
+    }, 'settings-studio-name-enter');
     bindEventOnce(container.querySelector('#settings-language-select'), 'change', (event) => {
       const nextLang = String(event?.target?.value || '').trim();
       if (!nextLang) return;
@@ -5730,6 +5792,7 @@
         if (typeof data.googleCalendarAutoSyncEnabled === 'boolean') setGoogleCalendarAutoSyncEnabled(data.googleCalendarAutoSyncEnabled);
         if (typeof data.googleCalendarSelectedId === 'string') setGoogleCalendarSelectedId(data.googleCalendarSelectedId);
         if (data.billingProfile && typeof data.billingProfile === 'object') saveBillingProfile(data.billingProfile);
+        if (typeof data.studioName === 'string') setStudioName(data.studioName);
         if (typeof data.contractTemplateText === 'string') saveContractTemplate(data.contractTemplateText);
         reloadRuntimeStateFromStorage();
         applyHeroMetricsConfig();
@@ -7567,6 +7630,7 @@
     bindEventOnce(document.getElementById('btn-sync-import'), 'click', handleSyncImportClick, 'sync-import-click');
     bindEventOnce(document.getElementById('import-file'), 'change', handleImportFileChange, 'import-file-change');
     bindEventOnce(document.getElementById('btn-export'), 'click', handleCsvExportClick, 'csv-export-click');
+    bindEventOnce(document.getElementById('btn-export-list-csv'), 'click', handleCsvExportClick, 'csv-export-list-click');
     bindEventOnce(document.getElementById('btn-ics-export'), 'click', handleIcsExportClick, 'ics-export-click');
     bindEventOnce(document.getElementById('btn-team-add'), 'click', handleTeamAddClick, 'team-add-click');
     bindEventOnce(document.getElementById('btn-enterprise-contact-submit'), 'click', handleEnterpriseContactSubmit, 'enterprise-contact-submit');
@@ -7639,6 +7703,7 @@
     updateLanguage(currentLang || 'ja');
     applyInvoiceLocaleDefaults(currentLang || 'ja', { force: false });
     updateCurrency(currentCurrency);
+    updateHeaderBrandWordmark();
     if (ENABLE_STATS_FEATURES) {
       applyHeroMetricsConfig();
       setDashboardVisibility(dashboardVisible);
@@ -7688,8 +7753,10 @@
     currentTheme = FORCE_DARK_MODE ? 'dark' : getCloudValue(THEME_KEY, getLocalValue(THEME_KEY, 'dark'));
     currentCurrency = getCloudValue(CURRENCY_KEY, getLocalValue(CURRENCY_KEY, 'USD'));
     if (!CURRENCY_CONFIG[currentCurrency]) currentCurrency = 'USD';
+    currentStudioName = normalizeStudioName(getCloudValue(STUDIO_NAME_KEY, getLocalValue(STUDIO_NAME_KEY, '')));
     syncPlanFromStorage();
     reloadRuntimeStateFromStorage();
+    updateHeaderBrandWordmark();
     if (ENABLE_STATS_FEATURES) {
       applyHeroMetricsConfig();
       applyDashboardConfig();
