@@ -138,6 +138,47 @@ function normalizeRecordsForUser(records, uid) {
   });
 }
 
+function toTimestampMs(value) {
+  if (!value) return 0;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  if (typeof value?.toMillis === 'function') {
+    const millis = Number(value.toMillis());
+    return Number.isFinite(millis) ? millis : 0;
+  }
+  if (typeof value === 'object' && typeof value.seconds === 'number') {
+    const nanos = typeof value.nanoseconds === 'number' ? value.nanoseconds : 0;
+    return (value.seconds * 1000) + Math.floor(nanos / 1000000);
+  }
+  return 0;
+}
+
+function getRecordUpdatedAtMs(record) {
+  if (!record || typeof record !== 'object') return 0;
+  return Math.max(
+    toTimestampMs(record.updatedAt),
+    toTimestampMs(record.createdAt),
+    toTimestampMs(record.__updatedAt),
+  );
+}
+
+function getLatestUpdatedAtMsFromRecords(records) {
+  if (!Array.isArray(records) || records.length === 0) return 0;
+  return records.reduce((latest, record) => Math.max(latest, getRecordUpdatedAtMs(record)), 0);
+}
+
+function getLatestUpdatedAtMsFromDocSnapshots(docs) {
+  if (!Array.isArray(docs) || docs.length === 0) return 0;
+  return docs.reduce((latest, docSnap) => {
+    const data = docSnap?.data?.() || {};
+    return Math.max(latest, getRecordUpdatedAtMs(data));
+  }, 0);
+}
+
 function userMetaRef(uid) {
   return doc(db, 'users', uid, 'meta', 'state');
 }
@@ -349,10 +390,16 @@ async function buildAdminUserOverview(user) {
 function buildLocalDataSummary(payload = localMigrationPayload()) {
   const customers = Array.isArray(payload.photocrm_customers) ? payload.photocrm_customers.length : 0;
   const expenses = Array.isArray(payload.photocrm_expenses) ? payload.photocrm_expenses.length : 0;
+  const latestUpdatedAtMs = Math.max(
+    getLatestUpdatedAtMsFromRecords(payload.photocrm_customers),
+    getLatestUpdatedAtMsFromRecords(payload.photocrm_expenses),
+  );
   return {
     hasLocalData: customers > 0 || expenses > 0,
     customers,
     expenses,
+    latestUpdatedAtMs,
+    latestUpdatedAt: latestUpdatedAtMs > 0 ? new Date(latestUpdatedAtMs).toISOString() : '',
   };
 }
 
@@ -366,12 +413,19 @@ async function getCloudDataSummary(uid) {
   const projects = projectsSnap.size;
   const legacyClients = legacyClientsSnap.size;
   const expenses = expensesSnap.size;
+  const latestUpdatedAtMs = Math.max(
+    getLatestUpdatedAtMsFromDocSnapshots(projectsSnap.docs),
+    getLatestUpdatedAtMsFromDocSnapshots(legacyClientsSnap.docs),
+    getLatestUpdatedAtMsFromDocSnapshots(expensesSnap.docs),
+  );
 
   return {
     projects,
     legacyClients,
     expenses,
     hasCloudData: (projects + legacyClients + expenses) > 0,
+    latestUpdatedAtMs,
+    latestUpdatedAt: latestUpdatedAtMs > 0 ? new Date(latestUpdatedAtMs).toISOString() : '',
   };
 }
 

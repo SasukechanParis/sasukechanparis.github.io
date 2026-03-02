@@ -523,6 +523,20 @@
     return 'FREE';
   }
 
+  function getPlanTier(plan = currentUserPlan) {
+    const normalized = normalizeUserPlan(plan);
+    if (normalized === 'team') return 2;
+    if (normalized === 'individual') return 1;
+    return 0;
+  }
+
+  function getSubscriptionActionLabel(targetPlan, currentPlan = currentUserPlan) {
+    const targetTier = getPlanTier(targetPlan);
+    const currentTier = getPlanTier(currentPlan);
+    if (targetTier > currentTier) return t('settingsSubscriptionUpgradeButton');
+    return t('settingsSubscriptionChangeButton');
+  }
+
   function updateHeaderPlanBadge() {
     const badge = document.getElementById('header-plan-badge');
     const profileBadge = document.getElementById('profile-plan-badge');
@@ -4758,14 +4772,22 @@
     const currentPlanBadgeText = getPlanBadgeText(normalizedCurrentPlan);
     const subscriptionPlans = [
       {
+        key: 'free',
+        name: t('settingsSubscriptionFreeName'),
+        price: t('settingsSubscriptionFreePrice'),
+        summary: t('settingsSubscriptionFreeSummary', { limit: String(FREE_PLAN_LIMIT) }),
+      },
+      {
         key: 'individual',
         name: t('settingsSubscriptionIndividualName'),
         price: t('settingsSubscriptionIndividualPrice'),
+        summary: t('settingsSubscriptionIndividualSummary'),
       },
       {
         key: 'team',
         name: t('settingsSubscriptionTeamName'),
         price: t('settingsSubscriptionTeamPrice'),
+        summary: t('settingsSubscriptionTeamSummary'),
       },
     ];
     const subscriptionPlanRows = subscriptionPlans.map((planEntry) => {
@@ -4775,13 +4797,14 @@
           <div class="subscription-plan-meta">
             <div class="subscription-plan-name">${escapeHtml(planEntry.name || planEntry.key)}</div>
             <div class="subscription-plan-price">${escapeHtml(planEntry.price || '')}</div>
+            <div class="subscription-plan-summary">${escapeHtml(planEntry.summary || '')}</div>
           </div>
           <button
             type="button"
             class="btn btn-secondary btn-sm subscription-plan-action-btn"
             data-subscription-plan-target="${escapeHtml(planEntry.key)}"
             ${isCurrent ? 'disabled' : ''}
-          >${escapeHtml(isCurrent ? t('settingsSubscriptionCurrentButton') : t('settingsSubscriptionUpgradeButton'))}</button>
+          >${escapeHtml(isCurrent ? t('settingsSubscriptionCurrentButton') : getSubscriptionActionLabel(planEntry.key, normalizedCurrentPlan))}</button>
         </div>
       `;
     }).join('');
@@ -4926,6 +4949,9 @@
           <span class="header-plan-badge" data-plan="${escapeHtml(normalizedCurrentPlan)}">${escapeHtml(currentPlanBadgeText)}</span>
         </div>
         <div class="subscription-plan-list">${subscriptionPlanRows}</div>
+        <div class="subscription-plan-footer">
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-subscription-plan-details">${escapeHtml(t('settingsSubscriptionDetailsLink'))}</button>
+        </div>
       </div>
       <div class="settings-section">
         <h3>${escapeHtml(t('settingsPlanSection'))}</h3>
@@ -4987,6 +5013,7 @@
         handleSubscriptionPlanSelect(targetPlan);
       }, `subscription-plan-select-${targetPlan}`);
     });
+    bindEventOnce(container.querySelector('#btn-subscription-plan-details'), 'click', handleSubscriptionPlanDetailsClick, 'subscription-plan-details-open');
 
     container.querySelectorAll('button[data-plan-edit]').forEach((button) => {
       const index = Number(button.dataset.planEdit);
@@ -5893,6 +5920,17 @@
     showToast(t('settingsSubscriptionUpdated', { plan: getPlanBadgeText(normalized) }));
   }
 
+  function handleSubscriptionPlanDetailsClick() {
+    const detailsText = [
+      t('settingsSubscriptionDetailsModalTitle'),
+      '',
+      `• ${t('settingsSubscriptionFreeName')} (${t('settingsSubscriptionFreePrice')}): ${t('settingsSubscriptionFreeSummary', { limit: String(FREE_PLAN_LIMIT) })}`,
+      `• ${t('settingsSubscriptionIndividualName')} (${t('settingsSubscriptionIndividualPrice')}): ${t('settingsSubscriptionIndividualSummary')}`,
+      `• ${t('settingsSubscriptionTeamName')} (${t('settingsSubscriptionTeamPrice')}): ${t('settingsSubscriptionTeamSummary')}`,
+    ].join('\n');
+    window.alert(detailsText);
+  }
+
   function openSettingsPlanManagementSection() {
     handleOpenSettingsClick();
     const menuTabBtn = settingsOverlay?.querySelector('.settings-tab-btn[data-tab="menu"]');
@@ -6679,31 +6717,26 @@
     const localSummary = window.FirebaseService.getLocalDataSummary?.();
     if (!localSummary?.hasLocalData) return;
 
-    let cloudSummary = { projects: 0, expenses: 0, hasCloudData: false };
+    let cloudSummary = { projects: 0, expenses: 0, hasCloudData: false, latestUpdatedAtMs: 0 };
     try {
       cloudSummary = await window.FirebaseService.getCloudDataSummary?.() || cloudSummary;
     } catch (err) {
       console.warn('Failed to fetch cloud summary before merge', err);
     }
 
-    const shouldMerge = window.confirm(
-      t('cloudMergeConfirm', {
-        localCustomers: String(localSummary.customers || 0),
-        localExpenses: String(localSummary.expenses || 0),
-        cloudProjects: String(cloudSummary.projects || 0),
-        cloudExpenses: String(cloudSummary.expenses || 0),
-      })
-    );
-
-    if (!shouldMerge) {
-      showToast(t('cloudMergeSkipped'));
-      return;
-    }
+    const localUpdatedAtMs = Number(localSummary.latestUpdatedAtMs) || 0;
+    const cloudUpdatedAtMs = Number(cloudSummary.latestUpdatedAtMs) || 0;
+    const hasCloudData = !!cloudSummary.hasCloudData;
+    const shouldOverwrite = hasCloudData && localUpdatedAtMs > 0 && localUpdatedAtMs > cloudUpdatedAtMs;
+    const shouldMerge = !hasCloudData
+      || shouldOverwrite
+      || (hasCloudData && localUpdatedAtMs === 0 && ((localSummary.customers || 0) > 0 || (localSummary.expenses || 0) > 0));
+    if (!shouldMerge) return;
 
     setCloudSyncIndicator('syncing');
     try {
-      const mergeResult = await window.FirebaseService.mergeLocalDataToCloud?.({ overwrite: false });
-      if (mergeResult?.merged) {
+      const mergeResult = await window.FirebaseService.mergeLocalDataToCloud?.({ overwrite: shouldOverwrite });
+      if (mergeResult?.merged && ((mergeResult.customerCount || 0) > 0 || (mergeResult.expenseCount || 0) > 0)) {
         showToast(t('cloudMergeCompleted', {
           customers: String(mergeResult.customerCount || 0),
           expenses: String(mergeResult.expenseCount || 0),
