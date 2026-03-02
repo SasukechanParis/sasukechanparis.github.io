@@ -166,6 +166,16 @@ body {
   overflow-x: hidden;
 }
 
+/* Vertical writing long vowel mark support (ー) */
+[style*="writing-mode: vertical"],
+[style*="writing-mode:vertical"],
+.vertical-writing,
+.vertical-text,
+.tategaki {
+  text-orientation: mixed;
+  font-feature-settings: "vert" 1, "vrt2" 1;
+}
+
 .login-screen {
   min-height: 100vh;
   display: flex;
@@ -443,7 +453,7 @@ body {
   position: absolute;
   top: calc(100% + 8px);
   left: 0;
-  width: min(320px, calc(100vw - 40px));
+  width: min(320px, calc(100dvw - 40px));
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 12px;
@@ -1422,7 +1432,7 @@ html[lang="fr"] .stat-label {
   top: 0;
   left: 0;
   right: auto;
-  width: min(340px, calc(100vw - 32px));
+  width: min(340px, calc(100dvw - 32px));
   background: #ffffff;
   border: 1px solid #d8deea;
   border-radius: 12px;
@@ -2414,7 +2424,7 @@ tbody tr:hover {
     gap: 6px;
     min-width: 0;
     flex-wrap: nowrap;
-    overflow-x: auto;
+    overflow-x: hidden;
     overflow-y: hidden;
     scrollbar-width: none;
   }
@@ -2519,7 +2529,7 @@ tbody tr:hover {
     top: calc(100% + 8px);
     right: 0;
     z-index: 120;
-    width: min(250px, calc(100vw - 28px));
+    width: min(250px, calc(100dvw - 28px));
     flex-direction: column;
     align-items: stretch;
     gap: 8px;
@@ -2560,7 +2570,11 @@ tbody tr:hover {
   }
 
   .list-columns-trigger {
-    width: auto;
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    padding: 0;
+    font-size: 0.95rem;
     justify-content: center;
   }
 
@@ -2596,7 +2610,7 @@ tbody tr:hover {
     align-items: center;
     gap: 8px;
     margin-bottom: 10px;
-    overflow-x: visible;
+    overflow-x: hidden;
   }
 
   .toolbar-add-btn {
@@ -2617,7 +2631,9 @@ tbody tr:hover {
   }
 
   .list-columns-menu-wrap {
-    display: none;
+    display: inline-flex;
+    margin-left: 0;
+    flex: 0 0 auto;
   }
 
   .filter-select {
@@ -2658,10 +2674,15 @@ tbody tr:hover {
     font-size: 0.74rem;
   }
 
+  .customer-card-mobile-metrics,
+  .customer-card-mobile-foot {
+    display: none;
+  }
+
   .list-columns-menu {
     right: auto;
     left: 0;
-    width: min(360px, calc(100vw - 28px));
+    width: min(320px, calc(100dvw - 24px));
   }
 
   .table-action-btn,
@@ -2755,7 +2776,7 @@ tbody tr:hover {
   }
 
   .dashboard-quick-menu {
-    width: min(340px, calc(100vw - 32px));
+    width: min(340px, calc(100dvw - 32px));
   }
 
   .modal {

@@ -3545,6 +3545,7 @@
   }
 
   function getListSettingsButtonLabel() {
+    if (isMobileViewport()) return '⚙';
     return `⚙ ${t('listColumnSettings')}`;
   }
 
@@ -3662,6 +3663,7 @@
   }
 
   function handleListColumnsViewportChange() {
+    updateListSettingsButtonLabel();
     if (!isListColumnsMenuOpen) return;
     positionListColumnsMenu();
   }
@@ -3907,6 +3909,7 @@
   }
 
   function handleMobileHeaderViewportChange() {
+    updateListSettingsButtonLabel();
     if (!isMobileViewport()) {
       setMobileHeaderMenuOpen(false);
     }
@@ -4459,11 +4462,24 @@
     if (pf_staff !== 'all') list = list.filter(c => c.assignedTo === pf_staff);
 
     const { key, dir } = currentSort;
+    const dateSortKeys = new Set(['inquiryDate', 'contractDate', 'shootingDate', 'meetingDate', 'billingDate', 'deliveryDate', 'paymentConfirmDate']);
     list.sort((a, b) => {
       let va = a[key] ?? '', vb = b[key] ?? '';
-      if (key === 'revenue') { va = Number(va) || 0; vb = Number(vb) || 0; }
-      else if (key === 'paymentChecked') { va = va ? 1 : 0; vb = vb ? 1 : 0; }
-      else { va = String(va).toLowerCase(); vb = String(vb).toLowerCase(); }
+      if (key === 'revenue') {
+        va = Number(va) || 0;
+        vb = Number(vb) || 0;
+      } else if (key === 'paymentChecked') {
+        va = va ? 1 : 0;
+        vb = vb ? 1 : 0;
+      } else if (dateSortKeys.has(key)) {
+        const aParts = parseDateParts(va);
+        const bParts = parseDateParts(vb);
+        va = aParts ? new Date(aParts.year, aParts.month, aParts.day).getTime() : 0;
+        vb = bParts ? new Date(bParts.year, bParts.month, bParts.day).getTime() : 0;
+      } else {
+        va = String(va).toLowerCase();
+        vb = String(vb).toLowerCase();
+      }
       if (va < vb) return dir === 'asc' ? -1 : 1;
       if (va > vb) return dir === 'asc' ? 1 : -1;
       return 0;
@@ -4700,13 +4716,14 @@
   }
 
   function bindSortEventListeners() {
+    const dateSortKeys = new Set(['inquiryDate', 'contractDate', 'shootingDate', 'meetingDate', 'billingDate', 'deliveryDate', 'paymentConfirmDate']);
     $$('thead th[data-sort]').forEach((th) => {
       const key = th.dataset.sort || 'unknown';
       bindEventOnce(th, 'click', () => {
         const sortKey = th.dataset.sort;
         if (!sortKey) return;
         if (currentSort.key === sortKey) currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
-        else currentSort = { key: sortKey, dir: 'asc' };
+        else currentSort = { key: sortKey, dir: dateSortKeys.has(sortKey) ? 'desc' : 'asc' };
         renderTable();
       }, `table-sort-${key}`);
     });
@@ -8049,6 +8066,7 @@
   }
 
   function bindCoreUIEventListeners() {
+    updateListSettingsButtonLabel();
     getLanguageSelectElements().forEach((selectEl, index) => {
       bindEventOnce(selectEl, 'change', handleLanguageSelectChange, `lang-select-change-${index}`);
     });
