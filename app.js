@@ -6581,6 +6581,20 @@
     return '';
   }
 
+  function logAdminSecurityInitError(context = '', err = null, metadata = {}) {
+    const safeMetadata = metadata && typeof metadata === 'object' ? metadata : {};
+    const detail = {
+      context: String(context || '').trim() || 'admin_security',
+      code: String(err?.code || err?.name || '').trim(),
+      message: String(err?.message || err || '').trim(),
+      reason: String(safeMetadata.reason || '').trim(),
+      deviceId: String(safeMetadata.deviceId || '').trim(),
+      hasFirebaseService: !!window.FirebaseService,
+    };
+    console.error(`[AdminSecurity] ${detail.context} failed`, err);
+    console.log('[AdminSecurity][detail]', detail);
+  }
+
   function canAccessAdminPanel() {
     return isCurrentUserAdmin()
       && adminSecurityContext.authorized
@@ -6830,6 +6844,11 @@
       return;
     }
     if (!window.FirebaseService?.startAdminTotpEnrollment) {
+      logAdminSecurityInitError(
+        'startAdminTotpEnrollment',
+        new Error('window.FirebaseService.startAdminTotpEnrollment is not available'),
+        { reason: 'firebase_service_missing' }
+      );
       showToast(t('adminSecurityInitFailed'), 'error');
       return;
     }
@@ -6848,7 +6867,9 @@
       setAdminTotpQrPreview(otpUri);
       openModalOverlayById('admin-totp-overlay');
     } catch (err) {
-      console.error('TOTP enrollment start failed', err);
+      logAdminSecurityInitError('startAdminTotpEnrollment', err, {
+        reason: String(err?.code || err?.message || 'totp_enrollment_start_failed'),
+      });
       showToast(t('adminSecurityInitFailed'), 'error');
     }
   }
@@ -7010,6 +7031,7 @@
   async function initializeAdminSecurityForUser(user) {
     adminDeviceContextCache = null;
     adminDeviceState = { approved: [], pending: [] };
+    lastKnownAuthUserEmail = String(user?.email || lastKnownAuthUserEmail || '').trim();
     updateAdminTotpControlsVisibility();
     if (!user || !isAdminEmail(user.email)) {
       clearAdminSecurityState('not_admin');
@@ -7018,10 +7040,54 @@
       return;
     }
 
-    const device = await buildAdminDeviceContext();
+    let deviceContextBypassed = false;
+    let device = {
+      deviceId: `fallback_${String(user?.uid || 'admin').slice(0, 24)}`,
+      fingerprintHash: '',
+      label: 'Fallback Device',
+      platform: 'unknown',
+      userAgent: String(window.navigator?.userAgent || ''),
+      resolution: `${Number(window.screen?.width) || 0}x${Number(window.screen?.height) || 0}@${Number(window.devicePixelRatio) || 1}`,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+      language: String(window.navigator?.language || ''),
+    };
+    try {
+      device = await buildAdminDeviceContext();
+    } catch (err) {
+      deviceContextBypassed = true;
+      logAdminSecurityInitError('buildAdminDeviceContext', err, { reason: 'device_context_unavailable' });
+      setAdminDeviceWarning(t('adminSecurityInitFailed'), 'warning');
+      console.log('[AdminSecurity][detail]', {
+        context: 'device_context_fallback_active',
+        reason: 'device_context_unavailable',
+        deviceId: device.deviceId,
+      });
+    }
+
     if (!window.FirebaseService?.bootstrapAdminSecurity) {
-      clearAdminSecurityState('admin_security_init_failed');
+      logAdminSecurityInitError(
+        'bootstrapAdminSecurity',
+        new Error('window.FirebaseService.bootstrapAdminSecurity is not available'),
+        { reason: 'firebase_service_missing', deviceId: device.deviceId }
+      );
+      stopAdminSessionMonitor();
+      clearPersistedAdminSecureSession();
+      const mfaState = window.FirebaseService?.getAdminMfaState?.() || {};
+      adminSecurityContext = {
+        isAdmin: true,
+        authorized: false,
+        sessionActive: false,
+        reason: 'admin_security_init_failed',
+        deviceId: device.deviceId,
+        mfaVerified: !!mfaState.verified,
+        mfaRequired: true,
+        mfaEnrolledFactorCount: Number(mfaState.enrolledFactorCount) || 0,
+        sessionToken: '',
+        sessionExpiresAtMs: 0,
+      };
+      setAdminDeviceWarning(getAdminSecurityWarningMessage('admin_security_init_failed'), 'error');
       updateAdminSettingsAvailability();
+      updateAdminTotpControlsVisibility();
       return;
     }
 
@@ -7066,15 +7132,45 @@
           sessionExpiresAtMs: 0,
         };
         const warningMessage = getAdminSecurityWarningMessage(adminSecurityContext.reason);
-        setAdminDeviceWarning(warningMessage, 'error');
-        if (warningMessage) showToast(warningMessage, 'error');
+        const warningType = adminSecurityContext.reason === 'mfa_required' ? 'warning' : 'error';
+        setAdminDeviceWarning(warningMessage, warningType);
+        console.log('[AdminSecurity][bootstrap-result]', {
+          allowed: !!bootstrap?.allowed,
+          authorized: !!bootstrap?.authorized,
+          reason: adminSecurityContext.reason,
+          deviceId: device.deviceId,
+          mfaRequired: !!mfa.required,
+          mfaVerified: !!mfa.verified,
+          enrolledFactorCount: Number(mfa.enrolledFactorCount) || 0,
+        });
+        if (warningMessage) showToast(warningMessage, warningType === 'warning' ? 'warning' : 'error');
+      }
+      if (deviceContextBypassed) {
+        setAdminDeviceWarning(t('adminSecurityInitFailed'), 'warning');
       }
       renderAdminDeviceTableRows();
       updateAdminSettingsAvailability();
       updateAdminTotpControlsVisibility();
     } catch (err) {
-      console.error('Admin security bootstrap failed', err);
-      clearAdminSecurityState('admin_security_init_failed');
+      logAdminSecurityInitError('bootstrapAdminSecurity', err, {
+        reason: 'admin_security_init_failed',
+        deviceId: device.deviceId,
+      });
+      stopAdminSessionMonitor();
+      clearPersistedAdminSecureSession();
+      const mfaState = window.FirebaseService?.getAdminMfaState?.() || {};
+      adminSecurityContext = {
+        isAdmin: true,
+        authorized: false,
+        sessionActive: false,
+        reason: 'admin_security_init_failed',
+        deviceId: device.deviceId,
+        mfaVerified: !!mfaState.verified,
+        mfaRequired: true,
+        mfaEnrolledFactorCount: Number(mfaState.enrolledFactorCount) || 0,
+        sessionToken: '',
+        sessionExpiresAtMs: 0,
+      };
       setAdminDeviceWarning(getAdminSecurityWarningMessage('admin_security_init_failed'), 'error');
       updateAdminSettingsAvailability();
       updateAdminTotpControlsVisibility();
@@ -7893,6 +7989,7 @@
   let adminSessionActivityBound = false;
   let adminSessionLastTouchedAt = 0;
   let mfaLoginChallengeInfo = null;
+  let lastKnownAuthUserEmail = '';
 
   function getLocaleTextOrFallback(key, fallback = '') {
     const locale = window.LOCALE?.[currentLang];
@@ -7942,11 +8039,18 @@
   }
 
   function isCurrentUserAdmin() {
+    const currentUserEmail = window.FirebaseService?.getCurrentUser?.()?.email || '';
+    const cachedEmail = lastKnownAuthUserEmail || '';
+    const effectiveEmail = String(currentUserEmail || cachedEmail).trim();
+    if (effectiveEmail) return isAdminEmail(effectiveEmail);
     if (typeof window.FirebaseService?.isCurrentUserAdmin === 'function') {
-      return !!window.FirebaseService.isCurrentUserAdmin();
+      try {
+        return !!window.FirebaseService.isCurrentUserAdmin();
+      } catch {
+        return false;
+      }
     }
-    const email = window.FirebaseService?.getCurrentUser?.()?.email || '';
-    return isAdminEmail(email);
+    return false;
   }
 
   function formatAdminPlanLabel(plan) {
@@ -8367,6 +8471,7 @@
 
     if (state === 'loggedOut') {
       isLoggedIn = false;
+      lastKnownAuthUserEmail = '';
       clearAdminSecurityState('not_admin');
       setCurrentUserPlan('free', { persistCloud: false });
       if (authStatus) authStatus.textContent = t('authLoggedOutPrompt');
@@ -8385,6 +8490,7 @@
 
     if (state === 'loggedIn') {
       const userName = getAuthDisplayName(user);
+      lastKnownAuthUserEmail = String(user?.email || lastKnownAuthUserEmail || '').trim();
       syncPlanFromStorage();
       if (authStatus) authStatus.textContent = t('authLoggedInAs', { user: userName });
       if (loginBtn) loginBtn.style.display = 'none';
@@ -8498,8 +8604,28 @@
             }
             setCloudSyncIndicator('ready');
           })().catch((err) => {
-            console.error('Auth update error:', err);
-            clearAdminSecurityState('admin_security_init_failed');
+            logAdminSecurityInitError('auth_state_update', err, {
+              reason: 'admin_security_init_failed',
+              deviceId: adminSecurityContext.deviceId,
+            });
+            if (isAdminEmail(user?.email)) {
+              stopAdminSessionMonitor();
+              clearPersistedAdminSecureSession();
+              adminSecurityContext = {
+                ...adminSecurityContext,
+                isAdmin: true,
+                authorized: false,
+                sessionActive: false,
+                reason: 'admin_security_init_failed',
+                sessionToken: '',
+                sessionExpiresAtMs: 0,
+              };
+              setAdminDeviceWarning(getAdminSecurityWarningMessage('admin_security_init_failed'), 'error');
+              updateAdminSettingsAvailability();
+              updateAdminTotpControlsVisibility();
+            } else {
+              clearAdminSecurityState('admin_security_init_failed');
+            }
             setCloudSyncIndicator('error');
           });
           return;
