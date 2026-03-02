@@ -2921,6 +2921,25 @@ tbody tr:hover {
   line-height: 1.65;
 }
 
+@media (max-width: 768px) {
+  .legal-region-switch {
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .legal-region-tab {
+    flex: 1 1 calc(33.333% - 6px);
+    text-align: center;
+    padding: 6px 8px;
+    font-size: 0.76rem;
+  }
+
+  .legal-modal-content {
+    font-size: 0.86rem;
+    line-height: 1.65;
+  }
+}
+
 /* Modal Header */
 .modal-header {
   display: flex;

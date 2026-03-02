@@ -1036,7 +1036,10 @@
     if (customerTable) customerTable.style.tableLayout = 'auto';
     const customerTableWrapper = document.getElementById('table-wrapper');
     if (customerTableWrapper) customerTableWrapper.style.overflowX = 'auto';
-    if (legalModalOverlay?.classList.contains('active')) renderLegalModal(activeLegalDocType);
+    if (legalModalOverlay?.classList.contains('active')) {
+      setLegalRegion(getDefaultLegalRegionForLanguage(currentLang), { rerender: false });
+      renderLegalModal(activeLegalDocType);
+    }
 
     refreshLanguageOptionAvailability();
     refreshUiAfterLanguageChange();
@@ -1507,6 +1510,10 @@
   const legalModalContent = document.getElementById('legal-modal-content');
   const legalModalCloseButton = document.getElementById('btn-legal-modal-close');
   const legalModalCloseFooterButton = document.getElementById('btn-legal-modal-close-footer');
+  const legalRegionTabs = Array.from(document.querySelectorAll('[data-legal-region]'));
+  const legalRegionGlobalTab = document.getElementById('legal-region-tab-global');
+  const legalRegionJapanTab = document.getElementById('legal-region-tab-japan');
+  const legalRegionEuTab = document.getElementById('legal-region-tab-eu');
   const listView = $('#list-view');
   const calendarView = $('#calendar-view');
   const calendarFilterInputs = $$('.calendar-filter-input');
@@ -1539,45 +1546,146 @@
   }
 
   let activeLegalDocType = 'terms';
+  let activeLegalRegion = 'global';
 
   function normalizeLegalDocType(type) {
     return String(type || '').trim().toLowerCase() === 'privacy' ? 'privacy' : 'terms';
   }
 
-  function getLegalDocTranslationKeys(type) {
+  function normalizeLegalRegion(region) {
+    const value = String(region || '').trim().toLowerCase();
+    if (value === 'japan') return 'japan';
+    if (value === 'eu') return 'eu';
+    return 'global';
+  }
+
+  function getDefaultLegalRegionForLanguage(lang = currentLang) {
+    const normalizedLang = String(lang || '').trim().toLowerCase();
+    if (normalizedLang === 'ja') return 'japan';
+    if (normalizedLang === 'fr') return 'eu';
+    return 'global';
+  }
+
+  function getLegalDocTranslationKeys(type, region) {
     const normalizedType = normalizeLegalDocType(type);
+    const normalizedRegion = normalizeLegalRegion(region);
+    const suffixMap = {
+      global: 'Global',
+      japan: 'Japan',
+      eu: 'Eu',
+    };
+    const suffix = suffixMap[normalizedRegion] || suffixMap.global;
     if (normalizedType === 'privacy') {
-      return { titleKey: 'privacyModalTitle', contentKey: 'privacyModalContent' };
+      return { titleKey: 'privacyModalTitle', contentKey: `privacyLegal${suffix}Content` };
     }
-    return { titleKey: 'termsModalTitle', contentKey: 'termsModalContent' };
+    return { titleKey: 'termsModalTitle', contentKey: `termsLegal${suffix}Content` };
+  }
+
+  function getLegalLocaleTextOrFallback(key, fallback = '') {
+    const currentLocale = window.LOCALE?.[currentLang];
+    if (currentLocale && typeof currentLocale[key] === 'string' && currentLocale[key]) return currentLocale[key];
+    const englishLocale = window.LOCALE?.en;
+    if (englishLocale && typeof englishLocale[key] === 'string' && englishLocale[key]) return englishLocale[key];
+    const japaneseLocale = window.LOCALE?.ja;
+    if (japaneseLocale && typeof japaneseLocale[key] === 'string' && japaneseLocale[key]) return japaneseLocale[key];
+    return fallback;
+  }
+
+  function interpolateLegalTemplate(template, params = {}) {
+    let resolved = String(template || '');
+    Object.entries(params).forEach(([key, value]) => {
+      resolved = resolved.split(`{${key}}`).join(String(value ?? ''));
+    });
+    return resolved;
+  }
+
+  function updateLegalRegionSwitchLabels() {
+    if (legalRegionGlobalTab) legalRegionGlobalTab.textContent = getLegalLocaleTextOrFallback('legalRegionGlobalLabel', 'Global');
+    if (legalRegionJapanTab) legalRegionJapanTab.textContent = getLegalLocaleTextOrFallback('legalRegionJapanLabel', 'Japan');
+    if (legalRegionEuTab) legalRegionEuTab.textContent = getLegalLocaleTextOrFallback('legalRegionEuLabel', 'EU');
+  }
+
+  function updateLegalRegionTabsState(region = activeLegalRegion) {
+    const normalizedRegion = normalizeLegalRegion(region);
+    legalRegionTabs.forEach((button) => {
+      const isActive = normalizeLegalRegion(button?.dataset?.legalRegion) === normalizedRegion;
+      button.classList.toggle('active', isActive);
+      button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+    activeLegalRegion = normalizedRegion;
   }
 
   function buildLegalModalBodyHtml(contentText) {
-    const sections = String(contentText || '')
-      .split(/\n{2,}/)
-      .map((section) => section.trim())
-      .filter(Boolean);
+    const lines = String(contentText || '').split(/\r?\n/);
+    const html = [];
+    let listItems = [];
 
-    if (sections.length === 0) return '';
-    return sections
-      .map((section) => `<p>${escapeHtml(section).replace(/\n/g, '<br>')}</p>`)
-      .join('');
+    const flushList = () => {
+      if (!listItems.length) return;
+      html.push(`<ul>${listItems.join('')}</ul>`);
+      listItems = [];
+    };
+
+    lines.forEach((rawLine) => {
+      const line = String(rawLine || '').trim();
+      if (!line) {
+        flushList();
+        return;
+      }
+      if (line.startsWith('## ')) {
+        flushList();
+        html.push(`<h4 class="legal-doc-heading">${escapeHtml(line.slice(3).trim())}</h4>`);
+        return;
+      }
+      if (line.startsWith('- ')) {
+        listItems.push(`<li>${escapeHtml(line.slice(2).trim())}</li>`);
+        return;
+      }
+      flushList();
+      html.push(`<p>${escapeHtml(line).replace(/\n/g, '<br>')}</p>`);
+    });
+
+    flushList();
+    return html.join('');
+  }
+
+  function setLegalRegion(region = 'global', options = {}) {
+    const { rerender = true } = options;
+    updateLegalRegionTabsState(region);
+    if (rerender && legalModalOverlay?.classList.contains('active')) {
+      renderLegalModal(activeLegalDocType);
+    }
   }
 
   function renderLegalModal(type = activeLegalDocType) {
     if (!legalModalTitle || !legalModalContent) return;
     const normalizedType = normalizeLegalDocType(type);
+    const normalizedRegion = normalizeLegalRegion(activeLegalRegion);
     activeLegalDocType = normalizedType;
-    const { titleKey, contentKey } = getLegalDocTranslationKeys(normalizedType);
-    const legalContactEmail = getLocaleTextOrFallback('legalContactEmail', '')
+    const { titleKey, contentKey } = getLegalDocTranslationKeys(normalizedType, normalizedRegion);
+    const legalContactEmail = getLegalLocaleTextOrFallback('legalContactEmail', '')
       || window.LOCALE?.ja?.legalContactEmail
       || '';
-    legalModalTitle.textContent = t(titleKey);
-    legalModalContent.innerHTML = buildLegalModalBodyHtml(t(contentKey, { contactEmail: legalContactEmail }));
+    const studioBrandName = normalizeStudioName(currentStudioName || getCloudValue(STUDIO_NAME_KEY, getLocalValue(STUDIO_NAME_KEY, '')))
+      || 'Sasuke Photography';
+    const defaultTitle = normalizedType === 'privacy' ? 'Privacy Policy' : 'Terms of Service';
+    const fallbackContentKey = normalizedType === 'privacy' ? 'privacyModalContent' : 'termsModalContent';
+    const rawContent = getLegalLocaleTextOrFallback(contentKey, getLegalLocaleTextOrFallback(fallbackContentKey, ''));
+
+    updateLegalRegionSwitchLabels();
+    updateLegalRegionTabsState(normalizedRegion);
+    legalModalTitle.textContent = getLegalLocaleTextOrFallback(titleKey, defaultTitle);
+    legalModalContent.innerHTML = buildLegalModalBodyHtml(
+      interpolateLegalTemplate(rawContent, {
+        contactEmail: legalContactEmail,
+        brandName: studioBrandName,
+      })
+    );
   }
 
   function openLegalModal(type = 'terms') {
     if (!legalModalOverlay) return;
+    setLegalRegion(getDefaultLegalRegionForLanguage(currentLang), { rerender: false });
     renderLegalModal(type);
     legalModalOverlay.style.display = 'flex';
     window.requestAnimationFrame(() => {
@@ -1599,6 +1707,12 @@
     event.preventDefault();
     const docType = event?.currentTarget?.dataset?.legalDoc || 'terms';
     openLegalModal(docType);
+  }
+
+  function handleLegalRegionTabClick(event) {
+    event.preventDefault();
+    const region = event?.currentTarget?.dataset?.legalRegion || 'global';
+    setLegalRegion(region);
   }
 
   window.closeLegalModal = closeLegalModal;
@@ -7913,6 +8027,9 @@
     bindEventOnce(document.getElementById('btn-logout'), 'click', handleGoogleLogoutClick, 'google-logout');
     document.querySelectorAll('[data-legal-doc]').forEach((link, index) => {
       bindEventOnce(link, 'click', handleLegalDocLinkClick, `legal-doc-link-${index}`);
+    });
+    legalRegionTabs.forEach((button, index) => {
+      bindEventOnce(button, 'click', handleLegalRegionTabClick, `legal-region-tab-${index}`);
     });
     bindEventOnce(legalModalCloseButton, 'click', closeLegalModal, 'legal-modal-close-top');
     bindEventOnce(legalModalCloseFooterButton, 'click', closeLegalModal, 'legal-modal-close-footer');
