@@ -851,6 +851,31 @@ button,
   justify-content: flex-start;
 }
 
+.tomorrow-reminder-card {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: linear-gradient(135deg, rgba(255, 251, 235, 0.95), rgba(254, 243, 199, 0.92));
+  box-shadow: 0 10px 24px rgba(245, 158, 11, 0.15);
+}
+
+.tomorrow-reminder-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #92400e;
+  margin-bottom: 8px;
+}
+
+.tomorrow-reminder-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  color: #7c2d12;
+  font-size: 0.84rem;
+}
+
 .dashboard-collapsible {
   overflow: hidden;
   max-height: 1100px;

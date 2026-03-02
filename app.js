@@ -1424,6 +1424,9 @@
   const mobileHeaderMenuButton = document.getElementById('btn-mobile-header-menu');
   const cloudSyncIndicator = document.getElementById('cloud-sync-indicator');
   const cloudSyncLabel = document.getElementById('cloud-sync-label');
+  const tomorrowReminderCard = document.getElementById('tomorrow-reminder-card');
+  const tomorrowReminderTitle = document.getElementById('tomorrow-reminder-title');
+  const tomorrowReminderList = document.getElementById('tomorrow-reminder-list');
   const listView = $('#list-view');
   const calendarView = $('#calendar-view');
   const calendarFilterInputs = $$('.calendar-filter-input');
@@ -4342,6 +4345,7 @@
     });
 
     updateDashboard();
+    renderTomorrowReminderCard();
     updateMonthFilter();
     updateHeaderPlanBadge();
     if (isMobileFilterSheetOpen) renderMobileSortQuickList();
@@ -4565,6 +4569,82 @@
     if (Number.isNaN(startDate.getTime())) return null;
     const endDate = new Date(startDate.getTime() + (60 * 60 * 1000));
     return { startDate, endDate };
+  }
+
+  function parseBookingSlot(rawDateTimeValue) {
+    const range = resolveShootingEventDateRange(rawDateTimeValue);
+    if (!range) return null;
+
+    const dateKey = `${range.startDate.getFullYear()}-${String(range.startDate.getMonth() + 1).padStart(2, '0')}-${String(range.startDate.getDate()).padStart(2, '0')}`;
+    const startMinutes = (range.startDate.getHours() * 60) + range.startDate.getMinutes();
+    const endMinutes = (range.endDate.getHours() * 60) + range.endDate.getMinutes();
+    const startLabel = `${String(range.startDate.getHours()).padStart(2, '0')}:${String(range.startDate.getMinutes()).padStart(2, '0')}`;
+    const endLabel = `${String(range.endDate.getHours()).padStart(2, '0')}:${String(range.endDate.getMinutes()).padStart(2, '0')}`;
+
+    return {
+      dateKey,
+      startMinutes,
+      endMinutes,
+      startLabel,
+      endLabel,
+    };
+  }
+
+  function isBookingSlotOverlapped(sourceSlot, targetSlot) {
+    if (!sourceSlot || !targetSlot) return false;
+    if (sourceSlot.dateKey !== targetSlot.dateKey) return false;
+    return sourceSlot.startMinutes < targetSlot.endMinutes
+      && targetSlot.startMinutes < sourceSlot.endMinutes;
+  }
+
+  function findDoubleBookingConflict(candidateShootingDate, ignoreCustomerId = '') {
+    const candidateSlot = parseBookingSlot(candidateShootingDate);
+    if (!candidateSlot) return null;
+
+    for (const customer of customers) {
+      if (!customer) continue;
+      if (ignoreCustomerId && customer.id === ignoreCustomerId) continue;
+      const targetSlot = parseBookingSlot(customer.shootingDate);
+      if (!targetSlot) continue;
+      if (isBookingSlotOverlapped(candidateSlot, targetSlot)) {
+        return { customer, slot: targetSlot };
+      }
+    }
+    return null;
+  }
+
+  function getTomorrowDateKey() {
+    const date = new Date();
+    date.setDate(date.getDate() + 1);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  }
+
+  function renderTomorrowReminderCard() {
+    if (!tomorrowReminderCard || !tomorrowReminderTitle || !tomorrowReminderList) return;
+
+    const tomorrowKey = getTomorrowDateKey();
+    const tomorrowBookings = customers
+      .map((customer) => ({ customer, slot: parseBookingSlot(customer?.shootingDate) }))
+      .filter((entry) => entry.slot && entry.slot.dateKey === tomorrowKey)
+      .sort((a, b) => a.slot.startMinutes - b.slot.startMinutes);
+
+    if (tomorrowBookings.length === 0) {
+      tomorrowReminderCard.style.display = 'none';
+      tomorrowReminderTitle.textContent = '';
+      tomorrowReminderList.innerHTML = '';
+      return;
+    }
+
+    tomorrowReminderTitle.textContent = t('reminderTomorrowTitle', { count: String(tomorrowBookings.length) });
+    tomorrowReminderList.innerHTML = tomorrowBookings.map(({ customer, slot }) => {
+      const text = t('reminderTomorrowItem', {
+        customer: String(customer?.customerName || '—'),
+        time: `${slot.startLabel}〜${slot.endLabel}`,
+        location: String(customer?.location || t('icsUnset')),
+      });
+      return `<li>${escapeHtml(text)}</li>`;
+    }).join('');
+    tomorrowReminderCard.style.display = 'block';
   }
 
   function buildGoogleCalendarEventPayload(customer) {
@@ -4800,6 +4880,20 @@
       if (el && el.value.trim()) customFields[field.id] = el.value.trim();
     });
     data.customFields = customFields;
+
+    const bookingConflict = findDoubleBookingConflict(data.shootingDate, editingId || '');
+    if (bookingConflict) {
+      const conflictCustomerName = String(bookingConflict.customer?.customerName || '—');
+      const conflictLocation = String(bookingConflict.customer?.location || t('icsUnset'));
+      const conflictTime = `${bookingConflict.slot.startLabel}〜${bookingConflict.slot.endLabel}`;
+      const proceed = window.confirm(t('doubleBookingConfirm', {
+        customer: conflictCustomerName,
+        date: bookingConflict.slot.dateKey,
+        time: conflictTime,
+        location: conflictLocation,
+      }));
+      if (!proceed) return;
+    }
 
     const planSelect = $('#form-plan');
     const selectedPlan = findPlanMasterByValue(planSelect?.value || '');
