@@ -693,6 +693,7 @@
         <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:20px;" data-i18n="settingsDesc">
           各フィールドの選択肢をカスタマイズできます。追加した選択肢は登録フォームのドロップダウンに反映されます。
         </p>
+        <div class="admin-device-warning" id="admin-device-warning" style="display:none;"></div>
         <div class="data-protection-status-wrap">
           <div class="data-protection-status" id="data-protection-status">ステータス：デバイス内に自動保護中（セーフティバックアップ有効）</div>
           <p class="data-protection-note">クラウド同期: Googleログイン時に自動同期</p>
@@ -972,6 +973,47 @@
               <div style="display:flex; justify-content:flex-end;">
                 <button class="btn btn-primary" id="btn-admin-support-reply" data-i18n="adminSupportSend">送信</button>
               </div>
+            </div>
+          </div>
+          <div class="settings-section">
+            <h3 data-i18n="adminDeviceLockTitle">デバイス管理</h3>
+            <p class="help-text" data-i18n="adminDeviceLockDesc">承認済みデバイスのみ管理者機能にアクセスできます。</p>
+            <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
+              <button class="btn btn-secondary btn-sm" id="btn-admin-device-refresh" data-i18n="adminDeviceRefresh">更新</button>
+            </div>
+            <h4 data-i18n="adminDeviceApprovedListTitle">承認済みデバイス</h4>
+            <div class="admin-user-table-wrap">
+              <table class="admin-user-table">
+                <thead>
+                  <tr>
+                    <th data-i18n="adminDeviceName">デバイス</th>
+                    <th data-i18n="adminDeviceLastSeen">最終アクセス</th>
+                    <th data-i18n="adminDeviceActions">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="admin-device-approved-body">
+                  <tr>
+                    <td colspan="3" data-i18n="adminNoData">データがありません</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <h4 data-i18n="adminDevicePendingListTitle" style="margin-top:12px;">承認待ちデバイス</h4>
+            <div class="admin-user-table-wrap">
+              <table class="admin-user-table">
+                <thead>
+                  <tr>
+                    <th data-i18n="adminDeviceName">デバイス</th>
+                    <th data-i18n="adminDeviceRequestedAt">要求日時</th>
+                    <th data-i18n="adminDeviceActions">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="admin-device-pending-body">
+                  <tr>
+                    <td colspan="3" data-i18n="adminNoData">データがありません</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </div>

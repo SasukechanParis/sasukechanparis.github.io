@@ -42,6 +42,9 @@
   const ENABLE_STATS_FEATURES = true;
   const DEFAULT_INVOICE_MESSAGE_KEY = 'invoiceDefaultMessage';
   const FREE_PLAN_LIMIT = 20;
+  const ADMIN_SECURE_SESSION_KEY = 'photocrm_admin_secure_session';
+  const ADMIN_SESSION_TIMEOUT_MS = 60 * 60 * 1000;
+  const ADMIN_SESSION_TOUCH_INTERVAL_MS = 5 * 60 * 1000;
   const PLAN_CONFIG = Object.freeze({
     free: {
       basePrice: 0,
@@ -524,6 +527,10 @@
     const detailTotalPriceLabel = document.getElementById('detail-total-price')?.closest('.detail-item')?.querySelector('.detail-label');
     if (detailTotalPriceLabel) detailTotalPriceLabel.textContent = t('labelTotalPrice');
     setCloudSyncIndicator(cloudSyncState);
+    if (isCurrentUserAdmin() && !canAccessAdminPanel()) {
+      const warningMessage = getAdminSecurityWarningMessage(adminSecurityContext.reason);
+      if (warningMessage) setAdminDeviceWarning(warningMessage, 'error');
+    }
   }
 
   function t(key, params = {}) {
@@ -1479,6 +1486,7 @@
 
   function activateLocalGuestMode(message = '') {
     isLoggedIn = true;
+    clearAdminSecurityState('not_admin');
     saveLocalValue(LOCAL_GUEST_MODE_KEY, true);
     setCurrentUserPlan('free', { persistCloud: false });
     safeRun('localMode.theme', () => applyTheme('dark'));
@@ -6429,6 +6437,472 @@
     };
   }
 
+  function fallbackHashHex(value) {
+    const text = String(value || '');
+    let hash = 2166136261;
+    for (let i = 0; i < text.length; i += 1) {
+      hash ^= text.charCodeAt(i);
+      hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
+    }
+    return (hash >>> 0).toString(16).padStart(8, '0');
+  }
+
+  async function computeSha256Hex(value) {
+    const text = String(value || '');
+    const subtle = window.crypto?.subtle;
+    if (!subtle || typeof TextEncoder === 'undefined') {
+      return `fallback_${fallbackHashHex(text)}`;
+    }
+    const encoded = new TextEncoder().encode(text);
+    const digest = await subtle.digest('SHA-256', encoded);
+    return Array.from(new Uint8Array(digest))
+      .map((item) => item.toString(16).padStart(2, '0'))
+      .join('');
+  }
+
+  function getCanvasFingerprintSeed() {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 220;
+      canvas.height = 60;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return '';
+      ctx.textBaseline = 'top';
+      ctx.font = '16px sans-serif';
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 0, 220, 60);
+      ctx.fillStyle = '#22d3ee';
+      ctx.fillText('Pholio Device Lock', 8, 10);
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillText(window.navigator?.userAgent || '', 8, 30);
+      return canvas.toDataURL();
+    } catch {
+      return '';
+    }
+  }
+
+  async function buildAdminDeviceContext(forceRefresh = false) {
+    if (!forceRefresh && adminDeviceContextCache && adminDeviceContextCache.deviceId) {
+      return adminDeviceContextCache;
+    }
+    const nav = window.navigator || {};
+    const screenInfo = window.screen || {};
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    const resolution = `${Number(screenInfo.width) || 0}x${Number(screenInfo.height) || 0}@${Number(window.devicePixelRatio) || 1}`;
+    const platform = String(nav.userAgentData?.platform || nav.platform || 'unknown');
+    const userAgent = String(nav.userAgent || '');
+    const language = String(nav.language || '');
+    const fingerprintRaw = JSON.stringify({
+      canvas: getCanvasFingerprintSeed(),
+      timezone,
+      resolution,
+      platform,
+      language,
+      userAgent,
+      vendor: String(nav.vendor || ''),
+      hardwareConcurrency: Number(nav.hardwareConcurrency) || 0,
+      deviceMemory: Number(nav.deviceMemory) || 0,
+      colorDepth: Number(screenInfo.colorDepth) || 0,
+    });
+    const fingerprintHash = await computeSha256Hex(fingerprintRaw);
+    const deviceId = `dev_${fingerprintHash.slice(0, 24)}`;
+    const deviceLabel = `${platform || 'Unknown'} ${resolution}`.trim();
+    adminDeviceContextCache = {
+      deviceId,
+      fingerprintHash,
+      label: deviceLabel,
+      platform,
+      userAgent,
+      resolution,
+      timezone,
+      language,
+    };
+    return adminDeviceContextCache;
+  }
+
+  function persistAdminSecureSession(sessionToken = '', expiresAtMs = 0) {
+    try {
+      const payload = {
+        token: String(sessionToken || ''),
+        expiresAtMs: Number(expiresAtMs) || 0,
+      };
+      sessionStorage.setItem(ADMIN_SECURE_SESSION_KEY, JSON.stringify(payload));
+    } catch {
+      // ignore storage errors
+    }
+  }
+
+  function clearPersistedAdminSecureSession() {
+    try {
+      sessionStorage.removeItem(ADMIN_SECURE_SESSION_KEY);
+    } catch {
+      // ignore storage errors
+    }
+  }
+
+  function setAdminDeviceWarning(message = '', type = 'warning') {
+    const warningEl = document.getElementById('admin-device-warning');
+    if (!warningEl) return;
+    const nextMessage = String(message || '').trim();
+    if (!nextMessage) {
+      warningEl.textContent = '';
+      warningEl.classList.remove('is-warning', 'is-error', 'is-info');
+      warningEl.style.display = 'none';
+      return;
+    }
+    warningEl.textContent = nextMessage;
+    warningEl.classList.remove('is-warning', 'is-error', 'is-info');
+    warningEl.classList.add(
+      type === 'error' ? 'is-error' : (type === 'info' ? 'is-info' : 'is-warning')
+    );
+    warningEl.style.display = 'block';
+  }
+
+  function getAdminSecurityWarningMessage(reason = '') {
+    const normalizedReason = String(reason || '').trim().toLowerCase();
+    if (normalizedReason === 'mfa_required') return t('adminMfaRequiredWarning');
+    if (
+      normalizedReason.startsWith('session_')
+      || normalizedReason.includes('session')
+      || normalizedReason === 'invalid_admin_session'
+    ) {
+      return t('adminSessionExpiredWarning');
+    }
+    if (
+      normalizedReason === 'unauthorized_device'
+      || normalizedReason === 'device_not_approved'
+      || normalizedReason === 'fingerprint_mismatch'
+    ) {
+      return t('adminDeviceUnauthorizedWarning');
+    }
+    if (normalizedReason === 'session_timeout') return t('adminSessionExpiredWarning');
+    if (normalizedReason === 'admin_security_init_failed') return t('adminSecurityInitFailed');
+    return '';
+  }
+
+  function canAccessAdminPanel() {
+    return isCurrentUserAdmin()
+      && adminSecurityContext.authorized
+      && adminSecurityContext.sessionActive;
+  }
+
+  function clearAdminSessionTimeoutCheck() {
+    if (!adminSessionTimeoutHandle) return;
+    clearTimeout(adminSessionTimeoutHandle);
+    adminSessionTimeoutHandle = null;
+  }
+
+  function unbindAdminSessionActivityListeners() {
+    if (!adminSessionActivityBound) return;
+    const eventNames = ['pointerdown', 'keydown', 'touchstart', 'scroll'];
+    eventNames.forEach((eventName) => {
+      window.removeEventListener(eventName, handleAdminSessionActivity, true);
+    });
+    adminSessionActivityBound = false;
+  }
+
+  function bindAdminSessionActivityListeners() {
+    if (adminSessionActivityBound) return;
+    const eventNames = ['pointerdown', 'keydown', 'touchstart', 'scroll'];
+    eventNames.forEach((eventName) => {
+      window.addEventListener(eventName, handleAdminSessionActivity, true);
+    });
+    adminSessionActivityBound = true;
+  }
+
+  function stopAdminSessionMonitor() {
+    clearAdminSessionTimeoutCheck();
+    unbindAdminSessionActivityListeners();
+    adminSessionLastActivityAt = 0;
+    adminSessionLastTouchedAt = 0;
+  }
+
+  function scheduleAdminSessionTimeoutCheck() {
+    clearAdminSessionTimeoutCheck();
+    if (!canAccessAdminPanel()) return;
+    const elapsedMs = Date.now() - (adminSessionLastActivityAt || Date.now());
+    const remainingMs = ADMIN_SESSION_TIMEOUT_MS - elapsedMs;
+    if (remainingMs <= 0) {
+      handleAdminSessionTimeout();
+      return;
+    }
+    const delayMs = Math.min(remainingMs, 30 * 1000);
+    adminSessionTimeoutHandle = setTimeout(() => {
+      scheduleAdminSessionTimeoutCheck();
+    }, delayMs);
+  }
+
+  async function syncAdminSessionHeartbeat(force = false) {
+    if (!canAccessAdminPanel()) return;
+    const now = Date.now();
+    if (!force && (now - adminSessionLastTouchedAt) < ADMIN_SESSION_TOUCH_INTERVAL_MS) return;
+    adminSessionLastTouchedAt = now;
+    try {
+      const result = await window.FirebaseService?.touchAdminSecureSession?.({
+        deviceId: adminSecurityContext.deviceId,
+        token: adminSecurityContext.sessionToken,
+        reason: force ? 'heartbeat' : 'activity',
+      });
+      if (result && result.allowed === false) {
+        adminSecurityContext = {
+          ...adminSecurityContext,
+          authorized: false,
+          sessionActive: false,
+          reason: String(result.reason || 'session_timeout'),
+          sessionToken: '',
+          sessionExpiresAtMs: 0,
+        };
+        clearPersistedAdminSecureSession();
+        stopAdminSessionMonitor();
+        setAdminDeviceWarning(getAdminSecurityWarningMessage(adminSecurityContext.reason), 'error');
+        updateAdminSettingsAvailability();
+      }
+    } catch (err) {
+      console.warn('Admin session heartbeat failed', err);
+    }
+  }
+
+  function handleAdminSessionActivity() {
+    if (!canAccessAdminPanel()) return;
+    adminSessionLastActivityAt = Date.now();
+    scheduleAdminSessionTimeoutCheck();
+    syncAdminSessionHeartbeat(false);
+  }
+
+  function startAdminSessionMonitor() {
+    if (!canAccessAdminPanel()) {
+      stopAdminSessionMonitor();
+      return;
+    }
+    adminSessionLastActivityAt = Date.now();
+    bindAdminSessionActivityListeners();
+    scheduleAdminSessionTimeoutCheck();
+    syncAdminSessionHeartbeat(true);
+  }
+
+  function handleAdminSessionTimeout() {
+    if (!isCurrentUserAdmin()) return;
+    stopAdminSessionMonitor();
+    adminSecurityContext = {
+      ...adminSecurityContext,
+      authorized: false,
+      sessionActive: false,
+      reason: 'session_timeout',
+      sessionToken: '',
+      sessionExpiresAtMs: 0,
+    };
+    clearPersistedAdminSecureSession();
+    setAdminDeviceWarning(getAdminSecurityWarningMessage('session_timeout'), 'error');
+    window.FirebaseService?.endAdminSecureSession?.('timeout').catch(() => {});
+    updateAdminSettingsAvailability();
+    showToast(t('adminSessionExpiredWarning'), 'error');
+  }
+
+  function clearAdminSecurityState(reason = 'not_admin') {
+    stopAdminSessionMonitor();
+    clearPersistedAdminSecureSession();
+    adminDeviceState = { approved: [], pending: [] };
+    adminSecurityContext = {
+      isAdmin: false,
+      authorized: false,
+      sessionActive: false,
+      reason,
+      deviceId: '',
+      mfaVerified: false,
+      mfaRequired: false,
+      mfaEnrolledFactorCount: 0,
+      sessionToken: '',
+      sessionExpiresAtMs: 0,
+    };
+    if (reason === 'not_admin') {
+      setAdminDeviceWarning('');
+    } else {
+      const warningMessage = getAdminSecurityWarningMessage(reason);
+      setAdminDeviceWarning(warningMessage, warningMessage ? 'error' : 'warning');
+    }
+  }
+
+  function renderAdminDeviceTableRows() {
+    const approvedBody = document.getElementById('admin-device-approved-body');
+    const pendingBody = document.getElementById('admin-device-pending-body');
+    if (approvedBody) {
+      const approved = Array.isArray(adminDeviceState.approved) ? adminDeviceState.approved : [];
+      approvedBody.innerHTML = approved.length > 0
+        ? approved.map((device) => `
+          <tr>
+            <td title="${escapeHtml(device.deviceId || '')}">${escapeHtml(device.label || device.deviceId || '—')}</td>
+            <td>${escapeHtml(formatDateTime(device.lastSeenAtIso || device.approvedAtIso || device.createdAtIso || ''))}</td>
+            <td>
+              <button type="button" class="btn btn-danger btn-sm" data-admin-device-action="revoke" data-admin-device-id="${escapeHtml(device.deviceId || '')}">
+                ${escapeHtml(t('adminDeviceRevoke'))}
+              </button>
+            </td>
+          </tr>
+        `).join('')
+        : `<tr><td colspan="3">${escapeHtml(t('adminNoData'))}</td></tr>`;
+    }
+    if (pendingBody) {
+      const pending = Array.isArray(adminDeviceState.pending) ? adminDeviceState.pending : [];
+      pendingBody.innerHTML = pending.length > 0
+        ? pending.map((device) => `
+          <tr>
+            <td title="${escapeHtml(device.deviceId || '')}">${escapeHtml(device.label || device.deviceId || '—')}</td>
+            <td>${escapeHtml(formatDateTime(device.requestedAtIso || device.createdAtIso || ''))}</td>
+            <td>
+              <div class="admin-device-actions">
+                <button type="button" class="btn btn-primary btn-sm" data-admin-device-action="approve" data-admin-device-id="${escapeHtml(device.deviceId || '')}">
+                  ${escapeHtml(t('adminDeviceApprove'))}
+                </button>
+                <button type="button" class="btn btn-danger btn-sm" data-admin-device-action="revoke" data-admin-device-id="${escapeHtml(device.deviceId || '')}">
+                  ${escapeHtml(t('adminDeviceRevoke'))}
+                </button>
+              </div>
+            </td>
+          </tr>
+        `).join('')
+        : `<tr><td colspan="3">${escapeHtml(t('adminNoData'))}</td></tr>`;
+    }
+  }
+
+  async function refreshAdminDeviceList() {
+    if (!canAccessAdminPanel()) {
+      adminDeviceState = { approved: [], pending: [] };
+      renderAdminDeviceTableRows();
+      return;
+    }
+    if (!window.FirebaseService?.getAdminDeviceConfig) return;
+    const currentDevice = await buildAdminDeviceContext();
+    try {
+      const result = await window.FirebaseService.getAdminDeviceConfig({
+        currentDeviceId: currentDevice.deviceId,
+        sessionToken: adminSecurityContext.sessionToken,
+      });
+      if (!result?.allowed) {
+        adminDeviceState = { approved: [], pending: [] };
+        adminSecurityContext = {
+          ...adminSecurityContext,
+          authorized: false,
+          sessionActive: false,
+          reason: String(result?.reason || 'unauthorized_device'),
+        };
+        stopAdminSessionMonitor();
+        setAdminDeviceWarning(getAdminSecurityWarningMessage(adminSecurityContext.reason), 'error');
+        updateAdminSettingsAvailability();
+      } else {
+        adminDeviceState = {
+          approved: Array.isArray(result?.devices?.approved) ? result.devices.approved : [],
+          pending: Array.isArray(result?.devices?.pending) ? result.devices.pending : [],
+        };
+      }
+      renderAdminDeviceTableRows();
+    } catch (err) {
+      console.error('Admin device list load failed', err);
+      showToast(t('adminDeviceActionFailed'), 'error');
+    }
+  }
+
+  async function handleAdminDeviceActionClick(event) {
+    const button = event?.target?.closest?.('button[data-admin-device-action]');
+    if (!button || !canAccessAdminPanel()) return;
+    const action = String(button.dataset.adminDeviceAction || '').trim().toLowerCase();
+    const targetDeviceId = String(button.dataset.adminDeviceId || '').trim();
+    if (!action || !targetDeviceId) return;
+    const currentDevice = await buildAdminDeviceContext();
+
+    button.disabled = true;
+    try {
+      if (action === 'approve') {
+        await window.FirebaseService?.approveAdminDevice?.(targetDeviceId, {
+          currentDeviceId: currentDevice.deviceId,
+          sessionToken: adminSecurityContext.sessionToken,
+        });
+        showToast(t('adminDeviceApproved'));
+      } else if (action === 'revoke') {
+        await window.FirebaseService?.revokeAdminDevice?.(targetDeviceId, {
+          currentDeviceId: currentDevice.deviceId,
+          sessionToken: adminSecurityContext.sessionToken,
+        });
+        showToast(t('adminDeviceRevoked'));
+      }
+      await refreshAdminDeviceList();
+    } catch (err) {
+      console.error('Admin device action failed', err);
+      showToast(t('adminDeviceActionFailed'), 'error');
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  async function initializeAdminSecurityForUser(user) {
+    adminDeviceContextCache = null;
+    adminDeviceState = { approved: [], pending: [] };
+    if (!user || !isAdminEmail(user.email)) {
+      clearAdminSecurityState('not_admin');
+      updateAdminSettingsAvailability();
+      return;
+    }
+
+    const device = await buildAdminDeviceContext();
+    if (!window.FirebaseService?.bootstrapAdminSecurity) {
+      clearAdminSecurityState('admin_security_init_failed');
+      updateAdminSettingsAvailability();
+      return;
+    }
+
+    try {
+      const bootstrap = await window.FirebaseService.bootstrapAdminSecurity({ device });
+      const mfa = bootstrap?.mfa && typeof bootstrap.mfa === 'object' ? bootstrap.mfa : {};
+      const session = bootstrap?.session && typeof bootstrap.session === 'object' ? bootstrap.session : {};
+      adminDeviceState = {
+        approved: Array.isArray(bootstrap?.devices?.approved) ? bootstrap.devices.approved : [],
+        pending: Array.isArray(bootstrap?.devices?.pending) ? bootstrap.devices.pending : [],
+      };
+
+      if (bootstrap?.allowed && bootstrap?.authorized && session?.token) {
+        adminSecurityContext = {
+          isAdmin: true,
+          authorized: true,
+          sessionActive: true,
+          reason: 'authorized',
+          deviceId: device.deviceId,
+          mfaVerified: !!mfa.verified,
+          mfaRequired: !!mfa.required,
+          mfaEnrolledFactorCount: Number(mfa.enrolledFactorCount) || 0,
+          sessionToken: String(session.token || ''),
+          sessionExpiresAtMs: Number(session.expiresAtMs) || 0,
+        };
+        persistAdminSecureSession(adminSecurityContext.sessionToken, adminSecurityContext.sessionExpiresAtMs);
+        setAdminDeviceWarning('');
+        startAdminSessionMonitor();
+      } else {
+        stopAdminSessionMonitor();
+        clearPersistedAdminSecureSession();
+        adminSecurityContext = {
+          isAdmin: true,
+          authorized: false,
+          sessionActive: false,
+          reason: String(bootstrap?.reason || 'unauthorized_device'),
+          deviceId: device.deviceId,
+          mfaVerified: !!mfa.verified,
+          mfaRequired: !!mfa.required,
+          mfaEnrolledFactorCount: Number(mfa.enrolledFactorCount) || 0,
+          sessionToken: '',
+          sessionExpiresAtMs: 0,
+        };
+        const warningMessage = getAdminSecurityWarningMessage(adminSecurityContext.reason);
+        setAdminDeviceWarning(warningMessage, 'error');
+        if (warningMessage) showToast(warningMessage, 'error');
+      }
+      renderAdminDeviceTableRows();
+      updateAdminSettingsAvailability();
+    } catch (err) {
+      console.error('Admin security bootstrap failed', err);
+      clearAdminSecurityState('admin_security_init_failed');
+      setAdminDeviceWarning(getAdminSecurityWarningMessage('admin_security_init_failed'), 'error');
+      updateAdminSettingsAvailability();
+    }
+  }
+
   function resetSupportTicketForm() {
     const subjectInput = document.getElementById('support-ticket-subject');
     const categorySelect = document.getElementById('support-ticket-category');
@@ -6881,8 +7355,12 @@
     loadContractTemplateSettings();
     renderPlanManagementSection();
     updateAdminSettingsAvailability();
-    if (isCurrentUserAdmin()) {
+    if (canAccessAdminPanel()) {
       refreshAdminOverview();
+      refreshAdminDeviceList();
+    } else if (isCurrentUserAdmin()) {
+      const warning = getAdminSecurityWarningMessage(adminSecurityContext.reason);
+      if (warning) setAdminDeviceWarning(warning, 'error');
     }
     settingsOverlay?.classList.add('active');
   }
@@ -6941,6 +7419,7 @@
         }
         if (tab === 'admin') {
           refreshAdminOverview();
+          refreshAdminDeviceList();
         }
       }, `settings-tab-${tabName}`);
     });
@@ -6983,6 +7462,7 @@
     isLoggedIn = false;
     mergePromptedUid = null;
     saveLocalValue(LOCAL_GUEST_MODE_KEY, true);
+    clearAdminSecurityState('not_admin');
     setCloudSyncIndicator('syncing');
     Promise.resolve(window.FirebaseService?.signOut?.())
       .catch((err) => {
@@ -7088,6 +7568,9 @@
     bindEventOnce(document.getElementById('btn-admin-support-refresh'), 'click', refreshAdminSupportTickets, 'admin-support-refresh');
     bindEventOnce(document.getElementById('admin-support-ticket-list-body'), 'click', handleAdminSupportTicketListClick, 'admin-support-list-click');
     bindEventOnce(document.getElementById('btn-admin-support-reply'), 'click', handleAdminSupportReplySubmit, 'admin-support-reply');
+    bindEventOnce(document.getElementById('btn-admin-device-refresh'), 'click', refreshAdminDeviceList, 'admin-device-refresh');
+    bindEventOnce(document.getElementById('admin-device-approved-body'), 'click', handleAdminDeviceActionClick, 'admin-device-approved-action');
+    bindEventOnce(document.getElementById('admin-device-pending-body'), 'click', handleAdminDeviceActionClick, 'admin-device-pending-action');
     bindEventOnce(document.getElementById('btn-save-contract-template'), 'click', handleSaveContractTemplate, 'contract-template-save');
     bindEventOnce(document.getElementById('btn-contract-preset-standard'), 'click', () => applyContractTemplatePreset('standard'), 'contract-preset-standard');
     bindEventOnce(document.getElementById('btn-contract-preset-bridal'), 'click', () => applyContractTemplatePreset('bridal'), 'contract-preset-bridal');
@@ -7188,6 +7671,24 @@
   let mergePromptedUid = null;
   let adminSupportTickets = [];
   let selectedAdminSupportTicketId = '';
+  let adminDeviceContextCache = null;
+  let adminDeviceState = { approved: [], pending: [] };
+  let adminSecurityContext = {
+    isAdmin: false,
+    authorized: false,
+    sessionActive: false,
+    reason: 'not_admin',
+    deviceId: '',
+    mfaVerified: false,
+    mfaRequired: false,
+    mfaEnrolledFactorCount: 0,
+    sessionToken: '',
+    sessionExpiresAtMs: 0,
+  };
+  let adminSessionLastActivityAt = 0;
+  let adminSessionTimeoutHandle = null;
+  let adminSessionActivityBound = false;
+  let adminSessionLastTouchedAt = 0;
 
   function getLocaleTextOrFallback(key, fallback = '') {
     const locale = window.LOCALE?.[currentLang];
@@ -7338,8 +7839,9 @@
   }
 
   async function refreshAdminSupportTickets() {
-    if (!isCurrentUserAdmin()) return;
+    if (!canAccessAdminPanel()) return;
     if (!window.FirebaseService?.getAdminSupportTickets) return;
+    const currentDevice = await buildAdminDeviceContext();
 
     const tableBody = document.getElementById('admin-support-ticket-list-body');
     if (tableBody) {
@@ -7347,8 +7849,25 @@
     }
 
     try {
-      const result = await window.FirebaseService.getAdminSupportTickets();
-      if (!result?.allowed) return;
+      const result = await window.FirebaseService.getAdminSupportTickets({
+        currentDeviceId: currentDevice.deviceId,
+        sessionToken: adminSecurityContext.sessionToken,
+      });
+      if (!result?.allowed) {
+        adminSecurityContext = {
+          ...adminSecurityContext,
+          authorized: false,
+          sessionActive: false,
+          reason: String(result.reason || 'unauthorized_device'),
+          sessionToken: '',
+          sessionExpiresAtMs: 0,
+        };
+        clearPersistedAdminSecureSession();
+        stopAdminSessionMonitor();
+        setAdminDeviceWarning(getAdminSecurityWarningMessage(adminSecurityContext.reason), 'error');
+        updateAdminSettingsAvailability();
+        return;
+      }
       adminSupportTickets = Array.isArray(result.tickets) ? result.tickets : [];
       renderAdminSupportTicketList(adminSupportTickets);
     } catch (err) {
@@ -7360,6 +7879,10 @@
   }
 
   async function handleAdminSupportReplySubmit() {
+    if (!canAccessAdminPanel()) {
+      showToast(t('adminDeviceActionFailed'), 'error');
+      return;
+    }
     const ticketId = String(selectedAdminSupportTicketId || '').trim();
     if (!ticketId) {
       showToast(t('adminSupportSelectTicket'), 'error');
@@ -7377,7 +7900,10 @@
 
     if (sendButton) sendButton.disabled = true;
     try {
+      const currentDevice = await buildAdminDeviceContext();
       await window.FirebaseService?.replySupportTicket?.(ticketId, {
+        currentDeviceId: currentDevice.deviceId,
+        sessionToken: adminSecurityContext.sessionToken,
         aiDraftReply,
         replyMessage,
       });
@@ -7497,18 +8023,37 @@
   }
 
   async function refreshAdminOverview() {
-    if (!isCurrentUserAdmin()) return;
+    if (!canAccessAdminPanel()) return;
     if (!window.FirebaseService?.getAdminUserOverview) return;
+    const currentDevice = await buildAdminDeviceContext();
 
     const tableBody = document.getElementById('admin-user-list-body');
     if (tableBody) {
       tableBody.innerHTML = `<tr><td colspan="3">${escapeHtml(t('adminLoading'))}</td></tr>`;
     }
     try {
-      const overview = await window.FirebaseService.getAdminUserOverview();
-      if (!overview?.allowed) return;
+      const overview = await window.FirebaseService.getAdminUserOverview({
+        currentDeviceId: currentDevice.deviceId,
+        sessionToken: adminSecurityContext.sessionToken,
+      });
+      if (!overview?.allowed) {
+        adminSecurityContext = {
+          ...adminSecurityContext,
+          authorized: false,
+          sessionActive: false,
+          reason: String(overview.reason || 'unauthorized_device'),
+          sessionToken: '',
+          sessionExpiresAtMs: 0,
+        };
+        clearPersistedAdminSecureSession();
+        stopAdminSessionMonitor();
+        setAdminDeviceWarning(getAdminSecurityWarningMessage(adminSecurityContext.reason), 'error');
+        updateAdminSettingsAvailability();
+        return;
+      }
       renderAdminOverview(overview);
       await refreshAdminSupportTickets();
+      await refreshAdminDeviceList();
     } catch (err) {
       console.error('Admin overview load failed', err);
       if (tableBody) {
@@ -7523,9 +8068,18 @@
     if (!tabButton || !tabContent) return;
 
     const isAdmin = isCurrentUserAdmin();
-    tabButton.style.display = isAdmin ? '' : 'none';
+    const hasAdminAccess = canAccessAdminPanel();
+    tabButton.style.display = hasAdminAccess ? '' : 'none';
+    if (isAdmin && !hasAdminAccess) {
+      const warning = getAdminSecurityWarningMessage(adminSecurityContext.reason);
+      setAdminDeviceWarning(warning, warning ? 'error' : 'warning');
+    } else if (!isAdmin) {
+      setAdminDeviceWarning('');
+    } else {
+      setAdminDeviceWarning('');
+    }
 
-    if (isAdmin) return;
+    if (hasAdminAccess) return;
     const wasAdminActive = tabButton.classList.contains('active') || tabContent.classList.contains('active');
     tabButton.classList.remove('active');
     tabContent.classList.remove('active');
@@ -7608,6 +8162,7 @@
 
     if (state === 'loggedOut') {
       isLoggedIn = false;
+      clearAdminSecurityState('not_admin');
       setCurrentUserPlan('free', { persistCloud: false });
       if (authStatus) authStatus.textContent = t('authLoggedOutPrompt');
       if (loginBtn) loginBtn.style.display = '';
@@ -7729,13 +8284,19 @@
           const userName = getAuthDisplayName(user);
           setAuthScreenState('loggedIn', user);
           setCloudSyncIndicator('syncing', `${t('cloudSyncStatusSyncing')} (${userName})`);
-          maybeMergeGuestDataToCloud(user)
-            .then(() => handleAuthState(user))
-            .then(() => setCloudSyncIndicator('ready'))
-            .catch((err) => {
-              console.error('Auth update error:', err);
-              setCloudSyncIndicator('error');
-            });
+          (async () => {
+            try {
+              await maybeMergeGuestDataToCloud(user);
+              await handleAuthState(user);
+            } finally {
+              await initializeAdminSecurityForUser(user);
+            }
+            setCloudSyncIndicator('ready');
+          })().catch((err) => {
+            console.error('Auth update error:', err);
+            clearAdminSecurityState('admin_security_init_failed');
+            setCloudSyncIndicator('error');
+          });
           return;
         }
 
