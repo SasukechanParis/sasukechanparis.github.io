@@ -40,6 +40,38 @@
   const ENABLE_STATS_FEATURES = true;
   const DEFAULT_INVOICE_MESSAGE_KEY = 'invoiceDefaultMessage';
   const FREE_PLAN_LIMIT = 20;
+  const PLAN_CONFIG = Object.freeze({
+    free: {
+      basePrice: 0,
+      includedMembers: 1,
+      extraMemberPrice: 0,
+      maxMembers: null,
+    },
+    individual: {
+      basePrice: 9,
+      includedMembers: 1,
+      extraMemberPrice: 0,
+      maxMembers: null,
+    },
+    small_team: {
+      basePrice: 19,
+      includedMembers: 5,
+      extraMemberPrice: 5,
+      maxMembers: null,
+    },
+    medium_team: {
+      basePrice: 39,
+      includedMembers: 15,
+      extraMemberPrice: 0,
+      maxMembers: 15,
+    },
+    enterprise: {
+      basePrice: 0,
+      includedMembers: Number.POSITIVE_INFINITY,
+      extraMemberPrice: 0,
+      maxMembers: null,
+    },
+  });
 
   const DASHBOARD_CARD_DEFINITIONS = [
     { key: 'totalCustomers', labelKey: 'cardTotalCustomers', fallbackLabel: 'Total Customers' },
@@ -540,6 +572,67 @@
     const currentTier = getPlanTier(currentPlan);
     if (targetTier > currentTier) return t('settingsSubscriptionUpgradeButton');
     return t('settingsSubscriptionSelectButton');
+  }
+
+  function getPlanConfig(plan = currentUserPlan) {
+    const normalized = normalizeUserPlan(plan);
+    return PLAN_CONFIG[normalized] || PLAN_CONFIG.free;
+  }
+
+  function getCurrentTeamMemberCount() {
+    const members = window.TeamManager?.loadPhotographers?.();
+    return Array.isArray(members) ? members.length : 0;
+  }
+
+  function formatPlanMonthlyPrice(amount) {
+    return `$${Math.max(0, Math.round(toSafeNumber(amount, 0)))}`;
+  }
+
+  function calculatePlanEstimate(plan = currentUserPlan, memberCount = getCurrentTeamMemberCount()) {
+    const normalized = normalizeUserPlan(plan);
+    const config = getPlanConfig(normalized);
+    const safeMemberCount = Math.max(0, Math.floor(toSafeNumber(memberCount, 0)));
+    const basePrice = Math.max(0, toSafeNumber(config.basePrice, 0));
+    const includedMembers = Math.max(0, Math.floor(toSafeNumber(config.includedMembers, 0)));
+    const extraMemberPrice = Math.max(0, toSafeNumber(config.extraMemberPrice, 0));
+    const extraMembers = Math.max(0, safeMemberCount - includedMembers);
+    const extraCost = extraMembers * extraMemberPrice;
+    const totalPrice = basePrice + extraCost;
+    const maxMembers = config.maxMembers == null ? null : Math.max(0, Math.floor(toSafeNumber(config.maxMembers, 0)));
+    const requiresEnterprise = maxMembers != null && safeMemberCount > maxMembers;
+
+    return {
+      plan: normalized,
+      memberCount: safeMemberCount,
+      basePrice,
+      includedMembers,
+      extraMemberPrice,
+      extraMembers,
+      extraCost,
+      totalPrice,
+      maxMembers,
+      requiresEnterprise,
+    };
+  }
+
+  function getPlanEstimateSummaryText(plan = currentUserPlan, memberCount = getCurrentTeamMemberCount()) {
+    const estimate = calculatePlanEstimate(plan, memberCount);
+    if (estimate.plan === 'enterprise') {
+      return t('settingsSubscriptionCurrentEstimated', {
+        amount: t('settingsSubscriptionEnterprisePrice'),
+      });
+    }
+    if (estimate.extraCost > 0 && estimate.extraMembers > 0) {
+      return t('settingsSubscriptionCurrentEstimatedWithExtra', {
+        amount: formatPlanMonthlyPrice(estimate.totalPrice),
+        base: formatPlanMonthlyPrice(estimate.basePrice),
+        extra: formatPlanMonthlyPrice(estimate.extraCost),
+        extraMembers: String(estimate.extraMembers),
+      });
+    }
+    return t('settingsSubscriptionCurrentEstimated', {
+      amount: formatPlanMonthlyPrice(estimate.totalPrice),
+    });
   }
 
   function updateHeaderPlanBadge() {
@@ -4775,6 +4868,18 @@
     container.innerHTML = '';
     const normalizedCurrentPlan = normalizeUserPlan(currentUserPlan);
     const currentPlanBadgeText = getPlanBadgeText(normalizedCurrentPlan);
+    const currentTeamMemberCount = getCurrentTeamMemberCount();
+    const currentPlanEstimate = calculatePlanEstimate(normalizedCurrentPlan, currentTeamMemberCount);
+    const estimateSummaryText = getPlanEstimateSummaryText(normalizedCurrentPlan, currentTeamMemberCount);
+    const estimateExtraText = currentPlanEstimate.extraMembers > 0
+      ? t('settingsSubscriptionExtraMembers', { count: String(currentPlanEstimate.extraMembers) })
+      : '';
+    const estimateEnterpriseNoticeText = currentPlanEstimate.requiresEnterprise
+      ? t('settingsSubscriptionEnterpriseLimitNotice', { limit: String(currentPlanEstimate.maxMembers || 15) })
+      : '';
+    const estimateAddonPolicyText = normalizedCurrentPlan === 'small_team'
+      ? t('settingsSubscriptionAddonPerMember', { price: formatPlanMonthlyPrice(getPlanConfig('small_team').extraMemberPrice) })
+      : '';
     const subscriptionPlans = [
       {
         key: 'free',
@@ -4971,6 +5076,11 @@
           <span>${escapeHtml(t('settingsSubscriptionCurrentPlanLabel'))}</span>
           <span class="header-plan-badge" data-plan="${escapeHtml(normalizedCurrentPlan)}">${escapeHtml(currentPlanBadgeText)}</span>
         </div>
+        <div class="settings-detail-empty">${escapeHtml(t('settingsSubscriptionRegisteredMembers', { count: String(currentTeamMemberCount) }))}</div>
+        <div class="settings-detail-empty">${escapeHtml(estimateSummaryText)}</div>
+        ${estimateExtraText ? `<div class="settings-detail-empty">${escapeHtml(estimateExtraText)}</div>` : ''}
+        ${estimateAddonPolicyText ? `<div class="settings-detail-empty">${escapeHtml(estimateAddonPolicyText)}</div>` : ''}
+        ${estimateEnterpriseNoticeText ? `<div class="settings-detail-empty">${escapeHtml(estimateEnterpriseNoticeText)}</div>` : ''}
         <div class="subscription-plan-list">${subscriptionPlanRows}</div>
         <div class="subscription-plan-footer">
           <button type="button" class="btn btn-secondary btn-sm" id="btn-subscription-plan-details">${escapeHtml(t('settingsSubscriptionDetailsLink'))}</button>
@@ -5243,6 +5353,7 @@
       item.querySelector('.btn-del-member').onclick = () => {
         window.TeamManager.removePhotographer(p.id);
         renderTeamList();
+        renderSettings();
         populateSelects();
         renderTable();
       };
@@ -6352,9 +6463,27 @@
     const name = $('#team-new-name')?.value.trim();
     const role = $('#team-new-role')?.value;
     if (!name) return;
+    const nextMemberCount = getCurrentTeamMemberCount() + 1;
+    const nextEstimate = calculatePlanEstimate(currentUserPlan, nextMemberCount);
+    if (nextEstimate.plan === 'small_team' && nextEstimate.extraMembers > 0 && nextEstimate.extraCost > 0) {
+      const confirmedAddon = confirm(t('teamAddonConfirm', {
+        extraMembers: String(nextEstimate.extraMembers),
+        extraCost: formatPlanMonthlyPrice(nextEstimate.extraCost),
+        perMember: formatPlanMonthlyPrice(nextEstimate.extraMemberPrice),
+        estimated: formatPlanMonthlyPrice(nextEstimate.totalPrice),
+      }));
+      if (!confirmedAddon) return;
+    }
+    if (nextEstimate.plan === 'medium_team' && nextEstimate.requiresEnterprise) {
+      const confirmedEnterprise = confirm(t('teamEnterpriseConfirm', {
+        limit: String(nextEstimate.maxMembers || 15),
+      }));
+      if (!confirmedEnterprise) return;
+    }
     window.TeamManager.addPhotographer({ name, role });
     $('#team-new-name').value = '';
     renderTeamList();
+    renderSettings();
     populateSelects();
     showToast(t('msgMemberAdded'));
   }
