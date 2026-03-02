@@ -278,7 +278,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   position: relative;
   width: 100%;
   column-gap: 16px;
@@ -337,9 +337,11 @@ body {
   color: var(--text-primary);
   line-height: 1.05;
   white-space: nowrap;
-  max-width: 150px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .header-left #languageSelect {
@@ -2406,8 +2408,8 @@ tbody tr:hover {
   }
 
   .brand-wordmark {
-    font-size: 1.08rem;
-    max-width: 96px;
+    font-size: 0.96rem;
+    max-width: none;
   }
 
   .header-left #languageSelect {
@@ -2752,8 +2754,8 @@ tbody tr:hover {
 @media (max-width: 560px) {
   .brand-wordmark {
     display: inline;
-    font-size: 0.98rem;
-    max-width: 84px;
+    font-size: 0.88rem;
+    max-width: none;
   }
 
   .header-left #languageSelect {
