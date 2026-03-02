@@ -256,6 +256,10 @@
           <span class="search-icon">🔍</span>
           <input type="text" id="search-input" placeholder="お客様名・連絡先で検索..." data-i18n-placeholder="searchPlaceholder" />
         </div>
+        <button class="btn-icon toolbar-filter-toggle" id="btn-mobile-filters" type="button" aria-expanded="false"
+          data-i18n-title="mobileFilterOpenTitle" data-i18n-aria-label="mobileFilterOpenTitle">
+          <span aria-hidden="true">☰</span>
+        </button>
         <select class="filter-select ui-button-standard" id="filter-payment">
           <option value="all" data-i18n="filterAll">すべて</option>
           <option value="paid" data-i18n="filterPaid">入金済み</option>
@@ -273,6 +277,53 @@
           </button>
           <div class="list-columns-menu" id="list-columns-menu" style="display:none;">
             <div class="list-columns-menu-content" id="list-columns-menu-content"></div>
+          </div>
+        </div>
+      </div>
+      <div class="mobile-filter-sheet-overlay" id="mobile-filter-sheet-overlay" aria-hidden="true">
+        <div class="mobile-filter-sheet" id="mobile-filter-sheet" role="dialog" aria-modal="true"
+          aria-labelledby="mobile-filter-sheet-title">
+          <div class="mobile-filter-sheet-header">
+            <h3 id="mobile-filter-sheet-title" data-i18n="mobileFilterSheetTitle">フィルター・ソート</h3>
+            <button class="btn btn-secondary btn-sm" id="btn-mobile-filter-close" type="button" data-i18n="close">閉じる</button>
+          </div>
+          <div class="mobile-filter-sheet-body">
+            <div class="mobile-filter-field">
+              <label for="mobile-filter-payment" data-i18n="mobileFilterPaymentLabel">入金フィルター</label>
+              <select id="mobile-filter-payment" class="ui-button-standard"></select>
+            </div>
+            <div class="mobile-filter-field">
+              <label for="mobile-filter-photographer" data-i18n="mobileFilterPhotographerLabel">担当</label>
+              <select id="mobile-filter-photographer" class="ui-button-standard"></select>
+            </div>
+            <div class="mobile-filter-field">
+              <label for="mobile-filter-month" data-i18n="mobileFilterPeriodLabel">期間</label>
+              <select id="mobile-filter-month" class="ui-button-standard"></select>
+            </div>
+            <div class="mobile-filter-field">
+              <label for="mobile-sort-key" data-i18n="mobileSortFieldLabel">並び替え項目</label>
+              <select id="mobile-sort-key" class="ui-button-standard">
+                <option value="shootingDate" data-i18n="thShootingDate">撮影日</option>
+                <option value="inquiryDate" data-i18n="thInquiryDate">問い合わせ日</option>
+                <option value="contractDate" data-i18n="thContractDate">成約日</option>
+                <option value="customerName" data-i18n="thCustomerName">お客様名</option>
+                <option value="meetingDate" data-i18n="thMeetingDate">打ち合わせ日</option>
+                <option value="plan" data-i18n="thPlan">プラン</option>
+                <option value="revenue" data-i18n="thRevenue">売上</option>
+                <option value="paymentChecked" data-i18n="thPayment">入金</option>
+                <option value="assignedTo" data-i18n="thPhotographer">担当</option>
+              </select>
+            </div>
+            <div class="mobile-filter-field">
+              <label for="mobile-sort-dir" data-i18n="mobileSortDirectionLabel">並び順</label>
+              <select id="mobile-sort-dir" class="ui-button-standard">
+                <option value="desc" data-i18n="mobileSortDesc">新しい順 / 大きい順</option>
+                <option value="asc" data-i18n="mobileSortAsc">古い順 / 小さい順</option>
+              </select>
+            </div>
+          </div>
+          <div class="mobile-filter-sheet-footer">
+            <button class="btn btn-primary" id="btn-mobile-filter-apply" type="button" data-i18n="close">閉じる</button>
           </div>
         </div>
       </div>

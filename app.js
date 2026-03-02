@@ -1369,7 +1369,18 @@
   const tbody = $('#customer-tbody');
   const searchInput = $('#search-input');
   const filterPayment = $('#filter-payment');
+  const filterPhotographer = $('#filter-photographer');
   const filterMonth = $('#filter-month');
+  const mobileFilterToggleButton = $('#btn-mobile-filters');
+  const mobileFilterSheetOverlay = $('#mobile-filter-sheet-overlay');
+  const mobileFilterSheet = $('#mobile-filter-sheet');
+  const mobileFilterPayment = $('#mobile-filter-payment');
+  const mobileFilterPhotographer = $('#mobile-filter-photographer');
+  const mobileFilterMonth = $('#mobile-filter-month');
+  const mobileSortKey = $('#mobile-sort-key');
+  const mobileSortDir = $('#mobile-sort-dir');
+  const mobileFilterCloseButton = $('#btn-mobile-filter-close');
+  const mobileFilterApplyButton = $('#btn-mobile-filter-apply');
   const dashboardMonthPicker = $('#dashboard-month-picker');
   const dashboardPrevMonth = $('#dashboard-prev-month');
   const dashboardNextMonth = $('#dashboard-next-month');
@@ -1392,6 +1403,7 @@
   const calendarView = $('#calendar-view');
   const calendarFilterInputs = $$('.calendar-filter-input');
   const eventBindingRegistry = new WeakMap();
+  let isMobileFilterSheetOpen = false;
 
   function bindEventOnce(element, eventName, handler, bindingKey = null, options = undefined) {
     if (!element || typeof handler !== 'function') return;
@@ -3318,6 +3330,117 @@
     return window.matchMedia('(max-width: 768px)').matches;
   }
 
+  function copySelectOptions(sourceSelect, targetSelect) {
+    if (!sourceSelect || !targetSelect) return;
+    const previousValue = targetSelect.value;
+    targetSelect.innerHTML = '';
+    Array.from(sourceSelect.options || []).forEach((option) => {
+      const next = document.createElement('option');
+      next.value = option.value;
+      next.textContent = option.textContent;
+      targetSelect.appendChild(next);
+    });
+    if (Array.from(targetSelect.options).some((option) => option.value === previousValue)) {
+      targetSelect.value = previousValue;
+    } else if (Array.from(targetSelect.options).some((option) => option.value === sourceSelect.value)) {
+      targetSelect.value = sourceSelect.value;
+    }
+  }
+
+  function syncMobileFilterSheetFromToolbar() {
+    copySelectOptions(filterPayment, mobileFilterPayment);
+    copySelectOptions(filterPhotographer, mobileFilterPhotographer);
+    copySelectOptions(filterMonth, mobileFilterMonth);
+
+    if (mobileSortKey) mobileSortKey.value = currentSort.key || 'shootingDate';
+    if (mobileSortDir) mobileSortDir.value = currentSort.dir || 'desc';
+  }
+
+  function applyMobileFilterSheetSelection() {
+    if (filterPayment && mobileFilterPayment) {
+      filterPayment.value = mobileFilterPayment.value;
+    }
+    if (filterPhotographer && mobileFilterPhotographer) {
+      filterPhotographer.value = mobileFilterPhotographer.value;
+    }
+    if (filterMonth && mobileFilterMonth) {
+      filterMonth.value = mobileFilterMonth.value;
+    }
+
+    const nextSortKey = mobileSortKey?.value || currentSort.key || 'shootingDate';
+    const nextSortDir = mobileSortDir?.value === 'asc' ? 'asc' : 'desc';
+    currentSort = { key: nextSortKey, dir: nextSortDir };
+    renderTable();
+  }
+
+  function setMobileFilterSheetOpen(isOpen) {
+    if (!mobileFilterSheetOverlay || !mobileFilterSheet || !mobileFilterToggleButton) return;
+
+    if (!isMobileViewport()) {
+      isMobileFilterSheetOpen = false;
+      mobileFilterSheetOverlay.classList.remove('active');
+      mobileFilterSheetOverlay.style.display = 'none';
+      mobileFilterSheetOverlay.setAttribute('aria-hidden', 'true');
+      mobileFilterToggleButton.setAttribute('aria-expanded', 'false');
+      return;
+    }
+
+    isMobileFilterSheetOpen = !!isOpen;
+    if (isMobileFilterSheetOpen) {
+      syncMobileFilterSheetFromToolbar();
+      setMobileHeaderMenuOpen(false);
+      mobileFilterSheetOverlay.style.display = 'flex';
+      requestAnimationFrame(() => {
+        mobileFilterSheetOverlay.classList.add('active');
+      });
+      mobileFilterSheetOverlay.setAttribute('aria-hidden', 'false');
+      mobileFilterToggleButton.setAttribute('aria-expanded', 'true');
+      return;
+    }
+
+    mobileFilterSheetOverlay.classList.remove('active');
+    mobileFilterSheetOverlay.setAttribute('aria-hidden', 'true');
+    mobileFilterToggleButton.setAttribute('aria-expanded', 'false');
+    window.setTimeout(() => {
+      if (!isMobileFilterSheetOpen) mobileFilterSheetOverlay.style.display = 'none';
+    }, 220);
+  }
+
+  function handleMobileFilterToggleClick(event) {
+    if (!isMobileViewport()) return;
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    setMobileFilterSheetOpen(!isMobileFilterSheetOpen);
+  }
+
+  function handleMobileFilterSheetOverlayClick(event) {
+    if (!isMobileFilterSheetOpen) return;
+    if (event.target === mobileFilterSheetOverlay) {
+      setMobileFilterSheetOpen(false);
+    }
+  }
+
+  function handleMobileFilterSheetEscape(event) {
+    if (event.key === 'Escape' && isMobileFilterSheetOpen) {
+      setMobileFilterSheetOpen(false);
+    }
+  }
+
+  function handleMobileFilterSheetApplyClick() {
+    applyMobileFilterSheetSelection();
+    setMobileFilterSheetOpen(false);
+  }
+
+  function handleMobileFilterSheetControlChange() {
+    applyMobileFilterSheetSelection();
+  }
+
+  function handleMobileFilterSheetViewportChange() {
+    if (!isMobileViewport()) {
+      setMobileFilterSheetOpen(false);
+    }
+  }
+
   function setMobileHeaderMenuOpen(isOpen) {
     if (!appHeader || !mobileHeaderMenuButton || !headerActions) return;
     if (!isMobileViewport()) {
@@ -3335,6 +3458,7 @@
     if (!isMobileViewport()) return;
     event?.preventDefault?.();
     event?.stopPropagation?.();
+    setMobileFilterSheetOpen(false);
     setMobileHeaderMenuOpen(!isMobileHeaderMenuOpen);
   }
 
@@ -3362,6 +3486,7 @@
     if (!isMobileViewport()) {
       setMobileHeaderMenuOpen(false);
     }
+    handleMobileFilterSheetViewportChange();
   }
 
   window.toggleDashboardCardVisibility = updateDashboardCardVisibility;
@@ -3402,7 +3527,7 @@
 
     // Populate Photographers
     const pSel = $('#form-assignedTo');
-    const fSel = $('#filter-photographer');
+    const fSel = filterPhotographer;
     if (pSel && fSel) {
       const curP = pSel.value;
       const curF = fSel.value;
@@ -3412,6 +3537,10 @@
       fSel.innerHTML = `<option value="all">${t('filterPhotographer')}</option>` + options;
       pSel.value = curP;
       fSel.value = curF;
+    }
+
+    if (isMobileFilterSheetOpen) {
+      syncMobileFilterSheetFromToolbar();
     }
   }
 
@@ -3881,6 +4010,9 @@
       filterMonth.appendChild(opt);
     });
     if (sorted.includes(current)) filterMonth.value = current;
+    if (isMobileFilterSheetOpen) {
+      syncMobileFilterSheetFromToolbar();
+    }
   }
 
   // ===== Filter & Sort =====
@@ -3899,7 +4031,7 @@
     const mf = filterMonth?.value || 'all';
     if (mf !== 'all') list = list.filter(c => c.shootingDate && c.shootingDate.startsWith(mf));
 
-    const pf_staff = $('#filter-photographer')?.value || 'all';
+    const pf_staff = filterPhotographer?.value || 'all';
     if (pf_staff !== 'all') list = list.filter(c => c.assignedTo === pf_staff);
 
     const { key, dir } = currentSort;
@@ -3999,6 +4131,7 @@
       if (workflowLegend) workflowLegend.style.display = 'none';
       emptyState.style.display = 'block';
       $('.toolbar').style.display = 'none';
+      setMobileFilterSheetOpen(false);
     } else {
       tableWrapper.style.display = '';
       if (customerCardGrid) customerCardGrid.style.display = '';
@@ -4314,7 +4447,7 @@
     bindEventOnce(searchInput, 'input', renderTable, 'toolbar-search-input');
     bindEventOnce(filterPayment, 'change', renderTable, 'toolbar-filter-payment');
     bindEventOnce(filterMonth, 'change', renderTable, 'toolbar-filter-month');
-    bindEventOnce($('#filter-photographer'), 'change', renderTable, 'toolbar-filter-photographer');
+    bindEventOnce(filterPhotographer, 'change', renderTable, 'toolbar-filter-photographer');
   }
 
   function shouldSyncGoogleCalendarEvent(previousCustomer, nextCustomer) {
@@ -6775,6 +6908,17 @@
     bindEventOnce(document, 'keydown', handleMobileHeaderMenuEscape, 'mobile-header-menu-escape');
     bindEventOnce(headerActions, 'click', handleMobileHeaderActionClick, 'mobile-header-menu-action-click');
     bindEventOnce(window, 'resize', handleMobileHeaderViewportChange, 'mobile-header-menu-viewport');
+    bindEventOnce(mobileFilterToggleButton, 'click', handleMobileFilterToggleClick, 'mobile-filter-toggle');
+    bindEventOnce(mobileFilterSheetOverlay, 'click', handleMobileFilterSheetOverlayClick, 'mobile-filter-overlay-click');
+    bindEventOnce(mobileFilterCloseButton, 'click', () => setMobileFilterSheetOpen(false), 'mobile-filter-close');
+    bindEventOnce(mobileFilterApplyButton, 'click', handleMobileFilterSheetApplyClick, 'mobile-filter-apply');
+    bindEventOnce(mobileFilterPayment, 'change', handleMobileFilterSheetControlChange, 'mobile-filter-payment-change');
+    bindEventOnce(mobileFilterPhotographer, 'change', handleMobileFilterSheetControlChange, 'mobile-filter-photographer-change');
+    bindEventOnce(mobileFilterMonth, 'change', handleMobileFilterSheetControlChange, 'mobile-filter-month-change');
+    bindEventOnce(mobileSortKey, 'change', handleMobileFilterSheetControlChange, 'mobile-filter-sort-key-change');
+    bindEventOnce(mobileSortDir, 'change', handleMobileFilterSheetControlChange, 'mobile-filter-sort-dir-change');
+    bindEventOnce(document, 'keydown', handleMobileFilterSheetEscape, 'mobile-filter-escape');
+    bindEventOnce(window, 'resize', handleMobileFilterSheetViewportChange, 'mobile-filter-viewport');
     bindEventOnce(document.getElementById('form-plan'), 'change', handlePlanSelectChange, 'form-plan-select-change');
     bindEventOnce(document.getElementById('form-plan-price'), 'input', handlePlanPriceInputChange, 'form-plan-price-input');
     bindEventOnce(document.getElementById('form-plan-cost'), 'input', handlePlanCostInputChange, 'form-plan-cost-input');
