@@ -3621,6 +3621,10 @@ html[lang="fr"] .modal-footer .btn {
   margin-bottom: 14px;
 }
 
+.admin-mfa-quick-section {
+  margin-bottom: 14px;
+}
+
 .totp-qr-wrap {
   display: grid;
   justify-items: center;

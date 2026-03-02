@@ -1495,6 +1495,7 @@
 
   function activateLocalGuestMode(message = '') {
     isLoggedIn = true;
+    currentAuthUserEmail = '';
     clearAdminSecurityState('not_admin');
     saveLocalValue(LOCAL_GUEST_MODE_KEY, true);
     setCurrentUserPlan('free', { persistCloud: false });
@@ -6788,14 +6789,32 @@
     return t('adminTotpDisabledStatus');
   }
 
+  function isAdminUserForTotpUi() {
+    const firebaseEmail = String(window.FirebaseService?.getCurrentUser?.()?.email || '').trim();
+    const cachedEmail = String(currentAuthUserEmail || '').trim();
+    const effectiveEmail = firebaseEmail || cachedEmail;
+    return isAdminEmail(effectiveEmail);
+  }
+
   function updateAdminTotpControlsVisibility() {
-    const section = document.getElementById('admin-mfa-settings-section');
-    const status = document.getElementById('admin-mfa-status-text');
-    if (!section || !status) return;
-    const isAdmin = isCurrentUserAdmin();
-    section.style.display = isAdmin ? '' : 'none';
+    const sections = [
+      document.getElementById('admin-mfa-settings-section'),
+      document.getElementById('admin-mfa-quick-section'),
+    ].filter(Boolean);
+    const statuses = [
+      document.getElementById('admin-mfa-status-text'),
+      document.getElementById('admin-mfa-status-text-quick'),
+    ].filter(Boolean);
+    if (sections.length === 0) return;
+    const isAdmin = isAdminUserForTotpUi();
+    sections.forEach((section) => {
+      section.style.display = isAdmin ? '' : 'none';
+    });
     if (!isAdmin) return;
-    status.textContent = getAdminMfaStatusText() || t('adminTotpSetupDesc');
+    const statusText = getAdminMfaStatusText() || t('adminTotpSetupDesc');
+    statuses.forEach((status) => {
+      status.textContent = statusText;
+    });
   }
 
   function openModalOverlayById(overlayId) {
@@ -6878,7 +6897,8 @@
 
   async function openAdminTotpSetupModal() {
     const user = window.FirebaseService?.getCurrentUser?.();
-    if (!user || !isAdminEmail(user.email)) {
+    const effectiveEmail = String(user?.email || currentAuthUserEmail || '').trim();
+    if (!isAdminEmail(effectiveEmail)) {
       showToast(t('supportLoginRequired'), 'error');
       return;
     }
@@ -6894,7 +6914,7 @@
     try {
       const enrollment = await window.FirebaseService.startAdminTotpEnrollment({
         issuer: 'Pholio',
-        accountName: user.email || 'admin',
+        accountName: effectiveEmail || 'admin',
       });
       const secretInput = document.getElementById('admin-totp-secret');
       const uriInput = document.getElementById('admin-totp-uri');
@@ -7914,6 +7934,7 @@
     bindEventOnce(document.getElementById('btn-admin-device-refresh'), 'click', refreshAdminDeviceList, 'admin-device-refresh');
     bindEventOnce(document.getElementById('admin-device-approved-body'), 'click', handleAdminDeviceActionClick, 'admin-device-approved-action');
     bindEventOnce(document.getElementById('admin-device-pending-body'), 'click', handleAdminDeviceActionClick, 'admin-device-pending-action');
+    bindEventOnce(document.getElementById('btn-admin-open-totp-quick'), 'click', openAdminTotpSetupModal, 'admin-totp-open-quick');
     bindEventOnce(document.getElementById('btn-admin-open-totp'), 'click', openAdminTotpSetupModal, 'admin-totp-open');
     bindEventOnce(document.getElementById('btn-admin-totp-enroll'), 'click', handleAdminTotpEnrollSubmit, 'admin-totp-enroll');
     bindEventOnce(document.getElementById('btn-admin-totp-cancel'), 'click', closeAdminTotpModal, 'admin-totp-cancel');
@@ -8023,6 +8044,7 @@
   let isLoggedIn = false;
   let authWatcherDisabled = false;
   let authUnsubscribe = null;
+  let currentAuthUserEmail = '';
   let cloudSyncState = 'local';
   let mergePromptedUid = null;
   let adminSupportTickets = [];
@@ -8536,6 +8558,7 @@
 
     if (state === 'loggedOut') {
       isLoggedIn = false;
+      currentAuthUserEmail = '';
       clearAdminSecurityState('not_admin');
       setCurrentUserPlan('free', { persistCloud: false });
       if (authStatus) authStatus.textContent = t('authLoggedOutPrompt');
@@ -8555,6 +8578,7 @@
 
     if (state === 'loggedIn') {
       const userName = getAuthDisplayName(user);
+      currentAuthUserEmail = String(user?.email || '').trim();
       syncPlanFromStorage();
       if (authStatus) authStatus.textContent = t('authLoggedInAs', { user: userName });
       if (loginBtn) loginBtn.style.display = 'none';
