@@ -43,11 +43,12 @@
     <!-- ===== Header ===== -->
     <header class="app-header">
       <div class="header-left">
-        <div class="logo">
+        <div class="logo logo-stack">
           <div class="brand-unit">
             <img src="iconpholio.png" alt="Pholio" class="brand-logo-image" />
             <span class="brand-wordmark">Pholio</span>
           </div>
+          <span class="header-plan-badge" id="header-plan-badge" data-plan="free" style="display:none;">FREE</span>
         </div>
         <select id="languageSelect" class="btn btn-secondary btn-sm">
           <option value="en">🇺🇸 English</option>
@@ -62,21 +63,12 @@
           <span class="cloud-sync-label" id="cloud-sync-label" data-i18n="cloudSyncStatusLocal">ローカル保存中</span>
         </div>
         <button class="theme-toggle" id="btn-theme" title="Toggle Theme">🌙</button>
-      </div>
-      <div class="header-right">
-        <div class="header-auth-meta">
-          <span class="header-plan-badge" id="header-plan-badge" data-plan="free" style="display:none;">FREE</span>
-          <button class="btn btn-secondary btn-sm" id="btn-header-logout" style="display:none;" title="ログアウト">
-            <span class="btn-icon" aria-hidden="true">↩</span>
-            <span class="btn-text" data-i18n="logout">ログアウト</span>
-          </button>
-        </div>
+        <button class="btn btn-secondary btn-sm" id="btn-settings" title="Settings" data-i18n="settingsHeader" data-i18n-title="settings">⚙
+          Settings</button>
         <button class="mobile-header-menu-btn" id="btn-mobile-header-menu" type="button" aria-expanded="false"
           data-i18n-title="mobileMenu" data-i18n-aria-label="mobileMenu">⚙️</button>
       </div>
       <div class="header-actions">
-        <button class="btn btn-secondary btn-sm" id="btn-settings" title="Settings" data-i18n="settingsHeader" data-i18n-title="settings">⚙
-          Settings</button>
         <button class="btn btn-secondary btn-sm" id="btn-sync-export" title="バックアップ (JSON)" data-i18n="exportSync"
           data-i18n-title="exportSync">バックアップ (JSON)</button>
         <button class="btn btn-secondary btn-sm" id="btn-sync-import" title="データ復元" data-i18n="importSync"
