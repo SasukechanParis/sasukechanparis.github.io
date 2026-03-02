@@ -4746,6 +4746,37 @@
     const container = $('#settings-list');
     if (!container) return;
     container.innerHTML = '';
+    const normalizedCurrentPlan = normalizeUserPlan(currentUserPlan);
+    const currentPlanBadgeText = getPlanBadgeText(normalizedCurrentPlan);
+    const subscriptionPlans = [
+      {
+        key: 'individual',
+        name: t('settingsSubscriptionIndividualName'),
+        price: t('settingsSubscriptionIndividualPrice'),
+      },
+      {
+        key: 'team',
+        name: t('settingsSubscriptionTeamName'),
+        price: t('settingsSubscriptionTeamPrice'),
+      },
+    ];
+    const subscriptionPlanRows = subscriptionPlans.map((planEntry) => {
+      const isCurrent = normalizedCurrentPlan === planEntry.key;
+      return `
+        <div class="subscription-plan-card ${isCurrent ? 'is-current' : ''}">
+          <div class="subscription-plan-meta">
+            <div class="subscription-plan-name">${escapeHtml(planEntry.name || planEntry.key)}</div>
+            <div class="subscription-plan-price">${escapeHtml(planEntry.price || '')}</div>
+          </div>
+          <button
+            type="button"
+            class="btn btn-secondary btn-sm subscription-plan-action-btn"
+            data-subscription-plan-target="${escapeHtml(planEntry.key)}"
+            ${isCurrent ? 'disabled' : ''}
+          >${escapeHtml(isCurrent ? t('settingsSubscriptionCurrentButton') : t('settingsSubscriptionUpgradeButton'))}</button>
+        </div>
+      `;
+    }).join('');
 
     const planRows = planMaster.length === 0
       ? `<div class="settings-item"><span>${escapeHtml(t('settingsPlanEmpty'))}</span></div>`
@@ -4879,6 +4910,15 @@
     `).join('');
 
     container.innerHTML = `
+      <div class="settings-section" id="settings-subscription-plan-section">
+        <h3>${escapeHtml(t('settingsSubscriptionSection'))}</h3>
+        <p class="settings-detail-empty">${escapeHtml(t('settingsSubscriptionDescription'))}</p>
+        <div class="settings-item subscription-current-row">
+          <span>${escapeHtml(t('settingsSubscriptionCurrentPlanLabel'))}</span>
+          <span class="header-plan-badge" data-plan="${escapeHtml(normalizedCurrentPlan)}">${escapeHtml(currentPlanBadgeText)}</span>
+        </div>
+        <div class="subscription-plan-list">${subscriptionPlanRows}</div>
+      </div>
       <div class="settings-section">
         <h3>${escapeHtml(t('settingsPlanSection'))}</h3>
         <div class="settings-item-list">${planRows}</div>
@@ -4932,6 +4972,13 @@
     bindEventOnce(container.querySelector('#btn-plan-save'), 'click', savePlanMasterFromForm, 'plan-master-save');
     bindEventOnce(container.querySelector('#btn-plan-reset'), 'click', resetPlanMasterFormInputs, 'plan-master-reset');
     bindEventOnce(container.querySelector('#btn-dynamic-item-add'), 'click', addDynamicItemHintFromSettings, 'dynamic-item-add');
+    container.querySelectorAll('button[data-subscription-plan-target]').forEach((button) => {
+      const targetPlan = String(button.dataset.subscriptionPlanTarget || '').trim();
+      bindEventOnce(button, 'click', () => {
+        if (!targetPlan) return;
+        handleSubscriptionPlanSelect(targetPlan);
+      }, `subscription-plan-select-${targetPlan}`);
+    });
 
     container.querySelectorAll('button[data-plan-edit]').forEach((button) => {
       const index = Number(button.dataset.planEdit);
@@ -5825,8 +5872,32 @@
       || `Free plan limit reached (${limit} customers). Upgrade to continue adding more customers.`
     );
     if (confirmed) {
-      window.open('landing.html#pricing', '_blank');
+      openSettingsPlanManagementSection();
     }
+  }
+
+  function handleSubscriptionPlanSelect(nextPlan) {
+    const normalized = normalizeUserPlan(nextPlan);
+    if (normalized === normalizeUserPlan(currentUserPlan)) return;
+    setCurrentUserPlan(normalized, { persistCloud: true });
+    renderSettings();
+    loadBillingProfileSettings();
+    showToast(t('settingsSubscriptionUpdated', { plan: getPlanBadgeText(normalized) }));
+  }
+
+  function openSettingsPlanManagementSection() {
+    handleOpenSettingsClick();
+    const menuTabBtn = settingsOverlay?.querySelector('.settings-tab-btn[data-tab="menu"]');
+    if (menuTabBtn && !menuTabBtn.classList.contains('active')) {
+      menuTabBtn.click();
+    }
+    window.requestAnimationFrame(() => {
+      const section = document.getElementById('settings-subscription-plan-section');
+      if (!section) return;
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      section.classList.add('settings-section-focus');
+      window.setTimeout(() => section.classList.remove('settings-section-focus'), 1200);
+    });
   }
 
   function renderInvoiceLegalFields(lang = currentLang, settings = getTaxSettings()) {
@@ -6310,6 +6381,7 @@
     bindEventOnce(document.getElementById('btn-google-login'), 'click', handleGoogleLoginClick, 'google-login-banner');
     bindEventOnce(document.getElementById('btn-google-login-screen'), 'click', handleGoogleLoginClick, 'google-login-screen');
     bindEventOnce(document.getElementById('btn-logout'), 'click', handleGoogleLogoutClick, 'google-logout');
+    bindEventOnce(document.getElementById('btn-header-logout'), 'click', handleGoogleLogoutClick, 'google-logout-header');
     bindSettingsTabListeners();
   }
 
@@ -6567,8 +6639,15 @@
   }
 
   function updateHeaderAuthUi(user = null) {
+    const headerLogout = document.getElementById('btn-header-logout');
     const headerPlanBadge = document.getElementById('header-plan-badge');
+    const isGuest = getLocalValue(LOCAL_GUEST_MODE_KEY, false) === true;
     const hasUser = !!user;
+    if (headerLogout) {
+      headerLogout.style.display = hasUser && !isGuest ? '' : 'none';
+      headerLogout.title = t('logout');
+      headerLogout.setAttribute('aria-label', t('logout'));
+    }
     if (headerPlanBadge) {
       headerPlanBadge.style.display = hasUser ? 'inline-flex' : 'none';
     }

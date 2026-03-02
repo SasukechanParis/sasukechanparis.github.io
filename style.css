@@ -236,7 +236,7 @@ body {
   column-gap: 8px;
   row-gap: 6px;
   margin-bottom: 0;
-  padding-right: 112px;
+  padding-right: 96px;
   padding-bottom: 14px;
   border-bottom: 1px solid var(--border-color);
   box-shadow: 0 8px 20px -20px rgba(15, 23, 42, 0.55);
@@ -443,7 +443,7 @@ body {
   gap: 6px;
   align-items: center;
   row-gap: 0;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   min-width: 0;
   max-width: none;
   padding-top: 0;
@@ -3083,6 +3083,12 @@ tbody tr:hover {
   margin-bottom: 14px;
 }
 
+.settings-section-focus {
+  border-color: color-mix(in srgb, var(--primary-color) 60%, var(--border-color));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 24%, transparent);
+  transition: box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
 .settings-section h3 {
   margin: 0 0 10px;
   font-size: 0.95rem;
@@ -3207,6 +3213,51 @@ tbody tr:hover {
   background: var(--bg-input);
   border: 1px solid var(--border-color);
   border-radius: 10px;
+}
+
+.subscription-current-row {
+  margin-bottom: 10px;
+}
+
+.subscription-plan-list {
+  display: grid;
+  gap: 8px;
+}
+
+.subscription-plan-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-input);
+}
+
+.subscription-plan-card.is-current {
+  border-color: color-mix(in srgb, var(--primary-color) 55%, var(--border-color));
+  background: color-mix(in srgb, var(--primary-color) 10%, var(--bg-input));
+}
+
+.subscription-plan-meta {
+  min-width: 0;
+}
+
+.subscription-plan-name {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.subscription-plan-price {
+  margin-top: 2px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.subscription-plan-action-btn[disabled] {
+  opacity: 0.8;
+  cursor: default;
 }
 
 .settings-tag-item {
