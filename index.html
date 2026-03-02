@@ -866,6 +866,46 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="enterprise-contact-overlay" style="display:none;">
+    <div class="modal" style="max-width:560px;">
+      <div class="modal-header">
+        <h2 class="modal-title">
+          <span class="modal-icon">🏢</span>
+          <span data-i18n="enterpriseContactTitle">Enterprise Inquiry</span>
+        </h2>
+        <button class="btn-close" id="btn-enterprise-contact-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="enterprise-contact-plan" value="enterprise" />
+        <div class="form-group">
+          <label for="enterprise-contact-team-name" data-i18n="enterpriseContactTeamName">Team / Company Name</label>
+          <input type="text" id="enterprise-contact-team-name" data-i18n-placeholder="enterpriseContactPlaceholderTeamName" placeholder="Team name">
+        </div>
+        <div class="form-group">
+          <label for="enterprise-contact-representative-name" data-i18n="enterpriseContactRepresentative">Representative Name</label>
+          <input type="text" id="enterprise-contact-representative-name" data-i18n-placeholder="enterpriseContactPlaceholderRepresentative" placeholder="Representative name">
+        </div>
+        <div class="form-group">
+          <label for="enterprise-contact-member-range" data-i18n="enterpriseContactMemberRange">Expected Team Size</label>
+          <select id="enterprise-contact-member-range">
+            <option value="" data-i18n="selectDefault">Select</option>
+            <option value="16-30" data-i18n="enterpriseContactMemberRange16_30">16-30 members</option>
+            <option value="31-50" data-i18n="enterpriseContactMemberRange31_50">31-50 members</option>
+            <option value="51+" data-i18n="enterpriseContactMemberRange51Plus">51+ members</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="enterprise-contact-message" data-i18n="enterpriseContactMessage">Message</label>
+          <textarea id="enterprise-contact-message" style="min-height: 120px;" data-i18n-placeholder="enterpriseContactPlaceholderMessage" placeholder="Tell us about your needs"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-enterprise-contact-cancel" data-i18n="cancel">Cancel</button>
+        <button class="btn btn-primary" id="btn-enterprise-contact-submit" data-i18n="enterpriseContactSubmit">Submit</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Delete Confirmation Modal -->
   <div class="modal-overlay" id="confirm-overlay" style="display:none;">
     <div class="modal modal-confirm">

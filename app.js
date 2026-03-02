@@ -29,6 +29,7 @@
   const GOOGLE_CALENDAR_SELECTED_ID_KEY = 'photocrm_google_calendar_selected_id';
   const USER_PLAN_KEY = 'photocrm_user_plan';
   const USER_BILLING_PROFILE_KEY = 'photocrm_user_billing_profile';
+  const ENTERPRISE_CONTACT_REQUESTS_KEY = 'photocrm_enterprise_contact_requests';
   const ADMIN_MANAGEMENT_EMAILS = new Set(['sasuke.photographe@gmail.com']);
   const GOOGLE_CALENDAR_DEFAULT_ID = 'sasuke.photographe@gmail.com';
   const LOCAL_GUEST_MODE_KEY = 'photocrm_local_guest_mode';
@@ -240,6 +241,7 @@
       GOOGLE_CALENDAR_SELECTED_ID_KEY,
       USER_PLAN_KEY,
       USER_BILLING_PROFILE_KEY,
+      ENTERPRISE_CONTACT_REQUESTS_KEY,
     ];
   }
 
@@ -528,8 +530,8 @@
 
   function normalizeUserPlan(plan) {
     const normalized = String(plan || '').trim().toLowerCase();
-    if (normalized === 'team' || normalized === 'small-team' || normalized === 'smallteam') return 'small_team';
-    if (normalized === 'medium-team' || normalized === 'mediumteam') return 'medium_team';
+    if (normalized === 'small_team' || normalized === 'team' || normalized === 'small-team' || normalized === 'smallteam') return 'small_team';
+    if (normalized === 'medium_team' || normalized === 'medium-team' || normalized === 'mediumteam') return 'medium_team';
     if (normalized === 'individual' || normalized === 'pro') return 'individual';
     if (normalized === 'enterprise' || normalized === 'ent') return 'enterprise';
     return 'free';
@@ -575,29 +577,31 @@
   }
 
   function getSubscriptionPlanEntries() {
+    const perMonthSuffix = t('settingsSubscriptionPerMonthSuffix') || '/mo';
+    const formatPlanPrice = (planKey) => `${formatCurrency(getPlanConfig(planKey).basePrice)}${perMonthSuffix}`;
     return [
       {
         key: 'free',
         name: t('settingsSubscriptionFreeName'),
-        price: t('settingsSubscriptionFreePrice'),
+        price: formatPlanPrice('free'),
         summary: t('settingsSubscriptionFreeSummary', { limit: String(FREE_PLAN_LIMIT) }),
       },
       {
         key: 'individual',
         name: t('settingsSubscriptionIndividualName'),
-        price: t('settingsSubscriptionIndividualPrice'),
+        price: formatPlanPrice('individual'),
         summary: t('settingsSubscriptionIndividualSummary'),
       },
       {
         key: 'small_team',
         name: t('settingsSubscriptionSmallTeamName'),
-        price: t('settingsSubscriptionSmallTeamPrice'),
+        price: formatPlanPrice('small_team'),
         summary: t('settingsSubscriptionSmallTeamSummary'),
       },
       {
         key: 'medium_team',
         name: t('settingsSubscriptionMediumTeamName'),
-        price: t('settingsSubscriptionMediumTeamPrice'),
+        price: formatPlanPrice('medium_team'),
         summary: t('settingsSubscriptionMediumTeamSummary'),
       },
       {
@@ -700,7 +704,7 @@
   }
 
   function formatPlanMonthlyPrice(amount) {
-    return `$${Math.max(0, Math.round(toSafeNumber(amount, 0)))}`;
+    return formatCurrency(Math.max(0, Math.round(toSafeNumber(amount, 0))));
   }
 
   function calculatePlanEstimate(plan = currentUserPlan, memberCount = getCurrentTeamMemberCount()) {
@@ -2616,6 +2620,10 @@
     renderTable();
     updateDashboard();
     renderExpenses();
+    if (settingsOverlay?.classList.contains('active')) {
+      renderSettings();
+      renderPlanManagementSection();
+    }
     if (editingId) openDetail(editingId);
   }
 
@@ -6093,23 +6101,80 @@
   }
 
   function handleSubscriptionPlanContactClick(targetPlan = 'enterprise') {
-    const subject = encodeURIComponent('Pholio Enterprise Plan Inquiry');
-    const body = encodeURIComponent(`Plan: ${targetPlan}\n\nPlease contact me about upgrading.`);
-    window.location.href = `mailto:sasuke.photographe@gmail.com?subject=${subject}&body=${body}`;
-    showToast(t('settingsSubscriptionContactOpened'));
+    openEnterpriseContactModal(targetPlan);
   }
 
   function handleSubscriptionPlanDetailsClick() {
-    const detailsText = [
-      t('settingsSubscriptionDetailsModalTitle'),
-      '',
-      `• ${t('settingsSubscriptionFreeName')} (${t('settingsSubscriptionFreePrice')}): ${t('settingsSubscriptionFreeSummary', { limit: String(FREE_PLAN_LIMIT) })}`,
-      `• ${t('settingsSubscriptionIndividualName')} (${t('settingsSubscriptionIndividualPrice')}): ${t('settingsSubscriptionIndividualSummary')}`,
-      `• ${t('settingsSubscriptionSmallTeamName')} (${t('settingsSubscriptionSmallTeamPrice')}): ${t('settingsSubscriptionSmallTeamSummary')}`,
-      `• ${t('settingsSubscriptionMediumTeamName')} (${t('settingsSubscriptionMediumTeamPrice')}): ${t('settingsSubscriptionMediumTeamSummary')}`,
-      `• ${t('settingsSubscriptionEnterpriseName')} (${t('settingsSubscriptionEnterprisePrice')}): ${t('settingsSubscriptionEnterpriseSummary')}`,
-    ].join('\n');
+    const detailLines = getSubscriptionPlanEntries().map((entry) => `• ${entry.name} (${entry.price}): ${entry.summary}`);
+    const detailsText = [t('settingsSubscriptionDetailsModalTitle'), '', ...detailLines].join('\n');
     window.alert(detailsText);
+  }
+
+  function getEnterpriseContactRequests() {
+    const loaded = getCloudValue(ENTERPRISE_CONTACT_REQUESTS_KEY, getLocalValue(ENTERPRISE_CONTACT_REQUESTS_KEY, []));
+    return Array.isArray(loaded) ? loaded : [];
+  }
+
+  function saveEnterpriseContactRequests(requests) {
+    const normalized = Array.isArray(requests) ? requests : [];
+    if (window.FirebaseService?.getCurrentUser?.()) {
+      saveCloudValue(ENTERPRISE_CONTACT_REQUESTS_KEY, normalized);
+      return;
+    }
+    saveLocalValue(ENTERPRISE_CONTACT_REQUESTS_KEY, normalized);
+  }
+
+  function openEnterpriseContactModal(targetPlan = 'enterprise') {
+    const overlay = document.getElementById('enterprise-contact-overlay');
+    if (!overlay) return;
+    const planInput = document.getElementById('enterprise-contact-plan');
+    if (planInput) planInput.value = String(targetPlan || 'enterprise');
+    const teamNameInput = document.getElementById('enterprise-contact-team-name');
+    const representativeInput = document.getElementById('enterprise-contact-representative-name');
+    const rangeSelect = document.getElementById('enterprise-contact-member-range');
+    const messageInput = document.getElementById('enterprise-contact-message');
+    if (teamNameInput) teamNameInput.value = '';
+    if (representativeInput) representativeInput.value = '';
+    if (rangeSelect) rangeSelect.value = '';
+    if (messageInput) messageInput.value = '';
+    overlay.style.display = 'flex';
+    setTimeout(() => overlay.classList.add('active'), 10);
+  }
+
+  function closeEnterpriseContactModal() {
+    const overlay = document.getElementById('enterprise-contact-overlay');
+    if (!overlay) return;
+    overlay.classList.remove('active');
+    setTimeout(() => { overlay.style.display = 'none'; }, 220);
+  }
+
+  function handleEnterpriseContactSubmit() {
+    const teamName = String(document.getElementById('enterprise-contact-team-name')?.value || '').trim();
+    const representativeName = String(document.getElementById('enterprise-contact-representative-name')?.value || '').trim();
+    const memberRange = String(document.getElementById('enterprise-contact-member-range')?.value || '').trim();
+    const message = String(document.getElementById('enterprise-contact-message')?.value || '').trim();
+    const selectedPlan = String(document.getElementById('enterprise-contact-plan')?.value || 'enterprise').trim();
+
+    if (!teamName || !representativeName || !memberRange) {
+      showToast(t('enterpriseContactValidation'), 'error');
+      return;
+    }
+
+    const nextRequests = [
+      {
+        id: generateId(),
+        createdAt: new Date().toISOString(),
+        plan: normalizeUserPlan(selectedPlan),
+        teamName,
+        representativeName,
+        memberRange,
+        message,
+      },
+      ...getEnterpriseContactRequests(),
+    ];
+    saveEnterpriseContactRequests(nextRequests);
+    showToast(t('enterpriseContactSubmitted'));
+    closeEnterpriseContactModal();
   }
 
   function renderPlanManagementSection() {
@@ -6626,6 +6691,12 @@
     bindEventOnce(document.getElementById('btn-export'), 'click', handleCsvExportClick, 'csv-export-click');
     bindEventOnce(document.getElementById('btn-ics-export'), 'click', handleIcsExportClick, 'ics-export-click');
     bindEventOnce(document.getElementById('btn-team-add'), 'click', handleTeamAddClick, 'team-add-click');
+    bindEventOnce(document.getElementById('btn-enterprise-contact-submit'), 'click', handleEnterpriseContactSubmit, 'enterprise-contact-submit');
+    bindEventOnce(document.getElementById('btn-enterprise-contact-cancel'), 'click', closeEnterpriseContactModal, 'enterprise-contact-cancel');
+    bindEventOnce(document.getElementById('btn-enterprise-contact-close'), 'click', closeEnterpriseContactModal, 'enterprise-contact-close');
+    bindEventOnce(document.getElementById('enterprise-contact-overlay'), 'click', (event) => {
+      if (event.target?.id === 'enterprise-contact-overlay') closeEnterpriseContactModal();
+    }, 'enterprise-contact-overlay-close');
     bindEventOnce(document.getElementById('add-item-btn'), 'click', () => addDynamicChargeItem(), 'add-extra-item-click');
     bindEventOnce(document.getElementById('btn-google-login'), 'click', handleGoogleLoginClick, 'google-login-banner');
     bindEventOnce(document.getElementById('btn-google-login-screen'), 'click', handleGoogleLoginClick, 'google-login-screen');
