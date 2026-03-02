@@ -6762,7 +6762,46 @@
   }
 
   function closeAdminTotpModal() {
+    const secretInput = document.getElementById('admin-totp-secret');
+    const uriInput = document.getElementById('admin-totp-uri');
+    const codeInput = document.getElementById('admin-totp-code');
+    const qrImage = document.getElementById('admin-totp-qr-image');
+    const qrFallback = document.getElementById('admin-totp-qr-fallback');
+    if (secretInput) secretInput.value = '';
+    if (uriInput) uriInput.value = '';
+    if (codeInput) codeInput.value = '';
+    if (qrImage) {
+      qrImage.style.display = 'none';
+      qrImage.removeAttribute('src');
+      qrImage.onload = null;
+      qrImage.onerror = null;
+    }
+    if (qrFallback) qrFallback.style.display = '';
+    window.FirebaseService?.cancelAdminTotpEnrollment?.();
     closeModalOverlayById('admin-totp-overlay');
+  }
+
+  function setAdminTotpQrPreview(otpauthUri = '') {
+    const qrImage = document.getElementById('admin-totp-qr-image');
+    const qrFallback = document.getElementById('admin-totp-qr-fallback');
+    const uri = String(otpauthUri || '').trim();
+    if (!qrImage) return;
+    if (!uri) {
+      qrImage.style.display = 'none';
+      qrImage.removeAttribute('src');
+      if (qrFallback) qrFallback.style.display = '';
+      return;
+    }
+    const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&ecc=M&data=${encodeURIComponent(uri)}`;
+    qrImage.onload = () => {
+      qrImage.style.display = '';
+      if (qrFallback) qrFallback.style.display = 'none';
+    };
+    qrImage.onerror = () => {
+      qrImage.style.display = 'none';
+      if (qrFallback) qrFallback.style.display = '';
+    };
+    qrImage.src = qrSrc;
   }
 
   function closeMfaLoginModal(clearChallenge = false) {
@@ -6802,9 +6841,11 @@
       const secretInput = document.getElementById('admin-totp-secret');
       const uriInput = document.getElementById('admin-totp-uri');
       const codeInput = document.getElementById('admin-totp-code');
+      const otpUri = String(enrollment?.qrCodeUrl || '');
       if (secretInput) secretInput.value = String(enrollment?.secretKey || '');
-      if (uriInput) uriInput.value = String(enrollment?.qrCodeUrl || '');
+      if (uriInput) uriInput.value = otpUri;
       if (codeInput) codeInput.value = '';
+      setAdminTotpQrPreview(otpUri);
       openModalOverlayById('admin-totp-overlay');
     } catch (err) {
       console.error('TOTP enrollment start failed', err);
