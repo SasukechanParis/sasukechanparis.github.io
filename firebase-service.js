@@ -1728,35 +1728,20 @@ window.FirebaseService = {
     provider.setCustomParameters({ prompt: 'select_account' });
     provider.addScope(GOOGLE_CALENDAR_SCOPE);
     provider.addScope(GOOGLE_CALENDAR_READ_SCOPE);
-    clearPendingMfaSignInChallenge();
 
-    try {
-      const result = await signInWithPopup(auth, provider);
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      setGoogleOAuthAccessToken(credential?.accessToken || '');
-      const syncResults = await Promise.allSettled([
-        syncUserProfileDoc(result.user),
-        syncAdminUserSummary(result.user),
-      ]);
-      syncResults.forEach((syncResult) => {
-        if (syncResult.status === 'rejected') {
-          console.warn('Post-login profile sync failed', syncResult.reason);
-        }
-      });
-      return result;
-    } catch (err) {
-      const code = String(err?.code || '').trim();
-      if (code === 'auth/multi-factor-auth-required') {
-        try {
-          pendingMfaSignInResolver = getMultiFactorResolver(auth, err);
-          pendingMfaSignInResolver.__createdAtMs = Date.now();
-        } catch (resolverErr) {
-          console.warn('Failed to initialize MFA resolver', resolverErr);
-          pendingMfaSignInResolver = null;
-        }
+    const result = await signInWithPopup(auth, provider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    setGoogleOAuthAccessToken(credential?.accessToken || '');
+    const syncResults = await Promise.allSettled([
+      syncUserProfileDoc(result.user),
+      syncAdminUserSummary(result.user),
+    ]);
+    syncResults.forEach((syncResult) => {
+      if (syncResult.status === 'rejected') {
+        console.warn('Post-login profile sync failed', syncResult.reason);
       }
-      throw err;
-    }
+    });
+    return result;
   },
 
   async signInWithPopup() {
@@ -1771,103 +1756,57 @@ window.FirebaseService = {
     return isAdminUser(auth.currentUser);
   },
 
-  getAdminMfaState() {
-    return getAdminMfaState(auth.currentUser);
-  },
-
-  getPendingMfaChallenge() {
-    return getPendingMfaChallenge();
-  },
-
-  clearPendingMfaChallenge() {
-    clearPendingMfaSignInChallenge();
-  },
-
-  async resolvePendingMfaSignIn(oneTimePassword, hintUid = '') {
+  async bootstrapAdminSecurity() {
     await ensureInitialized();
-    const result = await resolvePendingMfaSignInCode(oneTimePassword, hintUid);
-    const credential = GoogleAuthProvider.credentialFromResult(result);
-    setGoogleOAuthAccessToken(credential?.accessToken || '');
-    const syncResults = await Promise.allSettled([
-      syncUserProfileDoc(result.user),
-      syncAdminUserSummary(result.user),
-    ]);
-    syncResults.forEach((syncResult) => {
-      if (syncResult.status === 'rejected') {
-        console.warn('Post-MFA profile sync failed', syncResult.reason);
-      }
-    });
-    return result;
+    const isAdmin = isAdminUser(auth.currentUser);
+    return {
+      allowed: isAdmin,
+      authorized: isAdmin,
+      reason: isAdmin ? 'authorized' : 'not_admin',
+      devices: { approved: [], pending: [] },
+      session: { token: '', expiresAtMs: 0 },
+      mfa: { required: false, verified: false, enrolledFactorCount: 0 },
+    };
   },
 
-  async startAdminTotpEnrollment(options = {}) {
+  async getAdminDeviceConfig() {
     await ensureInitialized();
-    return startTotpEnrollmentForCurrentAdmin(auth.currentUser, options);
+    const isAdmin = isAdminUser(auth.currentUser);
+    return {
+      allowed: isAdmin,
+      reason: isAdmin ? 'authorized' : 'not_admin',
+      devices: { approved: [], pending: [] },
+    };
   },
 
-  async probeAdminMfaOptions() {
+  async approveAdminDevice() {
     await ensureInitialized();
-    return probeAdminMfaOptionsForCurrentAdmin(auth.currentUser);
+    return { allowed: false, reason: 'disabled' };
   },
 
-  getPendingAdminTotpEnrollment() {
-    return getPendingTotpEnrollment();
-  },
-
-  cancelAdminTotpEnrollment() {
-    cancelTotpEnrollment();
-  },
-
-  async finalizeAdminTotpEnrollment(oneTimePassword, displayName = 'Pholio Admin') {
+  async revokeAdminDevice() {
     await ensureInitialized();
-    return finalizeTotpEnrollmentForCurrentAdmin(auth.currentUser, oneTimePassword, displayName);
+    return { allowed: false, reason: 'disabled' };
   },
 
-  async bootstrapAdminSecurity(payload = {}) {
+  async touchAdminSecureSession() {
     await ensureInitialized();
-    return getAdminSecurityBootstrap(auth.currentUser, payload);
-  },
-
-  async getAdminDeviceConfig(payload = {}) {
-    await ensureInitialized();
-    return getAdminDeviceManagementState(auth.currentUser, payload);
-  },
-
-  async approveAdminDevice(deviceId, payload = {}) {
-    await ensureInitialized();
-    return approvePendingAdminDevice(auth.currentUser, deviceId, payload);
-  },
-
-  async revokeAdminDevice(deviceId, payload = {}) {
-    await ensureInitialized();
-    return revokeApprovedAdminDevice(auth.currentUser, deviceId, payload);
-  },
-
-  async touchAdminSecureSession(payload = {}) {
-    await ensureInitialized();
-    return touchAdminSecureSession(auth.currentUser, payload);
+    const isAdmin = isAdminUser(auth.currentUser);
+    return { allowed: isAdmin, reason: isAdmin ? 'authorized' : 'not_admin' };
   },
 
   async endAdminSecureSession(reason = 'manual') {
     await ensureInitialized();
-    return endAdminSecureSession(auth.currentUser, reason);
+    return { ended: true, reason: String(reason || 'manual') };
   },
 
-  async getAdminUserOverview(payload = {}) {
+  async getAdminUserOverview() {
     await ensureInitialized();
     const user = auth.currentUser;
-    if (!isAdminUser(user)) return buildAdminUserOverview(user);
-    const safePayload = payload && typeof payload === 'object' ? payload : {};
-    try {
-      await assertTrustedAdminDeviceOrThrow(
-        user,
-        safePayload.currentDeviceId || '',
-        safePayload.sessionToken || safePayload.token || ''
-      );
-    } catch (err) {
+    if (!isAdminUser(user)) {
       return {
         allowed: false,
-        reason: String(err?.message || 'unauthorized_device'),
+        reason: 'not_admin',
         users: [],
         stats: {
           totalUsers: 0,
@@ -1879,19 +1818,11 @@ window.FirebaseService = {
     return buildAdminUserOverview(user);
   },
 
-  async getAdminSupportTickets(payload = {}) {
+  async getAdminSupportTickets() {
     await ensureInitialized();
     const user = auth.currentUser;
-    if (!isAdminUser(user)) return buildAdminSupportTickets(user);
-    const safePayload = payload && typeof payload === 'object' ? payload : {};
-    try {
-      await assertTrustedAdminDeviceOrThrow(
-        user,
-        safePayload.currentDeviceId || '',
-        safePayload.sessionToken || safePayload.token || ''
-      );
-    } catch (err) {
-      return { allowed: false, reason: String(err?.message || 'unauthorized_device'), tickets: [] };
+    if (!isAdminUser(user)) {
+      return { allowed: false, reason: 'not_admin', tickets: [] };
     }
     return buildAdminSupportTickets(user);
   },
@@ -1904,12 +1835,8 @@ window.FirebaseService = {
   async replySupportTicket(ticketId, payload = {}) {
     await ensureInitialized();
     const user = auth.currentUser;
+    if (!isAdminUser(user)) throw new Error('not_admin');
     const safePayload = payload && typeof payload === 'object' ? payload : {};
-    await assertTrustedAdminDeviceOrThrow(
-      user,
-      safePayload.currentDeviceId || '',
-      safePayload.sessionToken || safePayload.token || ''
-    );
     return replySupportTicketByAdmin(user, ticketId, safePayload);
   },
 
@@ -1990,11 +1917,6 @@ window.FirebaseService = {
 
   async signOut() {
     await ensureInitialized();
-    if (isAdminUser(auth.currentUser)) {
-      await endAdminSecureSession(auth.currentUser, 'sign_out').catch(() => {});
-    }
-    clearPendingMfaSignInChallenge();
-    cancelTotpEnrollment();
     setGoogleOAuthAccessToken('');
     return firebaseSignOut(auth);
   },

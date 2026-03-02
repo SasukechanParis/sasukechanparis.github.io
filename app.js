@@ -1528,6 +1528,7 @@
     { key: 'shootingDate', labelKey: 'thShootingDate', type: 'date' },
     { key: 'customerName', labelKey: 'thCustomerName', type: 'text' },
     { key: 'contact', labelKey: 'thContact', type: 'text' },
+    { key: 'leadSource', labelKey: 'labelLeadSource', type: 'select' },
     { key: 'meetingDate', labelKey: 'thMeetingDate', type: 'date' },
     { key: 'workflowStatus', labelKey: 'labelWorkflowStatus', type: 'select' },
     { key: 'plan', labelKey: 'thPlan', type: 'select' },
@@ -6629,9 +6630,7 @@
   }
 
   function canAccessAdminPanel() {
-    return isCurrentUserAdmin()
-      && adminSecurityContext.authorized
-      && adminSecurityContext.sessionActive;
+    return isCurrentUserAdmin();
   }
 
   function clearAdminSessionTimeoutCheck() {
@@ -6749,11 +6748,6 @@
   function clearAdminSecurityState(reason = 'not_admin') {
     stopAdminSessionMonitor();
     clearPersistedAdminSecureSession();
-    mfaLoginChallengeInfo = null;
-    adminMfaProbeResult = null;
-    adminMfaEnrollMode = 'totp';
-    window.FirebaseService?.clearPendingMfaChallenge?.();
-    window.FirebaseService?.cancelAdminTotpEnrollment?.();
     adminDeviceState = { approved: [], pending: [] };
     adminSecurityContext = {
       isAdmin: false,
@@ -6767,576 +6761,95 @@
       sessionToken: '',
       sessionExpiresAtMs: 0,
     };
-    if (reason === 'not_admin') {
-      setAdminDeviceWarning('');
-      setAdminSecurityStatusMini('online');
-    } else {
-      const warningMessage = getAdminSecurityWarningMessage(reason);
-      if (String(reason || '').trim().toLowerCase() === 'admin_security_init_failed') {
-        setAdminDeviceWarning('');
-        setAdminSecurityStatusMini('error');
-      } else {
-        setAdminDeviceWarning(warningMessage, warningMessage ? 'error' : 'warning');
-        setAdminSecurityStatusMini('online');
-      }
-    }
+    setAdminDeviceWarning('');
+    setAdminSecurityStatusMini('online');
   }
 
   function getAdminMfaStatusText() {
-    const mfaState = window.FirebaseService?.getAdminMfaState?.() || {};
-    if (!mfaState.required) return '';
-    if (mfaState.verified) {
-      return t('adminTotpEnabledStatus', { count: String(Number(mfaState.enrolledFactorCount) || 0) });
-    }
-    return t('adminTotpDisabledStatus');
+    return '';
   }
 
   function isAdminUserForTotpUi() {
-    const firebaseEmail = String(window.FirebaseService?.getCurrentUser?.()?.email || '').trim();
-    const cachedEmail = String(currentAuthUserEmail || '').trim();
-    const effectiveEmail = firebaseEmail || cachedEmail;
-    return isAdminEmail(effectiveEmail);
+    return isCurrentUserAdmin();
   }
 
-  function setAdminMfaEnrollMode(mode = 'totp') {
-    adminMfaEnrollMode = String(mode || '').trim().toLowerCase() === 'sms' ? 'sms' : 'totp';
-    const i18nKey = adminMfaEnrollMode === 'sms' ? 'adminSmsSetupButton' : 'adminTotpSetupButton';
-    ['btn-admin-open-totp', 'btn-admin-open-totp-quick'].forEach((id) => {
-      const button = document.getElementById(id);
-      if (!button) return;
-      button.setAttribute('data-i18n', i18nKey);
-      button.textContent = t(i18nKey);
-    });
+  function setAdminMfaEnrollMode() {
+    // MFA/TOTP removed
   }
 
   function updateAdminTotpControlsVisibility() {
-    const sections = [
-      document.getElementById('admin-mfa-settings-section'),
-      document.getElementById('admin-mfa-quick-section'),
-    ].filter(Boolean);
-    const statuses = [
-      document.getElementById('admin-mfa-status-text'),
-      document.getElementById('admin-mfa-status-text-quick'),
-    ].filter(Boolean);
-    if (sections.length === 0) return;
-    const isAdmin = isAdminUserForTotpUi();
-    sections.forEach((section) => {
-      section.style.display = isAdmin ? '' : 'none';
-    });
-    if (!isAdmin) return;
-    const statusText = getAdminMfaStatusText() || t('adminTotpSetupDesc');
-    statuses.forEach((status) => {
-      status.textContent = statusText;
-    });
-    setAdminMfaEnrollMode(adminMfaEnrollMode);
-  }
-
-  function openModalOverlayById(overlayId) {
-    const overlay = document.getElementById(overlayId);
-    if (!overlay) return;
-    overlay.style.display = 'flex';
-    setTimeout(() => overlay.classList.add('active'), 10);
-  }
-
-  function closeModalOverlayById(overlayId) {
-    const overlay = document.getElementById(overlayId);
-    if (!overlay) return;
-    overlay.classList.remove('active');
-    setTimeout(() => {
-      overlay.style.display = 'none';
-    }, 220);
+    // MFA/TOTP removed
   }
 
   function closeAdminTotpModal() {
-    const secretInput = document.getElementById('admin-totp-secret');
-    const uriInput = document.getElementById('admin-totp-uri');
-    const codeInput = document.getElementById('admin-totp-code');
-    const qrImage = document.getElementById('admin-totp-qr-image');
-    const qrFallback = document.getElementById('admin-totp-qr-fallback');
-    if (secretInput) secretInput.value = '';
-    if (uriInput) uriInput.value = '';
-    if (codeInput) codeInput.value = '';
-    if (qrImage) {
-      qrImage.style.display = 'none';
-      qrImage.removeAttribute('src');
-      qrImage.onload = null;
-      qrImage.onerror = null;
-    }
-    if (qrFallback) qrFallback.style.display = '';
-    window.FirebaseService?.cancelAdminTotpEnrollment?.();
-    closeModalOverlayById('admin-totp-overlay');
+    // MFA/TOTP removed
   }
 
-  function setAdminTotpQrPreview(otpauthUri = '') {
-    const qrImage = document.getElementById('admin-totp-qr-image');
-    const qrFallback = document.getElementById('admin-totp-qr-fallback');
-    const uri = String(otpauthUri || '').trim();
-    if (!qrImage) return;
-    if (!uri) {
-      qrImage.style.display = 'none';
-      qrImage.removeAttribute('src');
-      if (qrFallback) qrFallback.style.display = '';
-      return;
-    }
-    const qrSources = [
-      `https://api.qrserver.com/v1/create-qr-code/?size=220x220&ecc=M&data=${encodeURIComponent(uri)}`,
-      `https://quickchart.io/qr?size=220&margin=1&text=${encodeURIComponent(uri)}`,
-    ];
-    let qrIndex = 0;
-    const tryLoad = () => {
-      if (qrIndex >= qrSources.length) {
-        qrImage.style.display = 'none';
-        if (qrFallback) qrFallback.style.display = '';
-        return;
-      }
-      qrImage.src = qrSources[qrIndex];
-      qrIndex += 1;
-    };
-    qrImage.onload = () => {
-      qrImage.style.display = '';
-      if (qrFallback) qrFallback.style.display = 'none';
-    };
-    qrImage.onerror = () => {
-      tryLoad();
-    };
-    tryLoad();
+  function setAdminTotpQrPreview() {
+    // MFA/TOTP removed
   }
 
-  function closeMfaLoginModal(clearChallenge = false) {
-    if (clearChallenge) {
-      mfaLoginChallengeInfo = null;
-      window.FirebaseService?.clearPendingMfaChallenge?.();
-    }
-    closeModalOverlayById('mfa-login-overlay');
+  function closeMfaLoginModal() {
+    // MFA/TOTP removed
   }
 
-  function openMfaLoginModal(challenge = null) {
-    const hint = document.getElementById('mfa-login-hint');
-    const codeInput = document.getElementById('mfa-login-code');
-    mfaLoginChallengeInfo = challenge && typeof challenge === 'object'
-      ? challenge
-      : (window.FirebaseService?.getPendingMfaChallenge?.() || null);
-    if (hint) hint.textContent = t('mfaLoginHint');
-    if (codeInput) codeInput.value = '';
-    openModalOverlayById('mfa-login-overlay');
+  function openMfaLoginModal() {
+    // MFA/TOTP removed
   }
 
   async function openAdminTotpSetupModal() {
-    const user = window.FirebaseService?.getCurrentUser?.();
-    const effectiveEmail = String(user?.email || currentAuthUserEmail || '').trim();
-    if (!isAdminEmail(effectiveEmail)) {
-      showToast(t('supportLoginRequired'), 'error');
-      return;
-    }
-    if (adminMfaEnrollMode === 'sms') {
-      const smsMessage = t('adminSmsSetupNotReady');
-      console.warn('[Admin Debug] SMS fallback mode active.', { probe: adminMfaProbeResult });
-      alert(smsMessage);
-      showToast(smsMessage, 'warning');
-      return;
-    }
-    if (window.FirebaseService?.probeAdminMfaOptions) {
-      try {
-        const probe = await window.FirebaseService.probeAdminMfaOptions();
-        adminMfaProbeResult = probe;
-        const factors = Array.isArray(probe?.availableFactorIds) ? probe.availableFactorIds : [];
-        const factorList = factors.length > 0 ? factors.join(', ') : 'none';
-        const sessionState = String(probe?.sessionErrorCode || 'ok');
-        console.log('[Admin Debug] MFA Options Probe:', probe);
-        alert(t('adminMfaOptionsAlert', { factors: factorList, session: sessionState }));
-        const hasTotp = factors.includes('totp');
-        if (!hasTotp) {
-          const warning = t('adminTotpUnavailableWarning');
-          setAdminMfaEnrollMode('sms');
-          console.warn('[Admin Debug] TOTP is unavailable in Firebase project.', probe);
-          alert(warning);
-          showToast(warning, 'warning');
-          return;
-        }
-        if (String(probe?.sessionErrorCode || '').trim()) {
-          console.warn('[Admin Debug] getSession has warning but TOTP exists. Continue enrollment flow.', probe);
-        }
-        setAdminMfaEnrollMode('totp');
-      } catch (err) {
-        logAdminSecurityInitError('probeAdminMfaOptions', err, {
-          reason: String(err?.code || err?.message || 'mfa_probe_failed'),
-        });
-      }
-    }
-    if (!window.FirebaseService?.startAdminTotpEnrollment) {
-      logAdminSecurityInitError(
-        'startAdminTotpEnrollment',
-        new Error('window.FirebaseService.startAdminTotpEnrollment is not available'),
-        { reason: 'firebase_service_missing' }
-      );
-      showToast(t('adminSecurityInitFailed'), 'error');
-      return;
-    }
-    try {
-      const enrollment = await window.FirebaseService.startAdminTotpEnrollment({
-        issuer: 'Pholio',
-        accountName: effectiveEmail || 'admin',
-      });
-      const secretInput = document.getElementById('admin-totp-secret');
-      const uriInput = document.getElementById('admin-totp-uri');
-      const codeInput = document.getElementById('admin-totp-code');
-      const secretKey = String(enrollment?.secretKey || '').trim();
-      let otpUri = String(enrollment?.qrCodeUrl || '').trim();
-      if (!otpUri && secretKey) {
-        const issuer = 'Pholio';
-        const label = `${issuer}:${effectiveEmail || 'admin'}`;
-        otpUri = `otpauth://totp/${encodeURIComponent(label)}?secret=${encodeURIComponent(secretKey)}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
-      }
-      if (secretInput) secretInput.value = secretKey;
-      if (uriInput) uriInput.value = otpUri;
-      if (codeInput) codeInput.value = '';
-      openModalOverlayById('admin-totp-overlay');
-      setAdminTotpQrPreview(otpUri);
-    } catch (err) {
-      logAdminSecurityInitError('startAdminTotpEnrollment', err, {
-        reason: String(err?.code || err?.message || 'totp_enrollment_start_failed'),
-      });
-      const errCode = String(err?.code || '').trim();
-      if (errCode === 'auth/requires-recent-login') {
-        const reloginMessage = t('adminTotpRecentLoginRequired');
-        alert(reloginMessage);
-        showToast(reloginMessage, 'warning');
-        return;
-      }
-      if (errCode === 'auth/operation-not-allowed' || errCode === 'auth/unsupported-first-factor') {
-        const warning = t('adminTotpUnavailableWarning');
-        setAdminMfaEnrollMode('sms');
-        alert(warning);
-        showToast(warning, 'warning');
-        return;
-      }
-      showToast(t('adminSecurityInitFailed'), 'error');
-    }
+    // MFA/TOTP removed
   }
 
   async function handleAdminTotpEnrollSubmit() {
-    const code = String(document.getElementById('admin-totp-code')?.value || '').trim();
-    if (!code || code.length < 6) {
-      showToast(t('mfaInvalidCode'), 'error');
-      return;
-    }
-    try {
-      await window.FirebaseService?.finalizeAdminTotpEnrollment?.(code, 'Pholio Admin');
-      showToast(t('adminTotpEnrollmentCompleted'));
-      closeAdminTotpModal();
-      updateAdminTotpControlsVisibility();
-      const currentUser = window.FirebaseService?.getCurrentUser?.();
-      if (currentUser && isAdminEmail(currentUser.email)) {
-        await initializeAdminSecurityForUser(currentUser);
-      }
-    } catch (err) {
-      console.error('TOTP enrollment finalize failed', err);
-      const errCode = String(err?.code || '').trim();
-      if (errCode === 'auth/requires-recent-login') {
-        const reloginMessage = t('adminTotpRecentLoginRequired');
-        alert(reloginMessage);
-        showToast(reloginMessage, 'warning');
-        return;
-      }
-      showToast(t('mfaCodeMismatch'), 'error');
-    }
+    // MFA/TOTP removed
   }
 
   async function handleMfaLoginSubmit() {
-    const code = String(document.getElementById('mfa-login-code')?.value || '').trim();
-    if (!code || code.length < 6) {
-      showToast(t('mfaInvalidCode'), 'error');
-      return;
-    }
-    if (!window.FirebaseService?.resolvePendingMfaSignIn) {
-      showToast(t('googleLoginFailed'), 'error');
-      return;
-    }
-    try {
-      const hintUid = String(mfaLoginChallengeInfo?.hints?.[0]?.uid || '').trim();
-      await window.FirebaseService.resolvePendingMfaSignIn(code, hintUid);
-      closeMfaLoginModal(false);
-      mfaLoginChallengeInfo = null;
-      showToast(t('mfaLoginSuccess'));
-    } catch (err) {
-      console.error('MFA sign-in resolve failed', err);
-      showToast(t('mfaCodeMismatch'), 'error');
-    }
+    // MFA/TOTP removed
   }
 
   function renderAdminDeviceTableRows() {
-    const approvedBody = document.getElementById('admin-device-approved-body');
-    const pendingBody = document.getElementById('admin-device-pending-body');
-    if (approvedBody) {
-      const approved = Array.isArray(adminDeviceState.approved) ? adminDeviceState.approved : [];
-      approvedBody.innerHTML = approved.length > 0
-        ? approved.map((device) => `
-          <tr>
-            <td title="${escapeHtml(device.deviceId || '')}">${escapeHtml(device.label || device.deviceId || '—')}</td>
-            <td>${escapeHtml(formatDateTime(device.lastSeenAtIso || device.approvedAtIso || device.createdAtIso || ''))}</td>
-            <td>
-              <button type="button" class="btn btn-danger btn-sm" data-admin-device-action="revoke" data-admin-device-id="${escapeHtml(device.deviceId || '')}">
-                ${escapeHtml(t('adminDeviceRevoke'))}
-              </button>
-            </td>
-          </tr>
-        `).join('')
-        : `<tr><td colspan="3">${escapeHtml(t('adminNoData'))}</td></tr>`;
-    }
-    if (pendingBody) {
-      const pending = Array.isArray(adminDeviceState.pending) ? adminDeviceState.pending : [];
-      pendingBody.innerHTML = pending.length > 0
-        ? pending.map((device) => `
-          <tr>
-            <td title="${escapeHtml(device.deviceId || '')}">${escapeHtml(device.label || device.deviceId || '—')}</td>
-            <td>${escapeHtml(formatDateTime(device.requestedAtIso || device.createdAtIso || ''))}</td>
-            <td>
-              <div class="admin-device-actions">
-                <button type="button" class="btn btn-primary btn-sm" data-admin-device-action="approve" data-admin-device-id="${escapeHtml(device.deviceId || '')}">
-                  ${escapeHtml(t('adminDeviceApprove'))}
-                </button>
-                <button type="button" class="btn btn-danger btn-sm" data-admin-device-action="revoke" data-admin-device-id="${escapeHtml(device.deviceId || '')}">
-                  ${escapeHtml(t('adminDeviceRevoke'))}
-                </button>
-              </div>
-            </td>
-          </tr>
-        `).join('')
-        : `<tr><td colspan="3">${escapeHtml(t('adminNoData'))}</td></tr>`;
-    }
+    // Device lock UI removed
   }
 
   async function refreshAdminDeviceList() {
-    if (!canAccessAdminPanel()) {
-      adminDeviceState = { approved: [], pending: [] };
-      renderAdminDeviceTableRows();
-      return;
-    }
-    if (!window.FirebaseService?.getAdminDeviceConfig) return;
-    const currentDevice = await buildAdminDeviceContext();
-    try {
-      const result = await window.FirebaseService.getAdminDeviceConfig({
-        currentDeviceId: currentDevice.deviceId,
-        sessionToken: adminSecurityContext.sessionToken,
-      });
-      if (!result?.allowed) {
-        adminDeviceState = { approved: [], pending: [] };
-        adminSecurityContext = {
-          ...adminSecurityContext,
-          authorized: false,
-          sessionActive: false,
-          reason: String(result?.reason || 'unauthorized_device'),
-        };
-        stopAdminSessionMonitor();
-        setAdminDeviceWarning(getAdminSecurityWarningMessage(adminSecurityContext.reason), 'error');
-        updateAdminSettingsAvailability();
-      } else {
-        adminDeviceState = {
-          approved: Array.isArray(result?.devices?.approved) ? result.devices.approved : [],
-          pending: Array.isArray(result?.devices?.pending) ? result.devices.pending : [],
-        };
-      }
-      renderAdminDeviceTableRows();
-    } catch (err) {
-      console.error('Admin device list load failed', err);
-      showToast(t('adminDeviceActionFailed'), 'error');
-    }
+    // Device lock UI removed
   }
 
-  async function handleAdminDeviceActionClick(event) {
-    const button = event?.target?.closest?.('button[data-admin-device-action]');
-    if (!button || !canAccessAdminPanel()) return;
-    const action = String(button.dataset.adminDeviceAction || '').trim().toLowerCase();
-    const targetDeviceId = String(button.dataset.adminDeviceId || '').trim();
-    if (!action || !targetDeviceId) return;
-    const currentDevice = await buildAdminDeviceContext();
-
-    button.disabled = true;
-    try {
-      if (action === 'approve') {
-        await window.FirebaseService?.approveAdminDevice?.(targetDeviceId, {
-          currentDeviceId: currentDevice.deviceId,
-          sessionToken: adminSecurityContext.sessionToken,
-        });
-        showToast(t('adminDeviceApproved'));
-      } else if (action === 'revoke') {
-        await window.FirebaseService?.revokeAdminDevice?.(targetDeviceId, {
-          currentDeviceId: currentDevice.deviceId,
-          sessionToken: adminSecurityContext.sessionToken,
-        });
-        showToast(t('adminDeviceRevoked'));
-      }
-      await refreshAdminDeviceList();
-    } catch (err) {
-      console.error('Admin device action failed', err);
-      showToast(t('adminDeviceActionFailed'), 'error');
-    } finally {
-      button.disabled = false;
-    }
+  async function handleAdminDeviceActionClick() {
+    // Device lock UI removed
   }
 
   async function initializeAdminSecurityForUser(user) {
     adminDeviceContextCache = null;
     adminDeviceState = { approved: [], pending: [] };
-    updateAdminTotpControlsVisibility();
-    if (!user || !isAdminEmail(user.email)) {
-      clearAdminSecurityState('not_admin');
-      updateAdminSettingsAvailability();
-      updateAdminTotpControlsVisibility();
-      return;
-    }
 
-    let deviceContextBypassed = false;
-    let device = {
-      deviceId: `fallback_${String(user?.uid || 'admin').slice(0, 24)}`,
-      fingerprintHash: '',
-      label: 'Fallback Device',
-      platform: 'unknown',
-      userAgent: String(window.navigator?.userAgent || ''),
-      resolution: `${Number(window.screen?.width) || 0}x${Number(window.screen?.height) || 0}@${Number(window.devicePixelRatio) || 1}`,
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || '',
-      language: String(window.navigator?.language || ''),
+    const isAdmin = !!(user && isAdminEmail(user.email));
+    adminSecurityContext = {
+      isAdmin,
+      authorized: isAdmin,
+      sessionActive: isAdmin,
+      reason: isAdmin ? 'authorized' : 'not_admin',
+      deviceId: '',
+      mfaVerified: false,
+      mfaRequired: false,
+      mfaEnrolledFactorCount: 0,
+      sessionToken: '',
+      sessionExpiresAtMs: 0,
     };
-    try {
-      device = await buildAdminDeviceContext();
-    } catch (err) {
-      deviceContextBypassed = true;
-      logAdminSecurityInitError('buildAdminDeviceContext', err, { reason: 'device_context_unavailable' });
-      setAdminDeviceWarning('');
-      setAdminSecurityStatusMini('error');
-      console.log('[Admin Debug] Detail:', {
-        context: 'device_context_fallback_active',
-        reason: 'device_context_unavailable',
-        deviceId: device.deviceId,
-      });
-    }
 
-    if (!window.FirebaseService?.bootstrapAdminSecurity) {
-      logAdminSecurityInitError(
-        'bootstrapAdminSecurity',
-        new Error('window.FirebaseService.bootstrapAdminSecurity is not available'),
-        { reason: 'firebase_service_missing', deviceId: device.deviceId }
-      );
-      stopAdminSessionMonitor();
-      clearPersistedAdminSecureSession();
-      const mfaState = window.FirebaseService?.getAdminMfaState?.() || {};
-      adminSecurityContext = {
-        isAdmin: true,
-        authorized: false,
-        sessionActive: false,
-        reason: 'admin_security_init_failed',
-        deviceId: device.deviceId,
-        mfaVerified: !!mfaState.verified,
-        mfaRequired: true,
-        mfaEnrolledFactorCount: Number(mfaState.enrolledFactorCount) || 0,
-        sessionToken: '',
-        sessionExpiresAtMs: 0,
-      };
+    if (isAdmin) {
       setAdminDeviceWarning('');
-      setAdminSecurityStatusMini('error');
-      updateAdminSettingsAvailability();
-      updateAdminTotpControlsVisibility();
-      return;
+      setAdminSecurityStatusMini('online');
+    } else {
+      clearAdminSecurityState('not_admin');
     }
-
-    try {
-      const bootstrap = await window.FirebaseService.bootstrapAdminSecurity({ device });
-      const mfa = bootstrap?.mfa && typeof bootstrap.mfa === 'object' ? bootstrap.mfa : {};
-      const session = bootstrap?.session && typeof bootstrap.session === 'object' ? bootstrap.session : {};
-      adminDeviceState = {
-        approved: Array.isArray(bootstrap?.devices?.approved) ? bootstrap.devices.approved : [],
-        pending: Array.isArray(bootstrap?.devices?.pending) ? bootstrap.devices.pending : [],
-      };
-
-      if (bootstrap?.allowed && bootstrap?.authorized && session?.token) {
-        adminSecurityContext = {
-          isAdmin: true,
-          authorized: true,
-          sessionActive: true,
-          reason: 'authorized',
-          deviceId: device.deviceId,
-          mfaVerified: !!mfa.verified,
-          mfaRequired: !!mfa.required,
-          mfaEnrolledFactorCount: Number(mfa.enrolledFactorCount) || 0,
-          sessionToken: String(session.token || ''),
-          sessionExpiresAtMs: Number(session.expiresAtMs) || 0,
-        };
-        persistAdminSecureSession(adminSecurityContext.sessionToken, adminSecurityContext.sessionExpiresAtMs);
-        setAdminDeviceWarning('');
-        setAdminSecurityStatusMini('online');
-        startAdminSessionMonitor();
-      } else {
-        stopAdminSessionMonitor();
-        clearPersistedAdminSecureSession();
-        adminSecurityContext = {
-          isAdmin: true,
-          authorized: false,
-          sessionActive: false,
-          reason: String(bootstrap?.reason || 'unauthorized_device'),
-          deviceId: device.deviceId,
-          mfaVerified: !!mfa.verified,
-          mfaRequired: !!mfa.required,
-          mfaEnrolledFactorCount: Number(mfa.enrolledFactorCount) || 0,
-          sessionToken: '',
-          sessionExpiresAtMs: 0,
-        };
-        const warningMessage = getAdminSecurityWarningMessage(adminSecurityContext.reason);
-        const warningType = adminSecurityContext.reason === 'mfa_required' ? 'warning' : 'error';
-        if (String(adminSecurityContext.reason || '').trim().toLowerCase() === 'admin_security_init_failed') {
-          setAdminDeviceWarning('');
-          setAdminSecurityStatusMini('error');
-        } else {
-          setAdminDeviceWarning(warningMessage, warningType);
-          setAdminSecurityStatusMini('online');
-        }
-        console.log('[Admin Debug] bootstrap-result:', {
-          allowed: !!bootstrap?.allowed,
-          authorized: !!bootstrap?.authorized,
-          reason: adminSecurityContext.reason,
-          deviceId: device.deviceId,
-          mfaRequired: !!mfa.required,
-          mfaVerified: !!mfa.verified,
-          enrolledFactorCount: Number(mfa.enrolledFactorCount) || 0,
-        });
-        if (warningMessage && String(adminSecurityContext.reason || '').trim().toLowerCase() !== 'admin_security_init_failed') {
-          showToast(warningMessage, warningType === 'warning' ? 'warning' : 'error');
-        }
-      }
-      if (deviceContextBypassed) {
-        setAdminDeviceWarning('');
-        setAdminSecurityStatusMini('error');
-      }
-      renderAdminDeviceTableRows();
-      updateAdminSettingsAvailability();
-      updateAdminTotpControlsVisibility();
-    } catch (err) {
-      logAdminSecurityInitError('bootstrapAdminSecurity', err, {
-        reason: 'admin_security_init_failed',
-        deviceId: device.deviceId,
-      });
-      stopAdminSessionMonitor();
-      clearPersistedAdminSecureSession();
-      const mfaState = window.FirebaseService?.getAdminMfaState?.() || {};
-      adminSecurityContext = {
-        isAdmin: true,
-        authorized: false,
-        sessionActive: false,
-        reason: 'admin_security_init_failed',
-        deviceId: device.deviceId,
-        mfaVerified: !!mfaState.verified,
-        mfaRequired: true,
-        mfaEnrolledFactorCount: Number(mfaState.enrolledFactorCount) || 0,
-        sessionToken: '',
-        sessionExpiresAtMs: 0,
-      };
-      setAdminDeviceWarning('');
-      setAdminSecurityStatusMini('error');
-      updateAdminSettingsAvailability();
-      updateAdminTotpControlsVisibility();
-    }
+    updateAdminSettingsAvailability();
   }
 
   function resetSupportTicketForm() {
+
     const subjectInput = document.getElementById('support-ticket-subject');
     const categorySelect = document.getElementById('support-ticket-category');
     const messageInput = document.getElementById('support-ticket-message');
@@ -7859,7 +7372,6 @@
         }
         if (tab === 'admin') {
           refreshAdminOverview();
-          refreshAdminDeviceList();
         }
       }, `settings-tab-${tabName}`);
     });
@@ -7876,27 +7388,12 @@
         showToast(t('firebaseConfigLoadFailed'));
         return;
       }
-      if (typeof window.FirebaseService.signInWithPopup !== 'function') {
-        showToast(t('googleConfigIssue'));
-        return;
-      }
-
-      await window.FirebaseService.signInWithPopup();
+      await window.FirebaseService.signInWithGoogle();
     } catch (err) {
-      const code = String(err?.code || '');
       console.error('Firebase Auth Error:', err?.code, err?.message);
       console.error(err);
 
-      if (code === 'auth/multi-factor-auth-required') {
-        const challenge = window.FirebaseService?.getPendingMfaChallenge?.();
-        if (challenge) {
-          openMfaLoginModal(challenge);
-          showToast(t('mfaLoginPrompt'));
-          return;
-        }
-      }
-
-      if (code === 'auth/operation-not-supported-in-this-environment') {
+      if (String(err?.code || '') === 'auth/operation-not-supported-in-this-environment') {
         activateLocalGuestMode(t('localGuestModeUnsupported'));
         alert(t('googleLoginUnavailableAlert'));
         return;
@@ -7912,8 +7409,6 @@
     mergePromptedUid = null;
     saveLocalValue(LOCAL_GUEST_MODE_KEY, true);
     clearAdminSecurityState('not_admin');
-    closeMfaLoginModal(true);
-    closeAdminTotpModal();
     setCloudSyncIndicator('syncing');
     Promise.resolve(window.FirebaseService?.signOut?.())
       .catch((err) => {
@@ -8019,23 +7514,6 @@
     bindEventOnce(document.getElementById('btn-admin-support-refresh'), 'click', refreshAdminSupportTickets, 'admin-support-refresh');
     bindEventOnce(document.getElementById('admin-support-ticket-list-body'), 'click', handleAdminSupportTicketListClick, 'admin-support-list-click');
     bindEventOnce(document.getElementById('btn-admin-support-reply'), 'click', handleAdminSupportReplySubmit, 'admin-support-reply');
-    bindEventOnce(document.getElementById('btn-admin-device-refresh'), 'click', refreshAdminDeviceList, 'admin-device-refresh');
-    bindEventOnce(document.getElementById('admin-device-approved-body'), 'click', handleAdminDeviceActionClick, 'admin-device-approved-action');
-    bindEventOnce(document.getElementById('admin-device-pending-body'), 'click', handleAdminDeviceActionClick, 'admin-device-pending-action');
-    bindEventOnce(document.getElementById('btn-admin-open-totp-quick'), 'click', openAdminTotpSetupModal, 'admin-totp-open-quick');
-    bindEventOnce(document.getElementById('btn-admin-open-totp'), 'click', openAdminTotpSetupModal, 'admin-totp-open');
-    bindEventOnce(document.getElementById('btn-admin-totp-enroll'), 'click', handleAdminTotpEnrollSubmit, 'admin-totp-enroll');
-    bindEventOnce(document.getElementById('btn-admin-totp-cancel'), 'click', closeAdminTotpModal, 'admin-totp-cancel');
-    bindEventOnce(document.getElementById('btn-admin-totp-close'), 'click', closeAdminTotpModal, 'admin-totp-close');
-    bindEventOnce(document.getElementById('admin-totp-overlay'), 'click', (event) => {
-      if (event.target?.id === 'admin-totp-overlay') closeAdminTotpModal();
-    }, 'admin-totp-overlay-close');
-    bindEventOnce(document.getElementById('btn-mfa-login-submit'), 'click', handleMfaLoginSubmit, 'mfa-login-submit');
-    bindEventOnce(document.getElementById('btn-mfa-login-cancel'), 'click', () => closeMfaLoginModal(true), 'mfa-login-cancel');
-    bindEventOnce(document.getElementById('btn-mfa-login-close'), 'click', () => closeMfaLoginModal(true), 'mfa-login-close');
-    bindEventOnce(document.getElementById('mfa-login-overlay'), 'click', (event) => {
-      if (event.target?.id === 'mfa-login-overlay') closeMfaLoginModal(true);
-    }, 'mfa-login-overlay-close');
     bindEventOnce(document.getElementById('btn-save-contract-template'), 'click', handleSaveContractTemplate, 'contract-template-save');
     bindEventOnce(document.getElementById('btn-contract-preset-standard'), 'click', () => applyContractTemplatePreset('standard'), 'contract-preset-standard');
     bindEventOnce(document.getElementById('btn-contract-preset-bridal'), 'click', () => applyContractTemplatePreset('bridal'), 'contract-preset-bridal');
@@ -8541,37 +8019,23 @@
     const tabContent = document.getElementById('settings-content-admin');
     if (!tabButton || !tabContent) return;
 
-    const isAdmin = isCurrentUserAdmin();
-    const hasAdminAccess = canAccessAdminPanel();
+    const hasAdminAccess = isCurrentUserAdmin();
     tabButton.style.display = hasAdminAccess ? '' : 'none';
-    if (isAdmin && !hasAdminAccess) {
-      const normalizedReason = String(adminSecurityContext.reason || '').trim().toLowerCase();
-      const warning = getAdminSecurityWarningMessage(normalizedReason);
-      if (normalizedReason === 'admin_security_init_failed') {
-        setAdminDeviceWarning('');
-        setAdminSecurityStatusMini('error');
-      } else {
-        setAdminDeviceWarning(warning, warning ? 'error' : 'warning');
-        setAdminSecurityStatusMini('online');
-      }
-    } else if (!isAdmin) {
+
+    if (hasAdminAccess) {
       setAdminDeviceWarning('');
       setAdminSecurityStatusMini('online');
-    } else {
-      setAdminDeviceWarning('');
-      setAdminSecurityStatusMini('online');
+      return;
     }
 
-    if (hasAdminAccess) return;
-    const wasAdminActive = tabButton.classList.contains('active') || tabContent.classList.contains('active');
     tabButton.classList.remove('active');
     tabContent.classList.remove('active');
-    if (wasAdminActive) {
-      const menuTab = settingsOverlay?.querySelector('.settings-tab-btn[data-tab="menu"]');
-      const menuContent = document.getElementById('settings-content-menu');
-      if (menuTab) menuTab.classList.add('active');
-      if (menuContent) menuContent.classList.add('active');
-    }
+    const menuTab = settingsOverlay?.querySelector('.settings-tab-btn[data-tab="menu"]');
+    const menuContent = document.getElementById('settings-content-menu');
+    if (menuTab) menuTab.classList.add('active');
+    if (menuContent) menuContent.classList.add('active');
+    setAdminDeviceWarning('');
+    setAdminSecurityStatusMini('online');
   }
 
   function updateHeaderAuthUi(user = null) {
@@ -8586,7 +8050,6 @@
       headerPlanUsage.style.display = 'none';
     }
     updateAdminSettingsAvailability();
-    updateAdminTotpControlsVisibility();
   }
 
   function hasGuestLocalData() {
@@ -8759,83 +8222,39 @@
 
       await window.FirebaseService.whenReady();
 
-      // onAuthChanged is registered only after Firebase initialization is complete.
       authWatcherDisabled = false;
       if (typeof authUnsubscribe === 'function') {
         authUnsubscribe();
         authUnsubscribe = null;
       }
-      const authWatcher = window.FirebaseService.onAuthChanged((user) => {
+
+      authUnsubscribe = window.FirebaseService.onAuthChanged((user) => {
         if (authWatcherDisabled) return;
 
         if (user) {
           isLoggedIn = true;
           saveLocalValue(LOCAL_GUEST_MODE_KEY, false);
-          const userName = getAuthDisplayName(user);
           setAuthScreenState('loggedIn', user);
-          setCloudSyncIndicator('syncing', `${t('cloudSyncStatusSyncing')} (${userName})`);
           (async () => {
-            try {
-              await maybeMergeGuestDataToCloud(user);
-              await handleAuthState(user);
-            } finally {
-              await initializeAdminSecurityForUser(user);
-            }
+            await maybeMergeGuestDataToCloud(user);
+            await handleAuthState(user);
+            await initializeAdminSecurityForUser(user);
             setCloudSyncIndicator('ready');
           })().catch((err) => {
-            logAdminSecurityInitError('auth_state_update', err, {
-              reason: 'admin_security_init_failed',
-              deviceId: adminSecurityContext.deviceId,
-            });
-            if (isAdminEmail(user?.email)) {
-              stopAdminSessionMonitor();
-              clearPersistedAdminSecureSession();
-              adminSecurityContext = {
-                ...adminSecurityContext,
-                isAdmin: true,
-                authorized: false,
-                sessionActive: false,
-                reason: 'admin_security_init_failed',
-                sessionToken: '',
-                sessionExpiresAtMs: 0,
-              };
-              setAdminDeviceWarning('');
-              setAdminSecurityStatusMini('error');
-              updateAdminSettingsAvailability();
-              updateAdminTotpControlsVisibility();
-            } else {
-              clearAdminSecurityState('admin_security_init_failed');
-            }
+            console.error('Auth state update failed', err);
             setCloudSyncIndicator('error');
           });
           return;
         }
 
-        if (!isLoggedIn) {
-          if (hasGuestLocalData()) {
-            activateLocalGuestMode(t('localGuestModeDefault'));
-            return;
-          }
-          setAuthScreenState('loggedOut');
-          return;
-        }
-
         isLoggedIn = false;
+        clearAdminSecurityState('not_admin');
         if (hasGuestLocalData()) {
           activateLocalGuestMode(t('localGuestModeDefault'));
           return;
         }
         setAuthScreenState('loggedOut');
       });
-      if (authWatcher && typeof authWatcher.then === 'function') {
-        authWatcher.then((unsubscribe) => {
-          if (typeof unsubscribe === 'function') authUnsubscribe = unsubscribe;
-        }).catch((err) => {
-          console.error('Auth watcher registration failed', err);
-        });
-      } else {
-        authUnsubscribe = authWatcher;
-      }
     } catch (err) {
       console.error('Firebase auth bootstrap failed', err);
       setAuthScreenState('loggedOut');
