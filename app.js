@@ -6878,16 +6878,28 @@
       if (qrFallback) qrFallback.style.display = '';
       return;
     }
-    const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&ecc=M&data=${encodeURIComponent(uri)}`;
+    const qrSources = [
+      `https://api.qrserver.com/v1/create-qr-code/?size=220x220&ecc=M&data=${encodeURIComponent(uri)}`,
+      `https://quickchart.io/qr?size=220&margin=1&text=${encodeURIComponent(uri)}`,
+    ];
+    let qrIndex = 0;
+    const tryLoad = () => {
+      if (qrIndex >= qrSources.length) {
+        qrImage.style.display = 'none';
+        if (qrFallback) qrFallback.style.display = '';
+        return;
+      }
+      qrImage.src = qrSources[qrIndex];
+      qrIndex += 1;
+    };
     qrImage.onload = () => {
       qrImage.style.display = '';
       if (qrFallback) qrFallback.style.display = 'none';
     };
     qrImage.onerror = () => {
-      qrImage.style.display = 'none';
-      if (qrFallback) qrFallback.style.display = '';
+      tryLoad();
     };
-    qrImage.src = qrSrc;
+    tryLoad();
   }
 
   function closeMfaLoginModal(clearChallenge = false) {
@@ -6932,7 +6944,7 @@
         const sessionState = String(probe?.sessionErrorCode || 'ok');
         console.log('[Admin Debug] MFA Options Probe:', probe);
         alert(t('adminMfaOptionsAlert', { factors: factorList, session: sessionState }));
-        const hasTotp = factors.includes('totp') && !!probe?.totpAvailable;
+        const hasTotp = factors.includes('totp');
         if (!hasTotp) {
           const warning = t('adminTotpUnavailableWarning');
           setAdminMfaEnrollMode('sms');
@@ -6940,6 +6952,9 @@
           alert(warning);
           showToast(warning, 'warning');
           return;
+        }
+        if (String(probe?.sessionErrorCode || '').trim()) {
+          console.warn('[Admin Debug] getSession has warning but TOTP exists. Continue enrollment flow.', probe);
         }
         setAdminMfaEnrollMode('totp');
       } catch (err) {
@@ -6965,17 +6980,29 @@
       const secretInput = document.getElementById('admin-totp-secret');
       const uriInput = document.getElementById('admin-totp-uri');
       const codeInput = document.getElementById('admin-totp-code');
-      const otpUri = String(enrollment?.qrCodeUrl || '');
-      if (secretInput) secretInput.value = String(enrollment?.secretKey || '');
+      const secretKey = String(enrollment?.secretKey || '').trim();
+      let otpUri = String(enrollment?.qrCodeUrl || '').trim();
+      if (!otpUri && secretKey) {
+        const issuer = 'Pholio';
+        const label = `${issuer}:${effectiveEmail || 'admin'}`;
+        otpUri = `otpauth://totp/${encodeURIComponent(label)}?secret=${encodeURIComponent(secretKey)}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
+      }
+      if (secretInput) secretInput.value = secretKey;
       if (uriInput) uriInput.value = otpUri;
       if (codeInput) codeInput.value = '';
-      setAdminTotpQrPreview(otpUri);
       openModalOverlayById('admin-totp-overlay');
+      setAdminTotpQrPreview(otpUri);
     } catch (err) {
       logAdminSecurityInitError('startAdminTotpEnrollment', err, {
         reason: String(err?.code || err?.message || 'totp_enrollment_start_failed'),
       });
       const errCode = String(err?.code || '').trim();
+      if (errCode === 'auth/requires-recent-login') {
+        const reloginMessage = t('adminTotpRecentLoginRequired');
+        alert(reloginMessage);
+        showToast(reloginMessage, 'warning');
+        return;
+      }
       if (errCode === 'auth/operation-not-allowed' || errCode === 'auth/unsupported-first-factor') {
         const warning = t('adminTotpUnavailableWarning');
         setAdminMfaEnrollMode('sms');
@@ -7004,6 +7031,13 @@
       }
     } catch (err) {
       console.error('TOTP enrollment finalize failed', err);
+      const errCode = String(err?.code || '').trim();
+      if (errCode === 'auth/requires-recent-login') {
+        const reloginMessage = t('adminTotpRecentLoginRequired');
+        alert(reloginMessage);
+        showToast(reloginMessage, 'warning');
+        return;
+      }
       showToast(t('mfaCodeMismatch'), 'error');
     }
   }
