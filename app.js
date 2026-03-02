@@ -105,6 +105,16 @@
     { key: 'paymentChecked', labelKey: 'thPayment', fallbackLabel: 'Payment', sortKey: 'paymentChecked' },
     { key: 'assignedTo', labelKey: 'thPhotographer', fallbackLabel: 'Staff', sortKey: 'assignedTo' },
   ];
+  const MOBILE_SORT_OPTIONS = [
+    { key: 'shootingDate', labelKey: 'thShootingDate', fallbackLabel: 'Shooting Date' },
+    { key: 'inquiryDate', labelKey: 'thInquiryDate', fallbackLabel: 'Inquiry Date' },
+    { key: 'contractDate', labelKey: 'thContractDate', fallbackLabel: 'Contract Date' },
+    { key: 'meetingDate', labelKey: 'thMeetingDate', fallbackLabel: 'Meeting Date' },
+    { key: 'customerName', labelKey: 'thCustomerName', fallbackLabel: 'Customer' },
+    { key: 'revenue', labelKey: 'thRevenue', fallbackLabel: 'Revenue' },
+    { key: 'paymentChecked', labelKey: 'thPayment', fallbackLabel: 'Payment' },
+    { key: 'assignedTo', labelKey: 'thPhotographer', fallbackLabel: 'Staff' },
+  ];
 
   const FORM_FIELD_VISIBILITY_DEFINITIONS = [
     { key: 'inquiryDate', labelKey: 'labelInquiryDate', fallbackLabel: 'Inquiry Date' },
@@ -1377,10 +1387,8 @@
   const mobileFilterPayment = $('#mobile-filter-payment');
   const mobileFilterPhotographer = $('#mobile-filter-photographer');
   const mobileFilterMonth = $('#mobile-filter-month');
-  const mobileSortKey = $('#mobile-sort-key');
-  const mobileSortDir = $('#mobile-sort-dir');
+  const mobileSortQuickList = $('#mobile-sort-quick-list');
   const mobileFilterCloseButton = $('#btn-mobile-filter-close');
-  const mobileFilterApplyButton = $('#btn-mobile-filter-apply');
   const dashboardMonthPicker = $('#dashboard-month-picker');
   const dashboardPrevMonth = $('#dashboard-prev-month');
   const dashboardNextMonth = $('#dashboard-next-month');
@@ -3351,9 +3359,13 @@
     copySelectOptions(filterPayment, mobileFilterPayment);
     copySelectOptions(filterPhotographer, mobileFilterPhotographer);
     copySelectOptions(filterMonth, mobileFilterMonth);
-
-    if (mobileSortKey) mobileSortKey.value = currentSort.key || 'shootingDate';
-    if (mobileSortDir) mobileSortDir.value = currentSort.dir || 'desc';
+    if (!MOBILE_SORT_OPTIONS.some((option) => option.key === currentSort.key)) {
+      currentSort = { key: 'shootingDate', dir: 'desc' };
+    }
+    if (currentSort.dir !== 'asc' && currentSort.dir !== 'desc') {
+      currentSort.dir = 'desc';
+    }
+    renderMobileSortQuickList();
   }
 
   function applyMobileFilterSheetSelection() {
@@ -3366,11 +3378,38 @@
     if (filterMonth && mobileFilterMonth) {
       filterMonth.value = mobileFilterMonth.value;
     }
-
-    const nextSortKey = mobileSortKey?.value || currentSort.key || 'shootingDate';
-    const nextSortDir = mobileSortDir?.value === 'asc' ? 'asc' : 'desc';
-    currentSort = { key: nextSortKey, dir: nextSortDir };
     renderTable();
+  }
+
+  function getMobileSortOptionLabel(option) {
+    if (!option) return '';
+    const translated = t(option.labelKey);
+    return translated && translated !== option.labelKey ? translated : option.fallbackLabel;
+  }
+
+  function renderMobileSortQuickList() {
+    if (!mobileSortQuickList) return;
+    const ascLabel = t('mobileSortAsc');
+    const descLabel = t('mobileSortDesc');
+    const rows = MOBILE_SORT_OPTIONS.map((option) => {
+      const label = escapeHtml(getMobileSortOptionLabel(option));
+      const ascActive = currentSort.key === option.key && currentSort.dir === 'asc';
+      const descActive = currentSort.key === option.key && currentSort.dir === 'desc';
+      return `
+        <div class="mobile-sort-row">
+          <span class="mobile-sort-row-label" title="${label}">${label}</span>
+          <div class="mobile-sort-arrows" role="group" aria-label="${label}">
+            <button type="button" class="mobile-sort-arrow-btn ${ascActive ? 'active' : ''}"
+              data-mobile-sort-key="${option.key}" data-mobile-sort-dir="asc"
+              title="${escapeHtml(ascLabel)}" aria-label="${escapeHtml(ascLabel)}">▲</button>
+            <button type="button" class="mobile-sort-arrow-btn ${descActive ? 'active' : ''}"
+              data-mobile-sort-key="${option.key}" data-mobile-sort-dir="desc"
+              title="${escapeHtml(descLabel)}" aria-label="${escapeHtml(descLabel)}">▼</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+    mobileSortQuickList.innerHTML = rows;
   }
 
   function setMobileFilterSheetOpen(isOpen) {
@@ -3426,13 +3465,18 @@
     }
   }
 
-  function handleMobileFilterSheetApplyClick() {
-    applyMobileFilterSheetSelection();
-    setMobileFilterSheetOpen(false);
-  }
-
   function handleMobileFilterSheetControlChange() {
     applyMobileFilterSheetSelection();
+  }
+
+  function handleMobileSortQuickClick(event) {
+    const trigger = event?.target?.closest?.('button[data-mobile-sort-key][data-mobile-sort-dir]');
+    if (!trigger) return;
+    const sortKey = trigger.dataset.mobileSortKey || 'shootingDate';
+    const sortDir = trigger.dataset.mobileSortDir === 'asc' ? 'asc' : 'desc';
+    currentSort = { key: sortKey, dir: sortDir };
+    renderMobileSortQuickList();
+    renderTable();
   }
 
   function handleMobileFilterSheetViewportChange() {
@@ -4271,6 +4315,7 @@
     updateDashboard();
     updateMonthFilter();
     updateHeaderPlanBadge();
+    if (isMobileFilterSheetOpen) renderMobileSortQuickList();
   }
 
   function bindSortEventListeners() {
@@ -6911,12 +6956,10 @@
     bindEventOnce(mobileFilterToggleButton, 'click', handleMobileFilterToggleClick, 'mobile-filter-toggle');
     bindEventOnce(mobileFilterSheetOverlay, 'click', handleMobileFilterSheetOverlayClick, 'mobile-filter-overlay-click');
     bindEventOnce(mobileFilterCloseButton, 'click', () => setMobileFilterSheetOpen(false), 'mobile-filter-close');
-    bindEventOnce(mobileFilterApplyButton, 'click', handleMobileFilterSheetApplyClick, 'mobile-filter-apply');
     bindEventOnce(mobileFilterPayment, 'change', handleMobileFilterSheetControlChange, 'mobile-filter-payment-change');
     bindEventOnce(mobileFilterPhotographer, 'change', handleMobileFilterSheetControlChange, 'mobile-filter-photographer-change');
     bindEventOnce(mobileFilterMonth, 'change', handleMobileFilterSheetControlChange, 'mobile-filter-month-change');
-    bindEventOnce(mobileSortKey, 'change', handleMobileFilterSheetControlChange, 'mobile-filter-sort-key-change');
-    bindEventOnce(mobileSortDir, 'change', handleMobileFilterSheetControlChange, 'mobile-filter-sort-dir-change');
+    bindEventOnce(mobileSortQuickList, 'click', handleMobileSortQuickClick, 'mobile-filter-sort-quick-click');
     bindEventOnce(document, 'keydown', handleMobileFilterSheetEscape, 'mobile-filter-escape');
     bindEventOnce(window, 'resize', handleMobileFilterSheetViewportChange, 'mobile-filter-viewport');
     bindEventOnce(document.getElementById('form-plan'), 'change', handlePlanSelectChange, 'form-plan-select-change');
