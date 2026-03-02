@@ -650,6 +650,57 @@ function getAdminMfaState(user) {
   };
 }
 
+async function probeAdminMfaOptionsForCurrentAdmin(user) {
+  if (!user) throw new Error('not_logged_in');
+  if (!isAdminUser(user)) throw new Error('not_admin');
+
+  const enrolledFactors = Array.isArray(user?.multiFactor?.enrolledFactors)
+    ? user.multiFactor.enrolledFactors
+    : [];
+  const enrolledFactorIds = enrolledFactors
+    .map((factor) => String(factor?.factorId || '').trim())
+    .filter(Boolean);
+
+  const supportedFactorIds = [];
+  if (TotpMultiFactorGenerator?.FACTOR_ID) {
+    supportedFactorIds.push(String(TotpMultiFactorGenerator.FACTOR_ID));
+  }
+
+  let sessionInfo = { ok: false, keys: [], type: '', note: '' };
+  let sessionErrorCode = '';
+  let sessionErrorMessage = '';
+  try {
+    const session = await multiFactor(user).getSession();
+    sessionInfo = {
+      ok: true,
+      keys: Object.keys(session || {}),
+      type: String(session?.type || ''),
+      note: 'Firebase SDK does not expose explicit allowed factorIds from getSession().',
+    };
+  } catch (err) {
+    sessionErrorCode = String(err?.code || err?.name || '').trim();
+    sessionErrorMessage = String(err?.message || '').trim();
+    sessionInfo = {
+      ok: false,
+      keys: [],
+      type: '',
+      note: 'getSession() failed.',
+    };
+  }
+
+  const availableFactorIds = Array.from(new Set(supportedFactorIds));
+  const hasTotpInList = availableFactorIds.includes(String(TotpMultiFactorGenerator?.FACTOR_ID || 'totp'));
+  const totpAvailable = hasTotpInList && !sessionErrorCode;
+  return {
+    availableFactorIds,
+    enrolledFactorIds,
+    sessionInfo,
+    sessionErrorCode,
+    sessionErrorMessage,
+    totpAvailable,
+  };
+}
+
 function mapMfaHint(hint) {
   return {
     uid: String(hint?.uid || '').trim(),
@@ -1752,6 +1803,11 @@ window.FirebaseService = {
   async startAdminTotpEnrollment(options = {}) {
     await ensureInitialized();
     return startTotpEnrollmentForCurrentAdmin(auth.currentUser, options);
+  },
+
+  async probeAdminMfaOptions() {
+    await ensureInitialized();
+    return probeAdminMfaOptionsForCurrentAdmin(auth.currentUser);
   },
 
   getPendingAdminTotpEnrollment() {

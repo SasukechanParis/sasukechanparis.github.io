@@ -6750,6 +6750,8 @@
     stopAdminSessionMonitor();
     clearPersistedAdminSecureSession();
     mfaLoginChallengeInfo = null;
+    adminMfaProbeResult = null;
+    adminMfaEnrollMode = 'totp';
     window.FirebaseService?.clearPendingMfaChallenge?.();
     window.FirebaseService?.cancelAdminTotpEnrollment?.();
     adminDeviceState = { approved: [], pending: [] };
@@ -6796,6 +6798,17 @@
     return isAdminEmail(effectiveEmail);
   }
 
+  function setAdminMfaEnrollMode(mode = 'totp') {
+    adminMfaEnrollMode = String(mode || '').trim().toLowerCase() === 'sms' ? 'sms' : 'totp';
+    const i18nKey = adminMfaEnrollMode === 'sms' ? 'adminSmsSetupButton' : 'adminTotpSetupButton';
+    ['btn-admin-open-totp', 'btn-admin-open-totp-quick'].forEach((id) => {
+      const button = document.getElementById(id);
+      if (!button) return;
+      button.setAttribute('data-i18n', i18nKey);
+      button.textContent = t(i18nKey);
+    });
+  }
+
   function updateAdminTotpControlsVisibility() {
     const sections = [
       document.getElementById('admin-mfa-settings-section'),
@@ -6815,6 +6828,7 @@
     statuses.forEach((status) => {
       status.textContent = statusText;
     });
+    setAdminMfaEnrollMode(adminMfaEnrollMode);
   }
 
   function openModalOverlayById(overlayId) {
@@ -6902,6 +6916,38 @@
       showToast(t('supportLoginRequired'), 'error');
       return;
     }
+    if (adminMfaEnrollMode === 'sms') {
+      const smsMessage = t('adminSmsSetupNotReady');
+      console.warn('[Admin Debug] SMS fallback mode active.', { probe: adminMfaProbeResult });
+      alert(smsMessage);
+      showToast(smsMessage, 'warning');
+      return;
+    }
+    if (window.FirebaseService?.probeAdminMfaOptions) {
+      try {
+        const probe = await window.FirebaseService.probeAdminMfaOptions();
+        adminMfaProbeResult = probe;
+        const factors = Array.isArray(probe?.availableFactorIds) ? probe.availableFactorIds : [];
+        const factorList = factors.length > 0 ? factors.join(', ') : 'none';
+        const sessionState = String(probe?.sessionErrorCode || 'ok');
+        console.log('[Admin Debug] MFA Options Probe:', probe);
+        alert(t('adminMfaOptionsAlert', { factors: factorList, session: sessionState }));
+        const hasTotp = factors.includes('totp') && !!probe?.totpAvailable;
+        if (!hasTotp) {
+          const warning = t('adminTotpUnavailableWarning');
+          setAdminMfaEnrollMode('sms');
+          console.warn('[Admin Debug] TOTP is unavailable in Firebase project.', probe);
+          alert(warning);
+          showToast(warning, 'warning');
+          return;
+        }
+        setAdminMfaEnrollMode('totp');
+      } catch (err) {
+        logAdminSecurityInitError('probeAdminMfaOptions', err, {
+          reason: String(err?.code || err?.message || 'mfa_probe_failed'),
+        });
+      }
+    }
     if (!window.FirebaseService?.startAdminTotpEnrollment) {
       logAdminSecurityInitError(
         'startAdminTotpEnrollment',
@@ -6929,6 +6975,14 @@
       logAdminSecurityInitError('startAdminTotpEnrollment', err, {
         reason: String(err?.code || err?.message || 'totp_enrollment_start_failed'),
       });
+      const errCode = String(err?.code || '').trim();
+      if (errCode === 'auth/operation-not-allowed' || errCode === 'auth/unsupported-first-factor') {
+        const warning = t('adminTotpUnavailableWarning');
+        setAdminMfaEnrollMode('sms');
+        alert(warning);
+        showToast(warning, 'warning');
+        return;
+      }
       showToast(t('adminSecurityInitFailed'), 'error');
     }
   }
@@ -8068,6 +8122,8 @@
   let adminSessionActivityBound = false;
   let adminSessionLastTouchedAt = 0;
   let mfaLoginChallengeInfo = null;
+  let adminMfaEnrollMode = 'totp';
+  let adminMfaProbeResult = null;
 
   function getLocaleTextOrFallback(key, fallback = '') {
     const locale = window.LOCALE?.[currentLang];
