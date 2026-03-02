@@ -17,6 +17,10 @@ const LOCALE = {
         addCustomer: "＋ 新規登録",
         termsLink: "利用規約",
         privacyLink: "プライバシーポリシー",
+        termsModalTitle: "利用規約",
+        termsModalContent: "第1条（適用）: 本規約は、本サービス（以下「Pholio」）の利用条件を定めるものです。ユーザーは本規約に同意の上、Google認証を通じてサービスを利用するものとします。\n\n第2条（サービスの目的）: 本サービスは、カメラマンの顧客管理およびスケジュール管理を支援するツールです。\n\n第3条（禁止事項）: 1.法令または公序良俗に反する行為。2.他のユーザーのログイン情報を不正に使用する行為。3.本サービスの機能を破壊・妨害する行為。\n\n第4条（免責事項）: 1.本サービスを利用したことによるデータの紛失、およびスケジュール管理ミス（ダブルブッキング等）による損害について、運営者は一切の責任を負いません。2.本サービスは予告なく内容の変更、停止を行う場合があります。",
+        privacyModalTitle: "プライバシーポリシー",
+        privacyModalContent: "1. 取得する情報: Google認証のメールアドレス、および入力された顧客情報（名前、連絡先、撮影日、問い合わせ元）。\n\n2. 利用目的: 本サービスの提供、ログイン時の本人確認、顧客管理、リマインド通知のため。\n\n3. データの管理: Google Cloud Platform（Firebase）の暗号化されたデータベースに安全に保存されます。\n\n4. 第三者提供の禁止: 法令に基づく場合を除き、同意なく第三者に提供することはありません。",
 
         // Dashboard
         totalCustomers: "総顧客数",
@@ -842,6 +846,10 @@ const LOCALE = {
         addCustomer: "＋ Add New",
         termsLink: "Terms",
         privacyLink: "Privacy",
+        termsModalTitle: "Terms of Service",
+        termsModalContent: "Article 1 (Application): These Terms define the conditions for using this service (\"Pholio\"). Users agree to these Terms and use the service through Google authentication.\n\nArticle 2 (Purpose of Service): This service supports photographers in customer management and schedule management.\n\nArticle 3 (Prohibited Acts): 1. Any act that violates laws or public order and morals. 2. Any unauthorized use of another user's login information. 3. Any act that destroys or interferes with the functions of this service.\n\nArticle 4 (Disclaimer): 1. The operator assumes no responsibility for data loss caused by use of this service or for damages caused by scheduling errors (including double booking). 2. The operator may change or suspend the contents of this service without prior notice.",
+        privacyModalTitle: "Privacy Policy",
+        privacyModalContent: "1. Information Collected: Email address from Google authentication and entered customer information (name, contact, shooting date, lead source).\n\n2. Purpose of Use: To provide this service, verify identity at login, manage customers, and send reminder notifications.\n\n3. Data Management: Data is securely stored in an encrypted database on Google Cloud Platform (Firebase).\n\n4. No Third-Party Disclosure: Except when required by law, data will not be provided to third parties without consent.",
 
         // Dashboard
         totalCustomers: "Total Customers",
@@ -1658,6 +1666,10 @@ Fee: {{total_price}}
         addCustomer: "＋ Nouveau",
         termsLink: "Conditions d'utilisation",
         privacyLink: "Politique de confidentialité",
+        termsModalTitle: "Conditions d'utilisation",
+        termsModalContent: "Article 1 (Application) : Les présentes conditions définissent les règles d'utilisation du service (\"Pholio\"). Les utilisateurs acceptent ces conditions et utilisent le service via l'authentification Google.\n\nArticle 2 (Objet du service) : Ce service aide les photographes dans la gestion des clients et des plannings.\n\nArticle 3 (Interdictions) : 1. Tout acte contraire aux lois ou à l'ordre public et aux bonnes mœurs. 2. Toute utilisation non autorisée des informations de connexion d'un autre utilisateur. 3. Tout acte qui détruit ou perturbe les fonctionnalités du service.\n\nArticle 4 (Clause de non-responsabilité) : 1. L'exploitant décline toute responsabilité en cas de perte de données liée à l'utilisation du service, ainsi qu'en cas de dommages dus à des erreurs de planning (y compris les doubles réservations). 2. Le service peut être modifié ou suspendu sans préavis.",
+        privacyModalTitle: "Politique de confidentialité",
+        privacyModalContent: "1. Informations collectées : adresse e-mail issue de l'authentification Google et informations client saisies (nom, contact, date de séance, source du contact).\n\n2. Finalités d'utilisation : fourniture du service, vérification de l'identité à la connexion, gestion des clients et notifications de rappel.\n\n3. Gestion des données : les données sont stockées de manière sécurisée dans une base chiffrée sur Google Cloud Platform (Firebase).\n\n4. Interdiction de transmission à des tiers : sauf obligation légale, aucune donnée n'est fournie à des tiers sans consentement.",
 
         // Dashboard
         totalCustomers: "Total Clients",
@@ -2451,6 +2463,10 @@ Tarif : {{total_price}}`,
         addCustomer: "＋ 新增",
         termsLink: "使用条款",
         privacyLink: "隐私政策",
+        termsModalTitle: "使用条款",
+        termsModalContent: "第1条（适用）：本条款规定本服务（以下简称“Pholio”）的使用条件。用户同意本条款，并通过 Google 认证使用本服务。\n\n第2条（服务目的）：本服务是用于支持摄影师进行客户管理与日程管理的工具。\n\n第3条（禁止事项）：1. 违反法律法规或公序良俗的行为。2. 非法使用其他用户登录信息的行为。3. 破坏或妨碍本服务功能的行为。\n\n第4条（免责声明）：1. 对于因使用本服务导致的数据丢失，以及因日程管理失误（如重复预约）导致的损失，运营方不承担任何责任。2. 本服务可能在不事先通知的情况下变更或停止。",
+        privacyModalTitle: "隐私政策",
+        privacyModalContent: "1. 收集的信息：Google 认证邮箱地址，以及录入的客户信息（姓名、联系方式、拍摄日期、来源渠道）。\n\n2. 使用目的：用于提供本服务、登录身份确认、客户管理和提醒通知。\n\n3. 数据管理：数据将安全存储在 Google Cloud Platform（Firebase）的加密数据库中。\n\n4. 禁止向第三方提供：除法律要求外，未经同意不会向第三方提供数据。",
 
         // Dashboard
         totalCustomers: "总客户数",
@@ -2991,6 +3007,10 @@ Tarif : {{total_price}}`,
         addCustomer: "＋ 新增",
         termsLink: "使用條款",
         privacyLink: "隱私政策",
+        termsModalTitle: "使用條款",
+        termsModalContent: "第1條（適用）：本條款規範本服務（以下稱「Pholio」）之使用條件。使用者同意本條款後，透過 Google 驗證使用本服務。\n\n第2條（服務目的）：本服務為協助攝影師進行客戶管理與行程管理之工具。\n\n第3條（禁止事項）：1. 違反法令或公序良俗之行為。2. 未經授權使用他人登入資訊之行為。3. 破壞或妨礙本服務功能之行為。\n\n第4條（免責事項）：1. 因使用本服務造成之資料遺失，及因行程管理失誤（如重複預約）造成之損害，營運方概不負責。2. 本服務得在未事先通知下變更或停止內容。",
+        privacyModalTitle: "隱私政策",
+        privacyModalContent: "1. 蒐集資訊：Google 驗證電子郵件地址，以及輸入之客戶資料（姓名、聯絡方式、拍攝日期、來源）。\n\n2. 使用目的：提供本服務、登入身分驗證、客戶管理與提醒通知。\n\n3. 資料管理：資料將安全儲存在 Google Cloud Platform（Firebase）的加密資料庫中。\n\n4. 禁止提供第三方：除依法令要求外，未經同意不會提供給第三方。",
 
         // Dashboard
         totalCustomers: "總客戶數",
@@ -3531,6 +3551,10 @@ Tarif : {{total_price}}`,
         addCustomer: "＋ 신규 등록",
         termsLink: "이용약관",
         privacyLink: "개인정보 처리방침",
+        termsModalTitle: "이용약관",
+        termsModalContent: "제1조(적용): 본 약관은 본 서비스(이하 \"Pholio\")의 이용 조건을 정합니다. 사용자는 본 약관에 동의한 후 Google 인증을 통해 서비스를 이용합니다.\n\n제2조(서비스 목적): 본 서비스는 사진작가의 고객 관리 및 일정 관리를 지원하는 도구입니다.\n\n제3조(금지사항): 1. 법령 또는 공공질서·미풍양속에 반하는 행위. 2. 다른 사용자의 로그인 정보를 부정 사용 하는 행위. 3. 본 서비스 기능을 파괴하거나 방해하는 행위.\n\n제4조(면책사항): 1. 본 서비스 이용으로 인한 데이터 손실 및 일정 관리 실수(중복 예약 등)로 발생한 손해에 대해 운영자는 책임을 지지 않습니다. 2. 본 서비스는 사전 고지 없이 내용 변경 또는 중단될 수 있습니다.",
+        privacyModalTitle: "개인정보 처리방침",
+        privacyModalContent: "1. 수집 정보: Google 인증 이메일 주소 및 입력된 고객 정보(이름, 연락처, 촬영일, 문의 경로).\n\n2. 이용 목적: 서비스 제공, 로그인 시 본인 확인, 고객 관리, 리마인드 알림.\n\n3. 데이터 관리: 데이터는 Google Cloud Platform(Firebase)의 암호화된 데이터베이스에 안전하게 저장됩니다.\n\n4. 제3자 제공 금지: 법령에 따른 경우를 제외하고, 동의 없이 제3자에게 제공하지 않습니다.",
 
         // Dashboard
         totalCustomers: "총 고객 수",

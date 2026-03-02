@@ -30,9 +30,9 @@
       <p>クラウド同期を利用するにはGoogleログインが必要です。</p>
       <button class="btn btn-primary btn-lg" id="btn-google-login-screen">Googleでログイン</button>
       <div class="login-legal-links">
-        <a href="#" id="login-terms-link" data-i18n="termsLink">利用規約</a>
+        <a href="#" id="login-terms-link" data-legal-doc="terms" data-i18n="termsLink">利用規約</a>
         <span class="login-legal-separator">·</span>
-        <a href="#" id="login-privacy-link" data-i18n="privacyLink">プライバシーポリシー</a>
+        <a href="#" id="login-privacy-link" data-legal-doc="privacy" data-i18n="privacyLink">プライバシーポリシー</a>
       </div>
     </div>
   </div>
@@ -430,6 +430,27 @@
       </div>
     </div>
 
+    <footer class="app-legal-footer">
+      <a href="#" id="footer-terms-link" data-legal-doc="terms" data-i18n="termsLink">利用規約</a>
+      <span class="app-legal-separator">·</span>
+      <a href="#" id="footer-privacy-link" data-legal-doc="privacy" data-i18n="privacyLink">プライバシーポリシー</a>
+    </footer>
+
+  </div>
+
+  <div class="modal-overlay" id="legal-modal-overlay" style="display:none;">
+    <div class="modal legal-modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="legal-modal-title">利用規約</h3>
+        <button class="btn-close" id="btn-legal-modal-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="legal-modal-content" id="legal-modal-content"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-legal-modal-close-footer" data-i18n="close">閉じる</button>
+      </div>
+    </div>
   </div>
 
   <!-- ===== Add/Edit Modal ===== -->

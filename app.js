@@ -999,6 +999,7 @@
     if (customerTable) customerTable.style.tableLayout = 'auto';
     const customerTableWrapper = document.getElementById('table-wrapper');
     if (customerTableWrapper) customerTableWrapper.style.overflowX = 'auto';
+    if (legalModalOverlay?.classList.contains('active')) renderLegalModal(activeLegalDocType);
 
     refreshLanguageOptionAvailability();
     refreshUiAfterLanguageChange();
@@ -1457,6 +1458,11 @@
   const tomorrowReminderCard = document.getElementById('tomorrow-reminder-card');
   const tomorrowReminderTitle = document.getElementById('tomorrow-reminder-title');
   const tomorrowReminderList = document.getElementById('tomorrow-reminder-list');
+  const legalModalOverlay = document.getElementById('legal-modal-overlay');
+  const legalModalTitle = document.getElementById('legal-modal-title');
+  const legalModalContent = document.getElementById('legal-modal-content');
+  const legalModalCloseButton = document.getElementById('btn-legal-modal-close');
+  const legalModalCloseFooterButton = document.getElementById('btn-legal-modal-close-footer');
   const listView = $('#list-view');
   const calendarView = $('#calendar-view');
   const calendarFilterInputs = $$('.calendar-filter-input');
@@ -1487,6 +1493,68 @@
       return fallback;
     }
   }
+
+  let activeLegalDocType = 'terms';
+
+  function normalizeLegalDocType(type) {
+    return String(type || '').trim().toLowerCase() === 'privacy' ? 'privacy' : 'terms';
+  }
+
+  function getLegalDocTranslationKeys(type) {
+    const normalizedType = normalizeLegalDocType(type);
+    if (normalizedType === 'privacy') {
+      return { titleKey: 'privacyModalTitle', contentKey: 'privacyModalContent' };
+    }
+    return { titleKey: 'termsModalTitle', contentKey: 'termsModalContent' };
+  }
+
+  function buildLegalModalBodyHtml(contentText) {
+    const sections = String(contentText || '')
+      .split(/\n{2,}/)
+      .map((section) => section.trim())
+      .filter(Boolean);
+
+    if (sections.length === 0) return '';
+    return sections
+      .map((section) => `<p>${escapeHtml(section).replace(/\n/g, '<br>')}</p>`)
+      .join('');
+  }
+
+  function renderLegalModal(type = activeLegalDocType) {
+    if (!legalModalTitle || !legalModalContent) return;
+    const normalizedType = normalizeLegalDocType(type);
+    activeLegalDocType = normalizedType;
+    const { titleKey, contentKey } = getLegalDocTranslationKeys(normalizedType);
+    legalModalTitle.textContent = t(titleKey);
+    legalModalContent.innerHTML = buildLegalModalBodyHtml(t(contentKey));
+  }
+
+  function openLegalModal(type = 'terms') {
+    if (!legalModalOverlay) return;
+    renderLegalModal(type);
+    legalModalOverlay.style.display = 'flex';
+    window.requestAnimationFrame(() => {
+      legalModalOverlay.classList.add('active');
+    });
+  }
+
+  function closeLegalModal() {
+    if (!legalModalOverlay) return;
+    legalModalOverlay.classList.remove('active');
+    window.setTimeout(() => {
+      if (!legalModalOverlay.classList.contains('active')) {
+        legalModalOverlay.style.display = 'none';
+      }
+    }, 220);
+  }
+
+  function handleLegalDocLinkClick(event) {
+    event.preventDefault();
+    const docType = event?.currentTarget?.dataset?.legalDoc || 'terms';
+    openLegalModal(docType);
+  }
+
+  window.closeLegalModal = closeLegalModal;
 
   function applyMinimalSafeModeUI() {
     if (!SAFE_MODE_MINIMAL_BOOT) return;
@@ -7644,6 +7712,18 @@
     bindEventOnce(document.getElementById('btn-google-login'), 'click', handleGoogleLoginClick, 'google-login-banner');
     bindEventOnce(document.getElementById('btn-google-login-screen'), 'click', handleGoogleLoginClick, 'google-login-screen');
     bindEventOnce(document.getElementById('btn-logout'), 'click', handleGoogleLogoutClick, 'google-logout');
+    document.querySelectorAll('[data-legal-doc]').forEach((link, index) => {
+      bindEventOnce(link, 'click', handleLegalDocLinkClick, `legal-doc-link-${index}`);
+    });
+    bindEventOnce(legalModalCloseButton, 'click', closeLegalModal, 'legal-modal-close-top');
+    bindEventOnce(legalModalCloseFooterButton, 'click', closeLegalModal, 'legal-modal-close-footer');
+    bindEventOnce(legalModalOverlay, 'click', (event) => {
+      if (event?.target?.id === 'legal-modal-overlay') closeLegalModal();
+    }, 'legal-modal-overlay-close');
+    bindEventOnce(document, 'keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      if (legalModalOverlay?.classList.contains('active')) closeLegalModal();
+    }, 'legal-modal-escape');
     bindSettingsTabListeners();
   }
 
