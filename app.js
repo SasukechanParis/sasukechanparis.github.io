@@ -7734,7 +7734,6 @@
     bindEventOnce(document.getElementById('btn-sync-import'), 'click', handleSyncImportClick, 'sync-import-click');
     bindEventOnce(document.getElementById('import-file'), 'change', handleImportFileChange, 'import-file-change');
     bindEventOnce(document.getElementById('btn-export'), 'click', handleCsvExportClick, 'csv-export-click');
-    bindEventOnce(document.getElementById('btn-export-list-csv'), 'click', handleCsvExportClick, 'csv-export-list-click');
     bindEventOnce(document.getElementById('btn-ics-export'), 'click', handleIcsExportClick, 'ics-export-click');
     bindEventOnce(document.getElementById('btn-team-add'), 'click', handleTeamAddClick, 'team-add-click');
     bindEventOnce(document.getElementById('btn-enterprise-contact-submit'), 'click', handleEnterpriseContactSubmit, 'enterprise-contact-submit');
