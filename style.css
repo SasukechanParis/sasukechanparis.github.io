@@ -162,8 +162,13 @@ body {
 html,
 body {
   width: 100%;
-  max-width: 100%;
+  max-width: 100vw;
   overflow-x: hidden !important;
+}
+
+.app-container,
+.app-header {
+  max-width: 100vw;
 }
 
 /* Vertical writing long vowel mark support (ー) */
@@ -177,7 +182,11 @@ body {
 .vertical-text,
 .tategaki {
   text-orientation: mixed;
+  -webkit-text-orientation: mixed;
+  text-combine-upright: all;
   font-feature-settings: "vert" 1, "vrt2" 1;
+  font-variant-east-asian: proportional-width;
+  font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans JP", sans-serif;
 }
 
 .login-screen {
@@ -565,17 +574,21 @@ body {
 
 .header-refresh-btn {
   min-width: 108px;
+  min-height: 44px;
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 2;
 }
 
 .refresh-fixed-btn {
-  display: none;
-  position: fixed;
-  top: 12px;
-  right: 12px;
-  z-index: 3001;
+  display: inline-flex;
+  position: static;
+  top: auto;
+  right: auto;
+  z-index: auto;
   min-height: 44px;
   padding: 0 14px;
-  box-shadow: var(--shadow-md);
+  box-shadow: none;
 }
 
 .header-plan-badge {
@@ -2541,17 +2554,17 @@ tbody tr:hover {
     line-height: 1;
   }
 
-  .refresh-fixed-btn {
-    top: 10px;
-    right: 10px;
+  .header-refresh-btn {
     width: 44px;
     min-width: 44px;
     height: 44px;
     padding: 0;
     font-size: 0;
+    line-height: 1;
+    justify-content: center;
   }
 
-  .refresh-fixed-btn::before {
+  .header-refresh-btn::before {
     content: "↻";
     font-size: 1rem;
     line-height: 1;
