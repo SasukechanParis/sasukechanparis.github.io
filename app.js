@@ -1579,7 +1579,7 @@
         if (
           currentNode.nodeValue
           && currentNode.nodeValue.includes('ー')
-          && !currentNode.parentElement?.closest('.vertical-long-vowel')
+          && !currentNode.parentElement?.closest('.ch-rotate')
         ) {
           textNodes.push(currentNode);
         }
@@ -1594,7 +1594,7 @@
         for (const ch of text) {
           if (ch === 'ー') {
             const marker = document.createElement('span');
-            marker.className = 'vertical-long-vowel';
+            marker.className = 'ch-rotate';
             marker.textContent = 'ー';
             fragment.appendChild(marker);
           } else {

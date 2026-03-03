@@ -4628,3 +4628,125 @@ html[lang="fr"] .modal-footer .btn {
 .hidden {
   display: none !important;
 }
+
+/* ===== Mobile hard override (requested) ===== */
+@media (max-width: 768px) {
+  /* 1) Force single-line compact customer row */
+  .customer-card {
+    display: block !important;
+    padding: 4px 6px !important;
+    min-height: 42px !important;
+    line-height: 1.2 !important;
+  }
+
+  .customer-card-mobile-head {
+    display: block !important;
+    overflow: hidden !important;
+    min-height: 30px !important;
+  }
+
+  .customer-card-mobile-left {
+    display: block !important;
+    overflow: hidden !important;
+    min-width: 0 !important;
+    padding-right: 96px !important;
+  }
+
+  .customer-card-mobile-main {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    min-width: 0 !important;
+  }
+
+  .customer-card-mobile-name {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    font-size: 0.8rem !important;
+    font-weight: 600 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  .customer-card-mobile-date {
+    flex: 0 0 auto !important;
+    width: 94px !important;
+    max-width: 94px !important;
+    margin-top: 0 !important;
+    font-size: 0.7rem !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  .customer-card-mobile-metrics,
+  .customer-card-mobile-foot {
+    display: none !important;
+  }
+
+  .customer-card-actions.action-buttons {
+    float: right !important;
+    display: flex !important;
+    justify-content: flex-end !important;
+    align-items: center !important;
+    gap: 2px !important;
+    width: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .customer-card-actions .table-action-btn,
+  .customer-card-actions .action-btn {
+    width: 26px !important;
+    min-width: 26px !important;
+    height: 26px !important;
+    min-height: 26px !important;
+    padding: 0 !important;
+    border-radius: 6px !important;
+  }
+
+  .customer-card-actions .table-action-label {
+    display: none !important;
+  }
+
+  .customer-card-actions .table-action-icon {
+    font-size: 0.8rem !important;
+    line-height: 1 !important;
+  }
+
+  .customer-card-actions .table-action-btn:nth-child(3),
+  .customer-card-actions .table-action-btn:nth-child(4) {
+    display: none !important;
+  }
+
+  /* 2) Mobile-only forced long vowel rotation */
+  .vertical-text,
+  .vertical-writing,
+  .tategaki,
+  [style*="writing-mode: vertical"],
+  [style*="writing-mode:vertical"],
+  [style*="writing-mode: vertical-rl"],
+  [style*="writing-mode:vertical-rl"],
+  [style*="writing-mode: vertical-lr"],
+  [style*="writing-mode:vertical-lr"] {
+    font-family: serif !important;
+  }
+
+  .vertical-text .ch-rotate,
+  .vertical-writing .ch-rotate,
+  .tategaki .ch-rotate,
+  [style*="writing-mode: vertical"] .ch-rotate,
+  [style*="writing-mode:vertical"] .ch-rotate,
+  [style*="writing-mode: vertical-rl"] .ch-rotate,
+  [style*="writing-mode:vertical-rl"] .ch-rotate,
+  [style*="writing-mode: vertical-lr"] .ch-rotate,
+  [style*="writing-mode:vertical-lr"] .ch-rotate {
+    display: inline-block !important;
+    transform: rotate(90deg) !important;
+    transform-origin: center !important;
+    line-height: 1 !important;
+  }
+}
