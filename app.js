@@ -1043,6 +1043,7 @@
 
     refreshLanguageOptionAvailability();
     refreshUiAfterLanguageChange();
+    updateSettingsCurrentTabIndicator();
     scheduleVerticalLongVowelNormalization();
   }
   window.updateLanguage = updateLanguage;
@@ -4701,6 +4702,7 @@
         const statusDot = renderWorkflowStatusDot(c);
         const shootingLabel = t('thShootingDate');
         const shootingValue = formatDate(c.shootingDate) || t('valUnset');
+        const mobileDateText = shootingValue;
         const revenueLabel = t('thRevenue');
         const profitLabel = t('cardProfit');
         const planLabel = t('thPlan');
@@ -4721,8 +4723,8 @@
             <div class="customer-card-mobile-left">
               <span class="customer-card-status-dot">${statusDot}</span>
               <div class="customer-card-mobile-main">
-                <div class="customer-card-mobile-name">${escapeHtml(c.customerName || t('valUnset'))}</div>
-                <div class="customer-card-mobile-date" title="${escapeHtml(`${shootingLabel}: ${shootingValue}`)}">${escapeHtml(`${shootingLabel}: ${shootingValue}`)}</div>
+                <div class="customer-card-mobile-date" title="${escapeHtml(`${shootingLabel}: ${shootingValue}`)}">${escapeHtml(mobileDateText)}</div>
+                <div class="customer-card-mobile-name" title="${escapeHtml(c.customerName || t('valUnset'))}">${escapeHtml(c.customerName || t('valUnset'))}</div>
               </div>
             </div>
             <div class="customer-card-mobile-metrics">
@@ -8026,6 +8028,7 @@
         if (warning) setAdminDeviceWarning(warning, 'error');
       }
     }
+    updateSettingsCurrentTabIndicator();
     settingsOverlay?.classList.add('active');
   }
 
@@ -8064,6 +8067,14 @@
     showToast(t('msgMemberAdded'));
   }
 
+  function updateSettingsCurrentTabIndicator() {
+    const indicator = document.getElementById('settings-current-tab-indicator');
+    if (!indicator) return;
+    const activeButton = settingsOverlay?.querySelector('.settings-tab-btn.active');
+    const label = String(activeButton?.textContent || '').trim();
+    indicator.textContent = label ? `▶ ${label}` : '';
+  }
+
   function bindSettingsTabListeners() {
     settingsOverlay?.querySelectorAll('.settings-tab-btn').forEach((btn) => {
       const tabName = btn.dataset.tab || 'default';
@@ -8087,6 +8098,7 @@
         if (tab === 'admin') {
           refreshAdminOverview();
         }
+        updateSettingsCurrentTabIndicator();
       }, `settings-tab-${tabName}`);
     });
   }
