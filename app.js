@@ -8033,7 +8033,9 @@
         showToast(t('firebaseConfigLoadFailed'));
         return;
       }
-      await window.FirebaseService.signInWithGoogle();
+      const loginFn = window.FirebaseService.signInWithPopup
+        ?? window.FirebaseService.signInWithGoogle;
+      await loginFn.call(window.FirebaseService);
     } catch (err) {
       console.error('Firebase Auth Error:', err?.code, err?.message);
       console.error(err);
@@ -8070,21 +8072,30 @@
     if (refreshButton?.disabled) return;
     if (refreshButton) refreshButton.disabled = true;
     try {
-      const authUser = window.FirebaseService?.getCurrentUser?.() || null;
-      if (authUser) {
-        setCloudSyncIndicator('syncing');
-        await handleAuthState(authUser);
-        showToast('最新データに更新しました。');
-        return;
-      }
       window.location.reload();
     } catch (err) {
       console.error('Refresh failed', err);
-      showToast('更新に失敗したため再読み込みします。', 'error');
-      window.location.reload();
+      showToast('更新に失敗しました。再読み込みしてください。', 'error');
     } finally {
       if (refreshButton) refreshButton.disabled = false;
     }
+  }
+
+  function enforceLoggedOutScreen() {
+    if (!isLoggedIn) {
+      setAuthScreenState('loggedOut');
+    }
+  }
+
+  function enforceLoggedOutScreenSoon() {
+    window.setTimeout(enforceLoggedOutScreen, 0);
+    window.setTimeout(enforceLoggedOutScreen, 200);
+    window.setTimeout(enforceLoggedOutScreen, 600);
+  }
+
+  function patchAuthBootstrapForMobile() {
+    if (!window.matchMedia('(max-width: 768px)').matches) return;
+    enforceLoggedOutScreenSoon();
   }
 
   function bindCoreUIEventListeners() {
@@ -8975,6 +8986,7 @@
 
     init();
     setAuthScreenState('checking');
+    patchAuthBootstrapForMobile();
     registerPwaServiceWorker();
     await initializeFirebaseAuthFlow();
   }

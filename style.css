@@ -198,9 +198,9 @@ body {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 20px;
-  max-width: 460px;
+  max-width: 420px;
   width: 100%;
-  padding: 40px 32px;
+  padding: 44px 32px;
   text-align: center;
   box-shadow: var(--shadow);
 }
@@ -208,6 +208,13 @@ body {
 .login-logo {
   font-size: 42px;
   margin-bottom: 12px;
+}
+
+.login-card h1 {
+  margin: 0 0 18px;
+  font-size: 1.65rem;
+  line-height: 1.25;
+  font-weight: 800;
 }
 
 .login-card p {
@@ -220,6 +227,8 @@ body {
   align-items: center;
   justify-content: center;
   min-height: 48px;
+  min-width: 220px;
+  width: min(92%, 320px);
   padding-inline: 22px;
   font-size: 1rem;
   font-weight: 700;
@@ -2700,7 +2709,8 @@ tbody tr:hover {
   }
 
   #btn-google-login-screen {
-    width: 100%;
+    width: min(96%, 340px);
+    min-width: 220px;
     min-height: 52px;
     font-size: 1rem;
   }
