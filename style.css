@@ -186,7 +186,8 @@ body {
   text-combine-upright: all;
   font-feature-settings: "vert" 1, "vrt2" 1;
   font-variant-east-asian: proportional-width;
-  font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans JP", sans-serif;
+  font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif !important;
+  line-break: strict;
 }
 
 .login-screen {
@@ -2787,19 +2788,23 @@ tbody tr:hover {
   }
 
   .customer-card {
-    position: relative;
-    padding: 9px 58px 9px 10px;
+    display: flex;
+    align-items: center;
     gap: 6px;
+    padding: 6px 8px;
+    min-height: 52px;
   }
 
   .customer-card-mobile-name {
-    font-size: 0.92rem;
+    font-size: 0.84rem;
+    font-weight: 600;
+    line-height: 1.25;
   }
 
   .customer-card-mobile-date,
   .customer-card-mobile-plan,
   .customer-card-mobile-note {
-    font-size: 0.74rem;
+    font-size: 0.7rem;
   }
 
   .customer-card-mobile-metrics,
@@ -2807,26 +2812,62 @@ tbody tr:hover {
     display: none;
   }
 
-  .customer-card-actions.action-buttons {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    width: 44px;
+  .customer-card-mobile-head {
+    flex: 1 1 auto;
+    min-width: 0;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .customer-card-mobile-left {
+    align-items: center;
+    gap: 6px;
+  }
+
+  .customer-card-status-dot {
     margin-top: 0;
-    display: grid;
-    grid-template-columns: 1fr !important;
-    gap: 4px;
+  }
+
+  .customer-card-mobile-main {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .customer-card-mobile-date {
+    margin-top: 0;
+    flex: 0 0 auto;
+    max-width: 110px;
+  }
+
+  .customer-card-mobile-name {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .customer-card-actions.action-buttons {
+    position: static;
+    margin-left: auto;
+    width: auto;
+    margin-top: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 3px;
+    flex: 0 0 auto;
   }
 
   .customer-card-actions .table-action-btn,
   .customer-card-actions .action-btn {
-    width: 44px;
-    min-width: 44px;
-    height: 44px;
-    min-height: 44px;
+    width: 30px;
+    min-width: 30px;
+    height: 30px;
+    min-height: 30px;
     padding: 0;
     justify-content: center;
-    border-radius: 8px;
+    border-radius: 7px;
   }
 
   .customer-card-actions .table-action-label,
@@ -2834,13 +2875,19 @@ tbody tr:hover {
     display: none;
   }
 
+  .customer-card-actions .table-action-icon,
+  .customer-card-actions .action-btn .table-action-icon {
+    font-size: 0.88rem;
+    line-height: 1;
+  }
+
   .customer-card-actions .table-action-btn:nth-child(3),
   .customer-card-actions .table-action-btn:nth-child(4) {
     display: none;
   }
 
-  .customer-card-actions .table-action-btn:nth-child(1) { order: 1; }
-  .customer-card-actions .table-action-btn:nth-child(2) { order: 2; }
+  .customer-card-actions .table-action-btn:nth-child(2) { order: 1; } /* 詳細 */
+  .customer-card-actions .table-action-btn:nth-child(1) { order: 2; } /* 編集 */
   .customer-card-actions .table-action-btn:nth-child(5) { order: 3; }
 
   .customer-card-actions .action-btn-delete,
