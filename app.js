@@ -956,35 +956,6 @@
     renderSettings();
     updateTeamManagementTabAvailability();
     syncDynamicItemRowsWithSettings();
-    normalizeVerticalLongVowelMarks();
-  }
-
-  function normalizeVerticalLongVowelMarks(root = document) {
-    const scope = root && typeof root.querySelectorAll === 'function' ? root : document;
-    const selector = [
-      '[style*="writing-mode: vertical"]',
-      '[style*="writing-mode:vertical"]',
-      '[style*="writing-mode: vertical-rl"]',
-      '[style*="writing-mode:vertical-rl"]',
-      '[style*="writing-mode: vertical-lr"]',
-      '[style*="writing-mode:vertical-lr"]',
-      '.vertical-writing',
-      '.vertical-text',
-      '.tategaki',
-    ].join(',');
-
-    scope.querySelectorAll(selector).forEach((element) => {
-      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-      const textNodes = [];
-      while (walker.nextNode()) {
-        textNodes.push(walker.currentNode);
-      }
-      textNodes.forEach((node) => {
-        if (!node.nodeValue || !node.nodeValue.includes('ー')) return;
-        // Fallback for browsers/fonts that fail to render vertical long vowel marks.
-        node.nodeValue = node.nodeValue.replace(/ー/g, '︱');
-      });
-    });
   }
 
   function updateLanguage(lang) {
@@ -1072,6 +1043,7 @@
 
     refreshLanguageOptionAvailability();
     refreshUiAfterLanguageChange();
+    scheduleVerticalLongVowelNormalization();
   }
   window.updateLanguage = updateLanguage;
   window.updateUITS = updateLanguage;
@@ -1576,6 +1548,73 @@
       console.error(`[SafeRun] ${label}`, err);
       return fallback;
     }
+  }
+
+  const VERTICAL_TEXT_TARGET_SELECTOR = [
+    '.vertical-text',
+    '.vertical-writing',
+    '.tategaki',
+    '[style*="writing-mode: vertical"]',
+    '[style*="writing-mode:vertical"]',
+    '[style*="writing-mode: vertical-rl"]',
+    '[style*="writing-mode:vertical-rl"]',
+    '[style*="writing-mode: vertical-lr"]',
+    '[style*="writing-mode:vertical-lr"]',
+  ].join(', ');
+  let verticalLongVowelNormalizeFrame = null;
+
+  function normalizeVerticalLongVowelMarks(root = document) {
+    if (!root || typeof root.querySelectorAll !== 'function') return;
+
+    const targets = root.querySelectorAll(VERTICAL_TEXT_TARGET_SELECTOR);
+    targets.forEach((target) => {
+      const walker = document.createTreeWalker(
+        target,
+        window.NodeFilter?.SHOW_TEXT ?? 4,
+        null
+      );
+      const textNodes = [];
+      let currentNode = walker.nextNode();
+      while (currentNode) {
+        if (
+          currentNode.nodeValue
+          && currentNode.nodeValue.includes('ー')
+          && !currentNode.parentElement?.closest('.vertical-long-vowel')
+        ) {
+          textNodes.push(currentNode);
+        }
+        currentNode = walker.nextNode();
+      }
+
+      textNodes.forEach((textNode) => {
+        const text = textNode.nodeValue;
+        if (!text || !text.includes('ー')) return;
+
+        const fragment = document.createDocumentFragment();
+        for (const ch of text) {
+          if (ch === 'ー') {
+            const marker = document.createElement('span');
+            marker.className = 'vertical-long-vowel';
+            marker.textContent = 'ー';
+            fragment.appendChild(marker);
+          } else {
+            fragment.appendChild(document.createTextNode(ch));
+          }
+        }
+
+        textNode.parentNode?.replaceChild(fragment, textNode);
+      });
+    });
+  }
+
+  function scheduleVerticalLongVowelNormalization(root = document) {
+    if (verticalLongVowelNormalizeFrame) {
+      cancelAnimationFrame(verticalLongVowelNormalizeFrame);
+    }
+    verticalLongVowelNormalizeFrame = requestAnimationFrame(() => {
+      verticalLongVowelNormalizeFrame = null;
+      normalizeVerticalLongVowelMarks(root);
+    });
   }
 
   let activeLegalDocType = 'terms';
@@ -4742,6 +4781,7 @@
     updateMonthFilter();
     updateHeaderPlanBadge();
     if (isMobileFilterSheetOpen) renderMobileSortQuickList();
+    scheduleVerticalLongVowelNormalization();
   }
 
   function bindSortEventListeners() {
@@ -9024,11 +9064,13 @@
   document.addEventListener('DOMContentLoaded', async () => {
     try {
       await bootstrapApp();
+      scheduleVerticalLongVowelNormalization();
     } catch (err) {
       console.error('App bootstrap failed', err);
       try {
         init();
         setAuthScreenState('loggedOut');
+        scheduleVerticalLongVowelNormalization();
       } catch (fallbackErr) {
         console.error('Bootstrap fallback failed', fallbackErr);
       }

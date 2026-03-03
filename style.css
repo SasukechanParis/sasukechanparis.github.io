@@ -150,13 +150,18 @@
 }
 
 body {
-  font-family: 'Inter', sans-serif;
+  font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "YuGothic", "Hiragino Sans", "Meiryo", "Inter", sans-serif !important;
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
   line-height: 1.6;
   overflow-x: hidden;
   transition: background-color var(--transition), color var(--transition);
+}
+
+html[lang^="ja"] body,
+body.lang-ja {
+  font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "YuGothic", "Hiragino Sans", "Meiryo", sans-serif !important;
 }
 
 html,
@@ -594,10 +599,12 @@ body {
 
 /* Optional JS/CMS fallback: wrap ー in span.vertical-long-vowel when needed */
 .vertical-long-vowel {
-  display: inline-block;
+  display: inline-block !important;
   text-orientation: upright;
-  transform: rotate(90deg);
+  transform: rotate(90deg) !important;
   transform-origin: center;
+  line-height: 1;
+  font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif !important;
 }
 
 .header-plan-badge {
@@ -2791,8 +2798,8 @@ tbody tr:hover {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 6px 8px;
-    min-height: 52px;
+    padding: 4px 6px;
+    min-height: 42px;
   }
 
   .customer-card-mobile-name {
@@ -2831,20 +2838,30 @@ tbody tr:hover {
   .customer-card-mobile-main {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     min-width: 0;
     overflow: hidden;
+    white-space: nowrap;
   }
 
   .customer-card-mobile-date {
     margin-top: 0;
     flex: 0 0 auto;
-    max-width: 110px;
+    width: 92px;
+    max-width: 92px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .customer-card-mobile-name {
     min-width: 0;
     flex: 1 1 auto;
+    font-size: 0.8rem;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .customer-card-actions.action-buttons {
@@ -2861,11 +2878,11 @@ tbody tr:hover {
 
   .customer-card-actions .table-action-btn,
   .customer-card-actions .action-btn {
-    width: 30px;
-    min-width: 30px;
-    height: 30px;
-    min-height: 30px;
-    padding: 0;
+    width: 26px !important;
+    min-width: 26px !important;
+    height: 26px !important;
+    min-height: 26px !important;
+    padding: 0 !important;
     justify-content: center;
     border-radius: 7px;
   }
@@ -2877,7 +2894,7 @@ tbody tr:hover {
 
   .customer-card-actions .table-action-icon,
   .customer-card-actions .action-btn .table-action-icon {
-    font-size: 0.88rem;
+    font-size: 0.8rem;
     line-height: 1;
   }
 
