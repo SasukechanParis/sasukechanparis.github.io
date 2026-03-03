@@ -8794,12 +8794,14 @@
     const loginBtn = document.getElementById('btn-google-login');
     const loginScreenBtn = document.getElementById('btn-google-login-screen');
     const logoutBtn = document.getElementById('btn-logout');
+    const refreshBtn = document.getElementById('btn-refresh');
 
     if (state === 'checking') {
       if (authStatus) authStatus.textContent = t('authChecking');
       if (loginBtn) loginBtn.style.display = 'none';
       if (loginScreenBtn) loginScreenBtn.style.display = 'none';
       if (logoutBtn) logoutBtn.style.display = 'none';
+      if (refreshBtn) refreshBtn.style.display = 'none';
       if (authScreen) authScreen.style.display = 'none';
       if (loginScreen) loginScreen.style.display = 'none';
       if (authBanner) authBanner.style.display = 'flex';
@@ -8818,6 +8820,7 @@
       if (loginBtn) loginBtn.style.display = '';
       if (loginScreenBtn) loginScreenBtn.style.display = '';
       if (logoutBtn) logoutBtn.style.display = 'none';
+      if (refreshBtn) refreshBtn.style.display = 'none';
       if (authScreenRoot) authScreenRoot.style.display = 'block';
       if (authScreen) authScreen.style.display = 'block';
       if (loginScreen) loginScreen.style.display = 'flex';
@@ -8837,6 +8840,7 @@
       if (loginBtn) loginBtn.style.display = 'none';
       if (loginScreenBtn) loginScreenBtn.style.display = 'none';
       if (logoutBtn) logoutBtn.style.display = '';
+      if (refreshBtn) refreshBtn.style.display = 'inline-flex';
       if (authScreen) authScreen.style.display = 'none';
       if (loginScreen) loginScreen.style.display = 'none';
       if (authBanner) authBanner.style.display = 'none';
