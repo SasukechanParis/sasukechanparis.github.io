@@ -4649,7 +4649,7 @@ html[lang="fr"] .modal-footer .btn {
     display: block !important;
     overflow: hidden !important;
     min-width: 0 !important;
-    padding-right: 96px !important;
+    padding-right: 132px !important;
   }
 
   .customer-card-status-dot {
@@ -4677,8 +4677,8 @@ html[lang="fr"] .modal-footer .btn {
 
   .customer-card-mobile-date {
     flex: 0 0 auto !important;
-    width: 104px !important;
-    max-width: 104px !important;
+    width: 110px !important;
+    max-width: 110px !important;
     margin-top: 0 !important;
     font-size: 0.74rem !important;
     font-weight: 600 !important;
@@ -4705,12 +4705,12 @@ html[lang="fr"] .modal-footer .btn {
 
   .customer-card-actions .table-action-btn,
   .customer-card-actions .action-btn {
-    width: 26px !important;
-    min-width: 26px !important;
-    height: 26px !important;
-    min-height: 26px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    height: 40px !important;
+    min-height: 40px !important;
     padding: 0 !important;
-    border-radius: 6px !important;
+    border-radius: 8px !important;
   }
 
   .customer-card-actions .table-action-label {
@@ -4718,7 +4718,7 @@ html[lang="fr"] .modal-footer .btn {
   }
 
   .customer-card-actions .table-action-icon {
-    font-size: 0.8rem !important;
+    font-size: 0.92rem !important;
     line-height: 1 !important;
   }
 
