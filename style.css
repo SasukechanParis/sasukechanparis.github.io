@@ -591,6 +591,14 @@ body {
   box-shadow: none;
 }
 
+/* Optional JS/CMS fallback: wrap ー in span.vertical-long-vowel when needed */
+.vertical-long-vowel {
+  display: inline-block;
+  text-orientation: upright;
+  transform: rotate(90deg);
+  transform-origin: center;
+}
+
 .header-plan-badge {
   display: inline-flex;
   align-items: center;
@@ -2554,6 +2562,11 @@ tbody tr:hover {
     line-height: 1;
   }
 
+  .header-left #btn-settings,
+  .header-left #btn-refresh {
+    flex: 0 0 auto;
+  }
+
   .header-refresh-btn {
     width: 44px;
     min-width: 44px;
@@ -2699,7 +2712,7 @@ tbody tr:hover {
     flex-direction: row;
     flex-wrap: nowrap;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     margin-bottom: 10px;
     overflow-x: hidden;
   }
@@ -2729,9 +2742,25 @@ tbody tr:hover {
   }
 
   .list-columns-menu-wrap {
-    display: inline-flex;
+    display: inline-flex !important;
     margin-left: 0;
     flex: 0 0 auto;
+  }
+
+  #btn-list-columns {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    padding: 0;
+    font-size: 0;
+    line-height: 1;
+    justify-content: center;
+  }
+
+  #btn-list-columns::before {
+    content: "⚙";
+    font-size: 1rem;
+    line-height: 1;
   }
 
   .filter-select {
@@ -2758,7 +2787,8 @@ tbody tr:hover {
   }
 
   .customer-card {
-    padding: 9px 10px;
+    position: relative;
+    padding: 9px 58px 9px 10px;
     gap: 6px;
   }
 
@@ -2775,6 +2805,47 @@ tbody tr:hover {
   .customer-card-mobile-metrics,
   .customer-card-mobile-foot {
     display: none;
+  }
+
+  .customer-card-actions.action-buttons {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 44px;
+    margin-top: 0;
+    display: grid;
+    grid-template-columns: 1fr !important;
+    gap: 4px;
+  }
+
+  .customer-card-actions .table-action-btn,
+  .customer-card-actions .action-btn {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 8px;
+  }
+
+  .customer-card-actions .table-action-label,
+  .customer-card-actions .action-btn .table-action-label {
+    display: none;
+  }
+
+  .customer-card-actions .table-action-btn:nth-child(3),
+  .customer-card-actions .table-action-btn:nth-child(4) {
+    display: none;
+  }
+
+  .customer-card-actions .table-action-btn:nth-child(1) { order: 1; }
+  .customer-card-actions .table-action-btn:nth-child(2) { order: 2; }
+  .customer-card-actions .table-action-btn:nth-child(5) { order: 3; }
+
+  .customer-card-actions .action-btn-delete,
+  .customer-card-actions .table-action-btn.btn-del {
+    grid-column: auto;
   }
 
   .list-columns-menu {

@@ -956,6 +956,35 @@
     renderSettings();
     updateTeamManagementTabAvailability();
     syncDynamicItemRowsWithSettings();
+    normalizeVerticalLongVowelMarks();
+  }
+
+  function normalizeVerticalLongVowelMarks(root = document) {
+    const scope = root && typeof root.querySelectorAll === 'function' ? root : document;
+    const selector = [
+      '[style*="writing-mode: vertical"]',
+      '[style*="writing-mode:vertical"]',
+      '[style*="writing-mode: vertical-rl"]',
+      '[style*="writing-mode:vertical-rl"]',
+      '[style*="writing-mode: vertical-lr"]',
+      '[style*="writing-mode:vertical-lr"]',
+      '.vertical-writing',
+      '.vertical-text',
+      '.tategaki',
+    ].join(',');
+
+    scope.querySelectorAll(selector).forEach((element) => {
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+      const textNodes = [];
+      while (walker.nextNode()) {
+        textNodes.push(walker.currentNode);
+      }
+      textNodes.forEach((node) => {
+        if (!node.nodeValue || !node.nodeValue.includes('ー')) return;
+        // Fallback for browsers/fonts that fail to render vertical long vowel marks.
+        node.nodeValue = node.nodeValue.replace(/ー/g, '︱');
+      });
+    });
   }
 
   function updateLanguage(lang) {
