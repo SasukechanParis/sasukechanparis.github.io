@@ -952,6 +952,17 @@ button,
   box-shadow: 0 6px 16px var(--accent-glow);
 }
 
+.btn-primary,
+.btn-primary:visited,
+.btn-primary:active,
+.btn-primary:focus-visible {
+  color: #ffffff !important;
+}
+
+.btn-primary * {
+  color: #ffffff !important;
+}
+
 .btn-primary:hover {
   filter: brightness(1.05);
   box-shadow: 0 10px 22px var(--accent-glow);
@@ -4280,6 +4291,11 @@ html[lang="fr"] .modal-footer .btn {
   background: #ffffff !important;
   border: 1px solid #d1d5db !important;
   box-shadow: none;
+}
+
+.settings-section .btn:not(.btn-primary):not(.btn-icon):not(.btn-icon-sm),
+.settings-section .ui-button-standard {
+  color: #1f2937 !important;
 }
 
 .settings-text-btn:hover:not(:disabled) {

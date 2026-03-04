@@ -7550,7 +7550,6 @@
       `[Admin Debug] Error Code: ${detail.code || 'unknown'} | Context: ${detail.context} | Message: ${detail.message || 'n/a'} | Reason: ${detail.reason || 'n/a'}`,
       err
     );
-    console.log('[Admin Debug] Detail:', detail);
   }
 
   function canAccessAdminPanel() {
