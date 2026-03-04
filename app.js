@@ -6088,6 +6088,7 @@
     const labelAdd = t('settingsAddBtn') || '追加';
     const labelSave = t('save') || '保存';
     const labelCancel = t('cancel') || 'キャンセル';
+    const labelSaveSettings = t('saveSettings') || labelSave;
     const labelEdit = t('edit') || '編集';
     const labelDelete = t('delete') || '削除';
     const languageOptionRows = getLanguageOptionDefinitions().map(({ code, label }) => {
@@ -6243,7 +6244,7 @@
           >
         </div>
         <div class="settings-save-row">
-          <button type="button" class="btn btn-primary btn-sm" id="btn-save-studio-name">${escapeHtml(t('saveSettings'))}</button>
+          <button type="button" class="btn btn-secondary btn-sm settings-text-btn" id="btn-save-studio-name">${escapeHtml(labelSaveSettings)}</button>
         </div>
       </div>
       <div class="settings-section">
@@ -6290,7 +6291,7 @@
             <input type="number" id="add-plan-price" min="0" step="1" placeholder="${escapeHtml(t('settingsPlanRevenuePlaceholder'))}">
             <input type="number" id="add-plan-cost" min="0" step="1" placeholder="${escapeHtml(t('settingsPlanCostPlaceholder'))}">
             <div class="settings-form-actions">
-              <button type="button" class="btn btn-primary btn-sm" id="btn-plan-save">${escapeHtml(t('saveSettings'))}</button>
+              <button type="button" class="btn btn-secondary btn-sm settings-text-btn" id="btn-plan-save">${escapeHtml(labelSaveSettings)}</button>
               <button type="button" class="btn btn-secondary btn-sm settings-text-btn" id="btn-plan-reset">${escapeHtml(labelCancel)}</button>
             </div>
           </div>
@@ -6300,7 +6301,7 @@
         <div class="settings-item-list">${dynamicItemRows}</div>
         <div class="settings-add-box settings-add-box-dynamic">
           <input type="text" id="add-dynamic-item-name" placeholder="${escapeHtml(t('settingsDynamicCategoryPlaceholder'))}">
-          <button type="button" class="btn btn-primary btn-sm" id="btn-dynamic-item-add">${escapeHtml(labelAdd)}</button>
+          <button type="button" class="btn btn-secondary btn-sm settings-text-btn" id="btn-dynamic-item-add">${escapeHtml(labelAdd)}</button>
         </div>
       </div>
       <div class="settings-section">
