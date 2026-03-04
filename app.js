@@ -2011,6 +2011,8 @@
     { key: 'contractDate', labelKey: 'thContractDate', type: 'date' },
     { key: 'deliveryDate', labelKey: 'labelDeliveryDate', type: 'date' },
     { key: 'shootingDate', labelKey: 'thShootingDate', type: 'date' },
+    { key: 'startTime', labelKey: 'labelStartTime', type: 'time' },
+    { key: 'endTime', labelKey: 'labelEndTime', type: 'time' },
     { key: 'customerName', labelKey: 'thCustomerName', type: 'text' },
     { key: 'contact', labelKey: 'thContact', type: 'text' },
     { key: 'leadSource', labelKey: 'labelLeadSource', type: 'select' },
@@ -2020,6 +2022,7 @@
     { key: 'billingDate', labelKey: 'labelBillingDate', type: 'date' },
     { key: 'paymentConfirmDate', labelKey: 'labelPaymentConfirmDate', type: 'date' },
     { key: 'paymentChecked', labelKey: 'labelPaymentChecked', type: 'checkbox' },
+    { key: 'syncGoogleCalendar', labelKey: 'labelSyncGoogleCalendar', type: 'checkbox' },
     { key: 'details', labelKey: 'labelDetails', type: 'textarea' },
     { key: 'notes', labelKey: 'labelNotes', type: 'textarea' },
     { key: 'revenue', labelKey: 'thRevenue', type: 'number' },
@@ -5145,6 +5148,7 @@
   function shouldSyncGoogleCalendarEvent(previousCustomer, nextCustomer) {
     if (!googleCalendarAutoSyncEnabled) return false;
     if (!nextCustomer || !String(nextCustomer.shootingDate || '').trim()) return false;
+    if (nextCustomer.syncGoogleCalendar === false) return false;
     const targetCalendarId = getTargetGoogleCalendarId();
     if (String(nextCustomer.google_event_calendar_id || '').trim() !== targetCalendarId) return true;
     if (!previousCustomer) return true;
@@ -5156,6 +5160,9 @@
       || (previousCustomer.plan || '') !== (nextCustomer.plan || '')
       || (previousCustomer.location || '') !== (nextCustomer.location || '')
       || (previousCustomer.notes || '') !== (nextCustomer.notes || '')
+      || normalizeTimeString(previousCustomer.startTime) !== normalizeTimeString(nextCustomer.startTime)
+      || normalizeTimeString(previousCustomer.endTime) !== normalizeTimeString(nextCustomer.endTime)
+      || !!previousCustomer.syncGoogleCalendar !== !!nextCustomer.syncGoogleCalendar
       || toSafeNumber(previousCustomer.revenue, 0) !== toSafeNumber(nextCustomer.revenue, 0)
     );
   }
@@ -5170,23 +5177,71 @@
     return `${y}-${m}-${d}T${hh}:${mm}:${ss}`;
   }
 
-  function resolveShootingEventDateRange(shootingDateValue) {
-    const raw = String(shootingDateValue || '').trim();
-    if (!raw) return null;
+  function toTimeString(dateValue) {
+    if (!(dateValue instanceof Date) || Number.isNaN(dateValue.getTime())) return '';
+    return `${String(dateValue.getHours()).padStart(2, '0')}:${String(dateValue.getMinutes()).padStart(2, '0')}`;
+  }
 
-    let startDate;
-    if (raw.includes('T')) {
-      startDate = new Date(raw);
-    } else {
-      startDate = new Date(`${raw}T10:00:00`);
+  function normalizeTimeString(rawTimeValue) {
+    const text = String(rawTimeValue || '').trim();
+    if (!text) return '';
+    const matched = text.match(/^(\d{1,2}):(\d{2})$/);
+    if (!matched) return '';
+    const hour = Number(matched[1]);
+    const minute = Number(matched[2]);
+    if (!Number.isFinite(hour) || !Number.isFinite(minute)) return '';
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return '';
+    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  }
+
+  function addOneHourToTimeString(timeString) {
+    const normalized = normalizeTimeString(timeString);
+    if (!normalized) return '11:00';
+    const [hourText, minuteText] = normalized.split(':');
+    const hour = Number(hourText);
+    const minute = Number(minuteText);
+    const date = new Date(2000, 0, 1, hour, minute, 0);
+    date.setHours(date.getHours() + 1);
+    return toTimeString(date);
+  }
+
+  function getDefaultShootingTimes() {
+    const now = new Date();
+    const startTime = toTimeString(now);
+    const endTime = toTimeString(new Date(now.getTime() + (60 * 60 * 1000)));
+    return { startTime, endTime };
+  }
+
+  function resolveShootingEventDateRange(sourceValue, sourceStartTime = '', sourceEndTime = '') {
+    const isObjectSource = !!sourceValue && typeof sourceValue === 'object';
+    const rawDate = isObjectSource
+      ? String(sourceValue.shootingDate || '').trim()
+      : String(sourceValue || '').trim();
+    const rawStartTime = normalizeTimeString(isObjectSource ? sourceValue.startTime : sourceStartTime);
+    const rawEndTime = normalizeTimeString(isObjectSource ? sourceValue.endTime : sourceEndTime);
+    if (!rawDate) return null;
+
+    if (rawDate.includes('T') && !rawStartTime && !rawEndTime) {
+      const startDate = new Date(rawDate);
+      if (Number.isNaN(startDate.getTime())) return null;
+      const endDate = new Date(startDate.getTime() + (60 * 60 * 1000));
+      return { startDate, endDate };
     }
+
+    const startTime = rawStartTime || '10:00';
+    const endTime = rawEndTime || addOneHourToTimeString(startTime);
+    const startDate = new Date(`${rawDate}T${startTime}:00`);
     if (Number.isNaN(startDate.getTime())) return null;
-    const endDate = new Date(startDate.getTime() + (60 * 60 * 1000));
+    const endDate = new Date(`${rawDate}T${endTime}:00`);
+    if (Number.isNaN(endDate.getTime())) return null;
+    if (endDate.getTime() <= startDate.getTime()) {
+      endDate.setDate(endDate.getDate() + 1);
+    }
     return { startDate, endDate };
   }
 
-  function parseBookingSlot(rawDateTimeValue) {
-    const range = resolveShootingEventDateRange(rawDateTimeValue);
+  function parseBookingSlot(sourceValue, sourceStartTime = '', sourceEndTime = '') {
+    const range = resolveShootingEventDateRange(sourceValue, sourceStartTime, sourceEndTime);
     if (!range) return null;
 
     const dateKey = `${range.startDate.getFullYear()}-${String(range.startDate.getMonth() + 1).padStart(2, '0')}-${String(range.startDate.getDate()).padStart(2, '0')}`;
@@ -5211,14 +5266,14 @@
       && targetSlot.startMinutes < sourceSlot.endMinutes;
   }
 
-  function findDoubleBookingConflict(candidateShootingDate, ignoreCustomerId = '') {
-    const candidateSlot = parseBookingSlot(candidateShootingDate);
+  function findDoubleBookingConflict(candidateBookingInput, ignoreCustomerId = '') {
+    const candidateSlot = parseBookingSlot(candidateBookingInput);
     if (!candidateSlot) return null;
 
     for (const customer of customers) {
       if (!customer) continue;
       if (ignoreCustomerId && customer.id === ignoreCustomerId) continue;
-      const targetSlot = parseBookingSlot(customer.shootingDate);
+      const targetSlot = parseBookingSlot(customer);
       if (!targetSlot) continue;
       if (isBookingSlotOverlapped(candidateSlot, targetSlot)) {
         return { customer, slot: targetSlot };
@@ -5238,7 +5293,7 @@
 
     const tomorrowKey = getTomorrowDateKey();
     const tomorrowBookings = customers
-      .map((customer) => ({ customer, slot: parseBookingSlot(customer?.shootingDate) }))
+      .map((customer) => ({ customer, slot: parseBookingSlot(customer) }))
       .filter((entry) => entry.slot && entry.slot.dateKey === tomorrowKey)
       .sort((a, b) => a.slot.startMinutes - b.slot.startMinutes);
 
@@ -5262,7 +5317,7 @@
   }
 
   function buildGoogleCalendarEventPayload(customer) {
-    const range = resolveShootingEventDateRange(customer?.shootingDate);
+    const range = resolveShootingEventDateRange(customer);
     if (!range) return null;
 
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -5403,6 +5458,20 @@
           el.value = c[f.key] || '';
         }
       });
+      const startTimeInput = $('#form-startTime');
+      const endTimeInput = $('#form-endTime');
+      const legacySlot = parseBookingSlot(c.shootingDate);
+      const fallbackStartTime = normalizeTimeString(c.startTime) || String(legacySlot?.startLabel || '');
+      const fallbackEndTime = normalizeTimeString(c.endTime) || String(legacySlot?.endLabel || '');
+      if (startTimeInput) startTimeInput.value = fallbackStartTime || '';
+      if (endTimeInput) {
+        const inferredEndTime = fallbackStartTime ? addOneHourToTimeString(fallbackStartTime) : '';
+        endTimeInput.value = fallbackEndTime || inferredEndTime;
+      }
+      const syncGoogleCalendarInput = $('#form-syncGoogleCalendar');
+      if (syncGoogleCalendarInput) {
+        syncGoogleCalendarInput.checked = c.syncGoogleCalendar !== false;
+      }
 
       const planDetails = normalizePlanDetails(c.planDetails, c.revenue);
       const planNameInput = $('#form-plan-name');
@@ -5453,6 +5522,15 @@
       isExpenseManuallyEdited = false;
       renderDynamicChargeItems([]);
       updateGrandTotal();
+      const { startTime, endTime } = getDefaultShootingTimes();
+      const startTimeInput = $('#form-startTime');
+      const endTimeInput = $('#form-endTime');
+      if (startTimeInput) startTimeInput.value = startTime;
+      if (endTimeInput) endTimeInput.value = endTime;
+      const syncGoogleCalendarInput = $('#form-syncGoogleCalendar');
+      if (syncGoogleCalendarInput) {
+        syncGoogleCalendarInput.checked = !!googleCalendarAutoSyncEnabled;
+      }
       renderCustomFields();
     }
     applyModalFieldVisibility();
@@ -5575,7 +5653,7 @@
       });
       data.customFields = customFields;
 
-      const bookingConflict = findDoubleBookingConflict(data.shootingDate, editingId || '');
+      const bookingConflict = findDoubleBookingConflict(data, editingId || '');
       if (bookingConflict) {
         const conflictCustomerName = String(bookingConflict.customer?.customerName || '—');
         const conflictLocation = String(bookingConflict.customer?.location || t('icsUnset'));

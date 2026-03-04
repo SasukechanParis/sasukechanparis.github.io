@@ -563,6 +563,14 @@
             <label for="form-shootingDate" data-i18n="labelShootingDate">撮影日</label>
             <input type="date" id="form-shootingDate" />
           </div>
+          <div class="form-group">
+            <label for="form-startTime" data-i18n="labelStartTime">開始時間</label>
+            <input type="time" id="form-startTime" data-i18n-placeholder="placeholderStartTime" />
+          </div>
+          <div class="form-group">
+            <label for="form-endTime" data-i18n="labelEndTime">終了時間</label>
+            <input type="time" id="form-endTime" data-i18n-placeholder="placeholderEndTime" />
+          </div>
           <div class="form-group" data-input-key="deliveryDate">
             <label for="form-deliveryDate" data-i18n="labelDeliveryDate">納品日</label>
             <input type="date" id="form-deliveryDate" />
@@ -633,6 +641,10 @@
           <div class="checkbox-wrapper">
             <input type="checkbox" id="form-paymentChecked" />
             <label for="form-paymentChecked" data-i18n="labelPaymentChecked">入金チェック済み</label>
+          </div>
+          <div class="checkbox-wrapper">
+            <input type="checkbox" id="form-syncGoogleCalendar" />
+            <label for="form-syncGoogleCalendar" data-i18n="labelSyncGoogleCalendar">保存時にGoogleカレンダーへ同期する</label>
           </div>
 
           <div class="form-section-title" data-i18n="sectionPlanDetails">プラン詳細</div>
