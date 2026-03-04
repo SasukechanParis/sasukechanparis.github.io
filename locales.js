@@ -518,7 +518,7 @@ const LOCALE = {
         authLoggedOutPrompt: "🔐 Googleでログインしてクラウド同期を開始",
         authLoggedInAs: "✅ {user} でログイン中",
         authLoggedInUserFallback: "ログイン中",
-        loginScreenDescription: "クラウド同期を利用するにはGoogleログインが必要です。",
+        loginScreenDescription: "カメラマンのための顧客管理・売上分析アプリ",
         googleLogin: "Googleでログイン",
         labelLeadSource: "問い合わせ元",
         leadSourceInstagram: "インスタグラム",
@@ -1389,7 +1389,7 @@ const LOCALE = {
         authLoggedOutPrompt: "🔐 Sign in with Google to start cloud sync",
         authLoggedInAs: "✅ Logged in as {user}",
         authLoggedInUserFallback: "Logged in",
-        loginScreenDescription: "Google login is required to enable cloud sync.",
+        loginScreenDescription: "Customer management and revenue analytics app for photographers.",
         googleLogin: "Sign in with Google",
         labelLeadSource: "Lead Source",
         leadSourceInstagram: "Instagram",
@@ -2250,7 +2250,7 @@ Fee: {{total_price}}
         authLoggedOutPrompt: "🔐 Connectez-vous avec Google pour activer la synchro cloud",
         authLoggedInAs: "✅ Connecté en tant que {user}",
         authLoggedInUserFallback: "Connecté",
-        loginScreenDescription: "La connexion Google est requise pour activer la synchronisation cloud.",
+        loginScreenDescription: "Application de gestion clients et d’analyse du chiffre d’affaires pour photographes.",
         googleLogin: "Connexion avec Google",
         labelLeadSource: "Source du lead",
         leadSourceInstagram: "Instagram",
@@ -4296,6 +4296,24 @@ if (!LOCALE.es) {
 }
 
 const REQUIRED_RECENT_KEYS = {
+    loginScreenDescription: {
+        ja: "カメラマンのための顧客管理・売上分析アプリ",
+        en: "Customer management and revenue analytics app for photographers.",
+        fr: "Application de gestion clients et d’analyse du chiffre d’affaires pour photographes.",
+        es: "Aplicación de gestión de clientes y análisis de ingresos para fotógrafos.",
+        "zh-CN": "面向摄影师的客户管理与营收分析应用",
+        "zh-TW": "為攝影師打造的客戶管理與營收分析應用",
+        ko: "사진작가를 위한 고객 관리·매출 분석 앱",
+    },
+    googleLogin: {
+        ja: "Googleでログイン",
+        en: "Sign in with Google",
+        fr: "Connexion avec Google",
+        es: "Iniciar sesión con Google",
+        "zh-CN": "使用 Google 登录",
+        "zh-TW": "使用 Google 登入",
+        ko: "Google로 로그인",
+    },
     saveSettings: {
         ja: "設定を保存",
         en: "Save Settings",
