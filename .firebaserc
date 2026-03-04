@@ -1,13 +1,11 @@
-{
+.{
   "projects": {
     "default": "photocrm-app"
   },
   "targets": {
     "photocrm-app": {
       "hosting": {
-        "pholio": [
-          "pholio-app"
-        ]
+        "pholio": ["pholio"]
       }
     }
   }
