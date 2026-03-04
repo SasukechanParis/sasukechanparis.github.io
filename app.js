@@ -483,6 +483,7 @@
       { code: 'ja', label: '🇯🇵 日本語' },
       { code: 'en', label: '🇺🇸 English' },
       { code: 'fr', label: '🇫🇷 Français' },
+      { code: 'es', label: '🇪🇸 Español' },
       { code: 'zh-CN', label: '🇨🇳 简体中文' },
       { code: 'zh-TW', label: '🇹🇼 繁體中文' },
       { code: 'ko', label: '🇰🇷 한국어' },
@@ -2245,6 +2246,7 @@
   function getLocaleForDates() {
     if (currentLang === 'fr') return 'fr-FR';
     if (currentLang === 'ja') return 'ja-JP';
+    if (currentLang === 'es') return 'es-ES';
     return 'en-US';
   }
 
@@ -4293,7 +4295,11 @@
   }
 
   function getDashboardChartMonthLabels() {
-    const locale = currentLang === 'fr' ? 'fr-FR' : (currentLang === 'ja' ? 'ja-JP' : 'en-US');
+    const locale = currentLang === 'fr'
+      ? 'fr-FR'
+      : (currentLang === 'ja'
+        ? 'ja-JP'
+        : (currentLang === 'es' ? 'es-ES' : 'en-US'));
     return Array.from({ length: 12 }, (_, index) => (
       new Date(2000, index, 1).toLocaleString(locale, { month: 'short' })
     ));

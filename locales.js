@@ -4269,6 +4269,80 @@ Tarif : {{total_price}}`,
     }
 };
 
+if (!LOCALE.es) {
+    LOCALE.es = {
+        ...LOCALE.en,
+        appSubtitle: "Gestión de clientes para fotógrafos",
+        settingsHeader: "⚙ Ajustes",
+        addCustomer: "＋ Nuevo",
+        addNew: "Nuevo",
+        saveSettings: "Guardar ajustes",
+        settingsSaved: "Ajustes guardados",
+        themeColorSection: "Color del tema",
+        themeColorLabel: "Color del tema",
+        themeColorHelp: "Elige un color y la interfaz se actualizará al instante.",
+        themeColorReset: "Restablecer",
+        cloudSaveRetryMessage: "Error al guardar en la nube. Verifica la conexión e inténtalo de nuevo.",
+        cloudDataLoadRetryMessage: "No se pudieron cargar los datos de la nube. Reinténtalo con el botón Actualizar.",
+        cancel: "Cancelar",
+        save: "Guardar",
+        edit: "Editar",
+        delete: "Eliminar",
+        settingsAddBtn: "Añadir",
+        legalRegionGlobalLabel: "Global",
+        legalRegionJapanLabel: "Japón",
+        legalRegionEuLabel: "UE",
+    };
+}
+
+const REQUIRED_RECENT_KEYS = {
+    saveSettings: {
+        ja: "設定を保存",
+        en: "Save Settings",
+        fr: "Enregistrer",
+        es: "Guardar ajustes",
+        "zh-CN": "保存设置",
+        "zh-TW": "儲存設定",
+        ko: "설정 저장",
+    },
+    themeColorSection: {
+        ja: "テーマカラー",
+        en: "Theme Color",
+        fr: "Couleur du thème",
+        es: "Color del tema",
+        "zh-CN": "主题颜色",
+        "zh-TW": "主題顏色",
+        ko: "테마 색상",
+    },
+    settingsSaved: {
+        ja: "設定を保存しました",
+        en: "Settings saved",
+        fr: "Paramètres enregistrés",
+        es: "Ajustes guardados",
+        "zh-CN": "设置已保存",
+        "zh-TW": "設置已保存",
+        ko: "설정이 저장되었습니다",
+    },
+    addNew: {
+        ja: "新規追加",
+        en: "Add New",
+        fr: "Ajouter",
+        es: "Nuevo",
+        "zh-CN": "新增",
+        "zh-TW": "新增",
+        ko: "새로 추가",
+    },
+};
+
+Object.entries(REQUIRED_RECENT_KEYS).forEach(([key, labels]) => {
+    Object.entries(labels).forEach(([lang, label]) => {
+        if (!LOCALE[lang]) return;
+        if (!Object.prototype.hasOwnProperty.call(LOCALE[lang], key) || !String(LOCALE[lang][key] || '').trim()) {
+            LOCALE[lang][key] = label;
+        }
+    });
+});
+
 // Country/region specific invoice profiles.
 // To add a new market, copy one block and adjust code/currency/tax/legal fields.
 const INVOICE_COUNTRY_PROFILES = {
@@ -4373,6 +4447,29 @@ const INVOICE_COUNTRY_PROFILES = {
         ],
     },
 };
+
+if (!INVOICE_COUNTRY_PROFILES.es) {
+    INVOICE_COUNTRY_PROFILES.es = {
+        code: 'ES',
+        currency: 'EUR',
+        defaultTaxRate: 21,
+        taxLabel: 'IVA',
+        legalSectionTitle: 'Información legal (España)',
+        legalSectionHint: 'Introduce los datos fiscales necesarios para tus facturas.',
+        legalFields: [
+            {
+                key: 'nifNumber',
+                label: 'NIF/CIF',
+                placeholder: 'B12345678',
+            },
+            {
+                key: 'ivaNumber',
+                label: 'Número de IVA',
+                placeholder: 'ESX1234567X',
+            },
+        ],
+    };
+}
 
 // Export locales to window
 if (typeof window !== 'undefined') {
