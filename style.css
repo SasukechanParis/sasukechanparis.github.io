@@ -150,7 +150,7 @@
 }
 
 body {
-  font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "YuGothic", "Hiragino Sans", "Meiryo", "Inter", sans-serif !important;
+  font-family: "Inter", "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", "YuGothic", "Hiragino Sans", "Meiryo", sans-serif !important;
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
@@ -161,7 +161,7 @@ body {
 
 html[lang^="ja"] body,
 body.lang-ja {
-  font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "YuGothic", "Hiragino Sans", "Meiryo", sans-serif !important;
+  font-family: "Inter", "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", "YuGothic", "Hiragino Sans", "Meiryo", sans-serif !important;
 }
 
 html,
@@ -4319,6 +4319,42 @@ html[lang="fr"] .modal-footer .btn {
   cursor: pointer;
 }
 
+.settings-accent-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 220px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.settings-accent-input {
+  width: 56px;
+  height: 36px;
+  padding: 3px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+}
+
+.settings-accent-input::-webkit-color-swatch-wrapper {
+  padding: 0;
+  border-radius: 8px;
+}
+
+.settings-accent-input::-webkit-color-swatch {
+  border: none;
+  border-radius: 8px;
+}
+
+.settings-accent-input::-moz-color-swatch {
+  border: none;
+  border-radius: 8px;
+}
+
 .settings-add-box {
   display: flex;
   gap: 8px;
@@ -4484,6 +4520,12 @@ html[lang="fr"] .modal-footer .btn {
     min-width: 0;
     flex: 1 1 100%;
   }
+
+  .settings-accent-control {
+    justify-content: flex-start;
+    width: 100%;
+    min-width: 0;
+  }
 }
 
 /* Task List */
@@ -4629,13 +4671,243 @@ html[lang="fr"] .modal-footer .btn {
   display: none !important;
 }
 
+/* ===== Pholio Gen2 (Professional polish) ===== */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background:
+    radial-gradient(1200px 560px at -10% -20%, rgba(139, 92, 246, 0.22), transparent 58%),
+    radial-gradient(900px 480px at 110% 0%, rgba(34, 211, 238, 0.14), transparent 62%),
+    radial-gradient(640px 420px at 50% 120%, rgba(236, 72, 153, 0.08), transparent 68%);
+}
+
+.app-header {
+  padding: 18px 20px 16px;
+  margin-bottom: 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.header-left,
+.header-actions {
+  gap: 10px;
+}
+
+.toolbar {
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+.btn,
+.ui-button-standard {
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: border-color var(--transition), background var(--transition), transform var(--transition), box-shadow var(--transition);
+}
+
+.btn:hover,
+.ui-button-standard:hover {
+  border-color: color-mix(in srgb, var(--accent) 60%, rgba(255, 255, 255, 0.12));
+  background: rgba(255, 255, 255, 0.06);
+  transform: translateY(-1px);
+}
+
+.search-box input,
+#search-input {
+  min-height: 44px;
+  padding: 12px 14px 12px 38px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.table-wrapper,
+.table-container {
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.14);
+}
+
+#customer-table th {
+  padding: 18px 14px;
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 0.76rem;
+  letter-spacing: 0.04em;
+}
+
+#customer-table td {
+  padding: 16px 14px;
+}
+
+#customer-table td[data-column-key="shootingDate"] {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+#customer-table td[data-column-key="customerName"] {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+#customer-table td[data-column-key="contact"],
+#customer-table td[data-column-key="meetingDate"],
+#customer-table td[data-column-key="assignedTo"] {
+  color: var(--text-secondary);
+}
+
+.table-footer {
+  padding: 12px 14px;
+}
+
+#table-count {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+#table-revenue-total {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.table-action-group,
+.action-buttons {
+  gap: 6px;
+}
+
+.table-action-btn,
+.action-btn {
+  min-height: 32px;
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.customer-card {
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+  padding: 18px;
+  gap: 14px;
+}
+
+.customer-card-flex-fields {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.customer-card-field[data-field="shootingDate"] {
+  order: var(--field-order-shootingDate, 1);
+}
+
+.customer-card-field[data-field="customerName"] {
+  order: var(--field-order-customerName, 2);
+}
+
+.customer-card-field[data-field="plan"] {
+  order: var(--field-order-plan, 3);
+}
+
+.customer-card-mobile-date {
+  color: var(--accent);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.customer-card-mobile-name {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.customer-card-mobile-note {
+  color: var(--text-muted);
+}
+
+.customer-card-mobile-foot {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.customer-card-mobile-foot .customer-card-field {
+  min-width: 0;
+}
+
+.modal {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+}
+
+.modal-body {
+  padding: 2.4rem;
+}
+
+.modal-footer {
+  gap: 14px;
+  padding: 1.8rem 2.4rem;
+}
+
+.settings-tabs {
+  gap: 10px;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+}
+
+.settings-section {
+  padding: 20px;
+  margin-bottom: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+@media (max-width: 768px) {
+  .toolbar {
+    margin-bottom: 14px;
+    gap: 8px;
+  }
+
+  .modal-body {
+    padding: 14px !important;
+  }
+
+  .settings-section {
+    padding: 14px !important;
+    margin-bottom: 12px !important;
+  }
+}
+
 /* ===== Mobile hard override (requested) ===== */
 @media (max-width: 768px) {
   /* 1) Force single-line compact customer row */
   .customer-card {
     display: block !important;
-    padding: 4px 6px !important;
-    min-height: 42px !important;
+    padding: 8px 10px !important;
+    min-height: 52px !important;
     line-height: 1.2 !important;
   }
 
@@ -4649,7 +4921,7 @@ html[lang="fr"] .modal-footer .btn {
     display: block !important;
     overflow: hidden !important;
     min-width: 0 !important;
-    padding-right: 132px !important;
+    padding-right: 136px !important;
   }
 
   .customer-card-status-dot {
@@ -4659,7 +4931,7 @@ html[lang="fr"] .modal-footer .btn {
   .customer-card-mobile-main {
     display: flex !important;
     align-items: center !important;
-    gap: 6px !important;
+    gap: 8px !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     min-width: 0 !important;
@@ -4697,7 +4969,7 @@ html[lang="fr"] .modal-footer .btn {
     display: flex !important;
     justify-content: flex-end !important;
     align-items: center !important;
-    gap: 2px !important;
+    gap: 4px !important;
     width: auto !important;
     margin: 0 !important;
     padding: 0 !important;
