@@ -35,8 +35,11 @@
   const SUPPORT_REPLY_NOTICE_SEEN_KEY = 'photocrm_support_reply_notice_seen';
   const REFERRAL_PROGRESS_KEY = 'photocrm_referral_progress';
   const REFERRAL_CODE_KEY = 'photocrm_referral_code';
+  const GOOGLE_CALENDAR_AUTH_GRANTED_KEY = 'photocrm_google_calendar_auth_granted';
   const ADMIN_MANAGEMENT_EMAILS = new Set(['sasuke.photographe@gmail.com']);
   const GOOGLE_CALENDAR_DEFAULT_ID = 'sasuke.photographe@gmail.com';
+  const GOOGLE_CALENDAR_API_KEY = 'AIzaSyD6fb5NWN0bAe0vW1Z9piQxv9aYE0e-tGs';
+  const GOOGLE_CALENDAR_OAUTH_CLIENT_ID = '1022053730718-hsfcha1a9fjcggpmiffqhitnkmp64600.apps.googleusercontent.com';
   const LOCAL_GUEST_MODE_KEY = 'photocrm_local_guest_mode';
   const IDB_MIRROR_DB_NAME = 'PholioDB';
   const IDB_MIRROR_DB_VERSION = 1;
@@ -2130,6 +2133,42 @@
     saveCloudValue(GOOGLE_CALENDAR_SELECTED_ID_KEY, normalized);
   }
 
+  function markGoogleCalendarAuthGranted() {
+    saveLocalValue(GOOGLE_CALENDAR_AUTH_GRANTED_KEY, true);
+  }
+
+  function hasGoogleCalendarAuthGrantedFlag() {
+    return getLocalValue(GOOGLE_CALENDAR_AUTH_GRANTED_KEY, false) === true;
+  }
+
+  async function ensureGoogleCalendarAccessToken() {
+    let token = String(window.FirebaseService?.getGoogleAccessToken?.() || '').trim();
+    if (token) {
+      markGoogleCalendarAuthGranted();
+      return token;
+    }
+
+    // Keep this guard explicit so invalid credentials fail fast in UI.
+    if (!String(GOOGLE_CALENDAR_API_KEY || '').trim() || !String(GOOGLE_CALENDAR_OAUTH_CLIENT_ID || '').trim()) {
+      throw new Error('google_calendar_credentials_missing');
+    }
+
+    const user = window.FirebaseService?.getCurrentUser?.();
+    if (!user) return '';
+
+    // Open Google consent only on first authorization request.
+    if (hasGoogleCalendarAuthGrantedFlag()) return '';
+
+    const loginFn = window.FirebaseService?.signInWithPopup
+      ?? window.FirebaseService?.signInWithGoogle;
+    if (typeof loginFn !== 'function') return '';
+
+    await loginFn.call(window.FirebaseService);
+    token = String(window.FirebaseService?.getGoogleAccessToken?.() || '').trim();
+    if (token) markGoogleCalendarAuthGranted();
+    return token;
+  }
+
   function getTargetGoogleCalendarId() {
     const normalized = String(googleCalendarSelectedId || '').trim();
     return normalized || GOOGLE_CALENDAR_DEFAULT_ID;
@@ -2166,7 +2205,7 @@
   }
 
   async function fetchGoogleCalendarList(force = false) {
-    const token = window.FirebaseService?.getGoogleAccessToken?.() || '';
+    const token = await ensureGoogleCalendarAccessToken();
     if (!token) {
       googleCalendarList = [];
       googleCalendarListLoaded = false;
@@ -2176,7 +2215,7 @@
     if (googleCalendarListPromise && !force) return googleCalendarListPromise;
 
     googleCalendarListPromise = (async () => {
-      const response = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
+      const response = await fetch(`https://www.googleapis.com/calendar/v3/users/me/calendarList?key=${encodeURIComponent(GOOGLE_CALENDAR_API_KEY)}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -5146,8 +5185,9 @@
   }
 
   function shouldSyncGoogleCalendarEvent(previousCustomer, nextCustomer) {
-    if (!googleCalendarAutoSyncEnabled) return false;
     if (!nextCustomer || !String(nextCustomer.shootingDate || '').trim()) return false;
+    const hasPerCustomerSync = nextCustomer.syncGoogleCalendar === true;
+    if (!hasPerCustomerSync && !googleCalendarAutoSyncEnabled) return false;
     if (nextCustomer.syncGoogleCalendar === false) return false;
     const targetCalendarId = getTargetGoogleCalendarId();
     if (String(nextCustomer.google_event_calendar_id || '').trim() !== targetCalendarId) return true;
@@ -5349,7 +5389,7 @@
   async function upsertGoogleCalendarEvent(customer) {
     const payload = buildGoogleCalendarEventPayload(customer);
     if (!payload) return null;
-    const accessToken = window.FirebaseService?.getGoogleAccessToken?.() || '';
+    const accessToken = await ensureGoogleCalendarAccessToken();
     if (!accessToken) {
       throw new Error('missing_google_access_token');
     }
@@ -5360,8 +5400,8 @@
     const existingEventCalendarId = String(customer?.google_event_calendar_id || '').trim();
     const shouldUpdateExisting = !!existingEventId && existingEventCalendarId === calendarId;
     const endpoint = shouldUpdateExisting
-      ? `${baseUrl}/${encodeURIComponent(existingEventId)}`
-      : baseUrl;
+      ? `${baseUrl}/${encodeURIComponent(existingEventId)}?key=${encodeURIComponent(GOOGLE_CALENDAR_API_KEY)}`
+      : `${baseUrl}?key=${encodeURIComponent(GOOGLE_CALENDAR_API_KEY)}`;
     const resolvedMethod = shouldUpdateExisting ? 'PUT' : 'POST';
 
     const response = await fetch(endpoint, {
@@ -8511,6 +8551,7 @@
       const loginFn = window.FirebaseService.signInWithPopup
         ?? window.FirebaseService.signInWithGoogle;
       await loginFn.call(window.FirebaseService);
+      markGoogleCalendarAuthGranted();
     } catch (err) {
       console.error('Firebase Auth Error:', err?.code, err?.message);
       console.error(err);
