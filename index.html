@@ -797,6 +797,7 @@
           <button class="settings-tab-btn" data-tab="contract">契約書設定</button>
           <button class="settings-tab-btn" data-tab="team" data-i18n="teamManager">チーム管理</button>
           <button class="settings-tab-btn" data-tab="support" data-i18n="supportFeedbackTab">サポート</button>
+          <button class="settings-tab-btn" data-tab="referral" data-i18n="referralProgramTab">紹介プログラム</button>
           <button class="settings-tab-btn" data-tab="admin" id="settings-tab-admin" data-i18n="adminPanelTab" style="display:none;">管理者</button>
         </div>
         <div class="settings-current-tab-indicator" id="settings-current-tab-indicator" aria-live="polite"></div>
@@ -981,6 +982,23 @@
               <div class="support-reply-list" id="support-reply-list">
                 <p class="help-text" data-i18n="supportMyRepliesEmpty">返信はまだありません。</p>
               </div>
+            </div>
+          </div>
+        </div>
+        <div class="settings-tab-content" id="settings-content-referral">
+          <div class="settings-section">
+            <h3 data-i18n="referralProgramTitle">仲間を招待して、特典をゲット</h3>
+            <p class="help-text" data-i18n="referralProgramDescription">あなたの紹介で友人がPholioを始めると、二人とも1ヶ月無料。さらに10人紹介で『一生無料』の特典を差し上げます。</p>
+            <div class="form-group">
+              <label for="referral-link-output" data-i18n="referralProgramLinkLabel">紹介リンク</label>
+              <div class="settings-inline-select-wrap">
+                <input type="text" id="referral-link-output" readonly>
+                <button class="btn btn-secondary btn-sm" type="button" id="btn-copy-referral-link" data-i18n="referralProgramCopyButton">リンクをコピー</button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="referral-progress-count" data-i18n="referralProgramProgressLabel">進捗状況</label>
+              <div id="referral-progress-count" class="settings-detail-empty">一生無料まで あと 10人</div>
             </div>
           </div>
         </div>

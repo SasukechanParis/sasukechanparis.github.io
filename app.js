@@ -33,6 +33,8 @@
   const STUDIO_NAME_KEY = 'photocrm_studio_name';
   const ENTERPRISE_CONTACT_REQUESTS_KEY = 'photocrm_enterprise_contact_requests';
   const SUPPORT_REPLY_NOTICE_SEEN_KEY = 'photocrm_support_reply_notice_seen';
+  const REFERRAL_PROGRESS_KEY = 'photocrm_referral_progress';
+  const REFERRAL_CODE_KEY = 'photocrm_referral_code';
   const ADMIN_MANAGEMENT_EMAILS = new Set(['sasuke.photographe@gmail.com']);
   const GOOGLE_CALENDAR_DEFAULT_ID = 'sasuke.photographe@gmail.com';
   const LOCAL_GUEST_MODE_KEY = 'photocrm_local_guest_mode';
@@ -259,6 +261,7 @@
       GOOGLE_CALENDAR_SELECTED_ID_KEY,
       USER_PLAN_KEY,
       USER_BILLING_PROFILE_KEY,
+      REFERRAL_PROGRESS_KEY,
       STUDIO_NAME_KEY,
       ENTERPRISE_CONTACT_REQUESTS_KEY,
     ];
@@ -991,6 +994,7 @@
     updateGraphToggleButtonLabel();
     updateHeroStatsToggleButtonLabel();
     renderSettings();
+    renderReferralProgramPanel();
     updateTeamManagementTabAvailability();
     syncDynamicItemRowsWithSettings();
   }
@@ -1099,6 +1103,7 @@
     if (State.getRaw(OPTIONS_KEY, null) === null) State.setJSON(OPTIONS_KEY, DEFAULT_OPTIONS);
     if (State.getRaw(USER_PLAN_KEY, null) === null) State.setJSON(USER_PLAN_KEY, 'free');
     if (State.getRaw(USER_BILLING_PROFILE_KEY, null) === null) State.setJSON(USER_BILLING_PROFILE_KEY, {});
+    if (State.getRaw(REFERRAL_PROGRESS_KEY, null) === null) State.setJSON(REFERRAL_PROGRESS_KEY, { acceptedCount: 0 });
     if (State.getRaw(STUDIO_NAME_KEY, null) === null) State.setJSON(STUDIO_NAME_KEY, '');
     if (State.getRaw(ACCENT_COLOR_KEY, null) === null) State.setJSON(ACCENT_COLOR_KEY, DEFAULT_ACCENT_COLOR);
   }
@@ -7787,6 +7792,93 @@
     if (messageInput) messageInput.value = '';
   }
 
+  function getReferralProgressState() {
+    const fallback = { acceptedCount: 0 };
+    const raw = getCloudValue(REFERRAL_PROGRESS_KEY, getLocalValue(REFERRAL_PROGRESS_KEY, fallback));
+    if (!raw || typeof raw !== 'object') return fallback;
+    return {
+      acceptedCount: Math.max(0, Math.floor(toSafeNumber(raw.acceptedCount ?? raw.count, 0))),
+    };
+  }
+
+  function getReferralCodeForUser(user = window.FirebaseService?.getCurrentUser?.()) {
+    const uid = String(user?.uid || '').trim();
+    if (uid) return uid;
+
+    const cached = String(getLocalValue(REFERRAL_CODE_KEY, '') || '').trim();
+    if (cached) return cached;
+
+    const generated = `guest-${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`;
+    saveLocalValue(REFERRAL_CODE_KEY, generated);
+    return generated;
+  }
+
+  function buildReferralLink(code = '') {
+    const base = `${window.location.origin}${window.location.pathname}`;
+    const normalizedCode = String(code || '').trim();
+    if (!normalizedCode) return base;
+    return `${base}?ref=${encodeURIComponent(normalizedCode)}`;
+  }
+
+  function renderReferralProgramPanel() {
+    const linkInput = document.getElementById('referral-link-output');
+    const progressEl = document.getElementById('referral-progress-count');
+    if (!linkInput && !progressEl) return;
+
+    const referralCode = getReferralCodeForUser();
+    const referralLink = buildReferralLink(referralCode);
+    const { acceptedCount } = getReferralProgressState();
+    const remaining = Math.max(0, 10 - acceptedCount);
+
+    if (linkInput) {
+      linkInput.value = referralLink;
+      linkInput.readOnly = true;
+    }
+    if (progressEl) {
+      progressEl.textContent = t('referralProgramRemaining', { count: String(remaining) });
+    }
+  }
+
+  async function handleCopyReferralLinkClick() {
+    const linkInput = document.getElementById('referral-link-output');
+    const text = String(linkInput?.value || '').trim();
+    if (!text) return;
+
+    let copied = false;
+    if (navigator?.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        copied = true;
+      } catch {
+        copied = false;
+      }
+    }
+
+    if (!copied) {
+      const tempArea = document.createElement('textarea');
+      tempArea.value = text;
+      tempArea.setAttribute('readonly', 'readonly');
+      tempArea.style.position = 'fixed';
+      tempArea.style.left = '-9999px';
+      tempArea.style.top = '0';
+      document.body.appendChild(tempArea);
+      tempArea.select();
+      try {
+        copied = document.execCommand('copy');
+      } catch {
+        copied = false;
+      } finally {
+        document.body.removeChild(tempArea);
+      }
+    }
+
+    if (copied) {
+      showToast(t('referralProgramCopied'));
+    } else {
+      showToast(t('referralProgramCopyFailed'), 'error');
+    }
+  }
+
   async function handleSupportTicketSubmit() {
     const subject = String(document.getElementById('support-ticket-subject')?.value || '').trim();
     const category = String(document.getElementById('support-ticket-category')?.value || 'bug').trim() || 'bug';
@@ -8233,6 +8325,7 @@
     loadBillingProfileSettings();
     loadContractTemplateSettings();
     renderPlanManagementSection();
+    renderReferralProgramPanel();
     updateTeamManagementTabAvailability();
     updateAdminSettingsAvailability();
     if (canAccessAdminPanel()) {
@@ -8314,6 +8407,9 @@
         if (tab === 'team') renderTeamList();
         if (tab === 'support') {
           refreshMySupportReplies({ notify: false });
+        }
+        if (tab === 'referral') {
+          renderReferralProgramPanel();
         }
         if (tab === 'admin') {
           refreshAdminOverview();
@@ -8462,6 +8558,7 @@
       if (event.target?.id === 'enterprise-contact-overlay') closeEnterpriseContactModal();
     }, 'enterprise-contact-overlay-close');
     bindEventOnce(document.getElementById('btn-support-submit'), 'click', handleSupportTicketSubmit, 'support-ticket-submit');
+    bindEventOnce(document.getElementById('btn-copy-referral-link'), 'click', handleCopyReferralLinkClick, 'referral-copy-link');
     bindEventOnce(document.getElementById('add-item-btn'), 'click', () => addDynamicChargeItem(), 'add-extra-item-click');
     bindEventOnce(document.getElementById('btn-google-login'), 'click', handleGoogleLoginClick, 'google-login-banner');
     bindEventOnce(document.getElementById('btn-google-login-screen'), 'click', handleGoogleLoginClick, 'google-login-screen');
