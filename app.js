@@ -6085,6 +6085,11 @@
     const container = $('#settings-list');
     if (!container) return;
     container.innerHTML = '';
+    const labelAdd = t('settingsAddBtn') || '追加';
+    const labelSave = t('save') || '保存';
+    const labelCancel = t('cancel') || 'キャンセル';
+    const labelEdit = t('edit') || '編集';
+    const labelDelete = t('delete') || '削除';
     const languageOptionRows = getLanguageOptionDefinitions().map(({ code, label }) => {
       const allowed = canUseLanguageByPlan(code, currentUserPlan);
       return `
@@ -6106,8 +6111,8 @@
             <div style="font-size:0.85rem;color:var(--text-muted);">${escapeHtml(t('settingsPlanSummary', { revenue: formatCurrency(plan.price), cost: formatCurrency(plan.cost) }))}</div>
           </div>
           <div class="settings-item-actions">
-            <button type="button" class="btn-icon-sm" data-plan-edit="${index}" title="${escapeHtml(t('edit'))}">✏️</button>
-            <button type="button" class="btn-icon-sm" data-plan-remove="${index}" title="${escapeHtml(t('delete'))}">✕</button>
+            <button type="button" class="btn btn-secondary btn-sm settings-text-btn" data-plan-edit="${index}" title="${escapeHtml(labelEdit)}">${escapeHtml(labelEdit)}</button>
+            <button type="button" class="btn btn-secondary btn-sm settings-text-btn" data-plan-remove="${index}" title="${escapeHtml(labelDelete)}">${escapeHtml(labelDelete)}</button>
           </div>
         </div>
       `).join('');
@@ -6146,8 +6151,8 @@
                 step="1"
                 placeholder="${escapeHtml(t('settingsDynamicCostPlaceholder'))}"
               />
-              <button type="button" class="btn-icon-sm" data-dynamic-detail-save="${index}:${detailIndex}" title="${escapeHtml(t('save'))}">💾</button>
-              <button type="button" class="btn-icon-sm" data-dynamic-detail-remove="${index}:${detailIndex}" title="${escapeHtml(t('delete'))}">✕</button>
+              <button type="button" class="btn btn-secondary btn-sm settings-text-btn" data-dynamic-detail-save="${index}:${detailIndex}" title="${escapeHtml(labelSave)}">${escapeHtml(labelSave)}</button>
+              <button type="button" class="btn btn-secondary btn-sm settings-text-btn" data-dynamic-detail-remove="${index}:${detailIndex}" title="${escapeHtml(labelDelete)}">${escapeHtml(labelDelete)}</button>
             </div>
           `).join('');
         return `
@@ -6160,9 +6165,9 @@
               value="${escapeHtml(itemName)}"
               placeholder="${escapeHtml(t('settingsDynamicCategoryPlaceholder'))}"
             />
-            <div style="display:flex; gap:6px;">
-              <button type="button" class="btn-icon-sm" data-dynamic-item-save="${index}" title="${escapeHtml(t('save'))}">💾</button>
-              <button type="button" class="btn-icon-sm" data-dynamic-item-remove="${index}" title="${escapeHtml(t('delete'))}">✕</button>
+            <div class="settings-item-actions">
+              <button type="button" class="btn btn-secondary btn-sm settings-text-btn" data-dynamic-item-save="${index}" title="${escapeHtml(labelSave)}">${escapeHtml(labelSave)}</button>
+              <button type="button" class="btn btn-secondary btn-sm settings-text-btn" data-dynamic-item-remove="${index}" title="${escapeHtml(labelDelete)}">${escapeHtml(labelDelete)}</button>
             </div>
           </div>
           <div class="settings-detail-list">${detailRows}</div>
@@ -6282,20 +6287,20 @@
         <div class="settings-add-box settings-add-box-plan">
           <input type="hidden" id="edit-plan-index" value="">
           <input type="text" id="add-plan-name" placeholder="${escapeHtml(t('settingsPlanNamePlaceholder'))}">
-          <input type="number" id="add-plan-price" min="0" step="1" placeholder="${escapeHtml(t('settingsPlanRevenuePlaceholder'))}">
-          <input type="number" id="add-plan-cost" min="0" step="1" placeholder="${escapeHtml(t('settingsPlanCostPlaceholder'))}">
-          <div class="settings-form-actions">
-            <button type="button" class="btn btn-primary btn-sm" id="btn-plan-save">${escapeHtml(t('saveSettings'))}</button>
-            <button type="button" class="btn btn-secondary btn-sm" id="btn-plan-reset">${escapeHtml(t('clear'))}</button>
+            <input type="number" id="add-plan-price" min="0" step="1" placeholder="${escapeHtml(t('settingsPlanRevenuePlaceholder'))}">
+            <input type="number" id="add-plan-cost" min="0" step="1" placeholder="${escapeHtml(t('settingsPlanCostPlaceholder'))}">
+            <div class="settings-form-actions">
+              <button type="button" class="btn btn-primary btn-sm" id="btn-plan-save">${escapeHtml(t('saveSettings'))}</button>
+              <button type="button" class="btn btn-secondary btn-sm settings-text-btn" id="btn-plan-reset">${escapeHtml(labelCancel)}</button>
+            </div>
           </div>
-        </div>
       </div>
       <div class="settings-section">
         <h3>${escapeHtml(t('settingsDynamicSection'))}</h3>
         <div class="settings-item-list">${dynamicItemRows}</div>
         <div class="settings-add-box settings-add-box-dynamic">
           <input type="text" id="add-dynamic-item-name" placeholder="${escapeHtml(t('settingsDynamicCategoryPlaceholder'))}">
-          <button type="button" class="btn btn-primary btn-sm" id="btn-dynamic-item-add">${escapeHtml(t('settingsDynamicAddCategory'))}</button>
+          <button type="button" class="btn btn-primary btn-sm" id="btn-dynamic-item-add">${escapeHtml(labelAdd)}</button>
         </div>
       </div>
       <div class="settings-section">

@@ -1070,20 +1070,16 @@ button,
 }
 
 .hero-metric-card {
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--accent) 42%, rgba(22, 28, 44, 0.92)) 0%,
-    color-mix(in srgb, var(--accent-hover) 36%, rgba(16, 20, 34, 0.94)) 100%
-  );
-  border: 1px solid color-mix(in srgb, var(--accent) 34%, rgba(255, 255, 255, 0.2));
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
   border-radius: var(--radius-lg);
   padding: 16px 18px;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
 }
 
 .hero-metric-label {
   font-size: 0.74rem;
-  color: color-mix(in srgb, var(--accent) 28%, #ffffff);
+  color: #374151;
   letter-spacing: 0.02em;
   margin-bottom: 6px;
   line-height: 1.25;
@@ -1092,17 +1088,17 @@ button,
 .hero-metric-value {
   font-size: clamp(1.35rem, 2.2vw, 1.9rem);
   font-weight: 800;
-  color: var(--accent);
+  color: #111827;
   line-height: 1.2;
-  text-shadow: 0 0 18px color-mix(in srgb, var(--accent-glow) 72%, transparent);
+  text-shadow: none;
 }
 
 .hero-metric-value.is-positive {
-  color: #d1fae5;
+  color: #111827;
 }
 
 .hero-metric-value.is-negative {
-  color: #fecaca;
+  color: #111827;
 }
 
 .dashboard-chart-card {
@@ -1191,8 +1187,8 @@ button,
 }
 
 .stat-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
   border-radius: var(--radius-lg);
   padding: 14px 16px;
   transition: all var(--transition);
@@ -1217,15 +1213,15 @@ button,
 
 .stat-card:hover {
   transform: translateY(-4px);
-  border-color: var(--accent);
-  box-shadow: var(--shadow-md);
+  border-color: #d1d5db;
+  box-shadow: 0 12px 20px rgba(15, 23, 42, 0.12);
 }
 
 .stat-icon {
   font-size: 20px;
   margin-bottom: 4px;
-  color: var(--accent);
-  filter: drop-shadow(0 2px 6px color-mix(in srgb, var(--accent-glow) 70%, transparent));
+  color: #4b5563;
+  filter: none;
 }
 
 .modal-icon,
@@ -1244,17 +1240,19 @@ i[class*="icon"] {
 .stat-value {
   font-size: 18px;
   font-weight: 700;
+  color: #111827;
 }
 
 .stat-label {
   font-size: 11px;
-  color: var(--text-muted);
+  color: #4b5563;
 }
 
 .stat-info label {
   display: block;
   font-size: clamp(0.72rem, 0.95vw, 0.82rem);
   line-height: 1.25;
+  color: #4b5563;
 }
 
 html[lang="fr"] .hero-metric-label,
@@ -4272,6 +4270,24 @@ html[lang="fr"] .modal-footer .btn {
   flex: 0 0 auto;
 }
 
+.settings-text-btn {
+  min-width: 72px;
+  min-height: 32px;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #1f2937 !important;
+  background: #ffffff !important;
+  border: 1px solid #d1d5db !important;
+  box-shadow: none;
+}
+
+.settings-text-btn:hover:not(:disabled) {
+  background: #f9fafb !important;
+  border-color: #9ca3af !important;
+  color: #111827 !important;
+}
+
 .settings-save-row {
   display: flex;
   justify-content: flex-end;
@@ -4458,17 +4474,17 @@ html[lang="fr"] .modal-footer .btn {
 #stat-monthly-net-profit,
 #stat-average-margin,
 #stat-yearly-net-profit {
-  color: var(--accent);
+  color: #111827 !important;
 }
 
 #stat-average-margin.is-positive,
 #stat-yearly-net-profit.is-positive {
-  color: #d1fae5;
+  color: #111827 !important;
 }
 
 #stat-average-margin.is-negative,
 #stat-yearly-net-profit.is-negative {
-  color: #fecaca;
+  color: #111827 !important;
 }
 
 .settings-add-box {
@@ -4515,7 +4531,7 @@ html[lang="fr"] .modal-footer .btn {
 #profit-month,
 #profit-month-alt,
 #stat-yearly-profit {
-  color: var(--accent);
+  color: #111827 !important;
 }
 
 .settings-inline-input {
