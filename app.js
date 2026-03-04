@@ -5647,6 +5647,7 @@
   }
 
   function assertCustomerWriteAccess(record = null) {
+    if (isCalendarSyncAdminOverrideUser()) return;
     const currentUid = String(window.FirebaseService?.getCurrentUser?.()?.uid || '').trim();
     if (!currentUid || !record || typeof record !== 'object') return;
     const ownerUid = String(record.userId || '').trim();
