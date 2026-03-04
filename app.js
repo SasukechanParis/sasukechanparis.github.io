@@ -5185,6 +5185,7 @@
   }
 
   function shouldSyncGoogleCalendarEvent(previousCustomer, nextCustomer) {
+    if (!canUseCalendarSyncFeature()) return false;
     if (!nextCustomer || !String(nextCustomer.shootingDate || '').trim()) return false;
     const hasPerCustomerSync = nextCustomer.syncGoogleCalendar === true;
     if (!hasPerCustomerSync && !googleCalendarAutoSyncEnabled) return false;
@@ -5510,7 +5511,8 @@
       }
       const syncGoogleCalendarInput = $('#form-syncGoogleCalendar');
       if (syncGoogleCalendarInput) {
-        syncGoogleCalendarInput.checked = c.syncGoogleCalendar !== false;
+        const allowed = canUseCalendarSyncFeature();
+        syncGoogleCalendarInput.checked = allowed && c.syncGoogleCalendar !== false;
       }
 
       const planDetails = normalizePlanDetails(c.planDetails, c.revenue);
@@ -5569,7 +5571,7 @@
       if (endTimeInput) endTimeInput.value = endTime;
       const syncGoogleCalendarInput = $('#form-syncGoogleCalendar');
       if (syncGoogleCalendarInput) {
-        syncGoogleCalendarInput.checked = !!googleCalendarAutoSyncEnabled;
+        syncGoogleCalendarInput.checked = canUseCalendarSyncFeature() && !!googleCalendarAutoSyncEnabled;
       }
       renderCustomFields();
     }
@@ -5681,6 +5683,9 @@
         else if (f.type === 'number') data[f.key] = el.value ? Number(el.value) : null;
         else data[f.key] = el.value || '';
       });
+      if (!canUseCalendarSyncFeature()) {
+        data.syncGoogleCalendar = false;
+      }
       if (!isFormFieldVisible('assignedTo') && !String(data.assignedTo || '').trim()) {
         data.assignedTo = resolveDefaultAssignedToValue();
       }
@@ -6618,8 +6623,21 @@
     });
 
     const googleCalendarToggle = container.querySelector('#settings-google-calendar-sync');
+    if (googleCalendarToggle && !canUseCalendarSyncFeature()) {
+      googleCalendarToggle.checked = false;
+      if (googleCalendarAutoSyncEnabled) {
+        setGoogleCalendarAutoSyncEnabled(false);
+      }
+    }
     bindEventOnce(googleCalendarToggle, 'change', (event) => {
-      setGoogleCalendarAutoSyncEnabled(!!event.target.checked);
+      const nextEnabled = !!event?.target?.checked;
+      if (nextEnabled && !canUseCalendarSyncFeature()) {
+        event.target.checked = false;
+        setGoogleCalendarAutoSyncEnabled(false);
+        promptCalendarSyncRestrictedNotice();
+        return;
+      }
+      setGoogleCalendarAutoSyncEnabled(nextEnabled);
     }, 'settings-google-calendar-sync-toggle');
 
     const googleCalendarSelect = container.querySelector('#settings-google-calendar-select');
@@ -7919,6 +7937,19 @@
     };
   }
 
+  function canUseCalendarSyncFeature() {
+    const achievedReferrals = getReferralProgressState().acceptedCount;
+    return achievedReferrals >= 10 || hasPaidPlanAccess(currentUserPlan);
+  }
+
+  function promptCalendarSyncRestrictedNotice() {
+    const message = 'この機能は10人紹介達成者、または有料プラン限定です。紹介プログラムを確認しますか？';
+    showToast(message, 'error');
+    if (window.confirm(message)) {
+      openSettingsReferralProgramSection();
+    }
+  }
+
   function getReferralCodeForUser(user = window.FirebaseService?.getCurrentUser?.()) {
     const uid = String(user?.uid || '').trim();
     if (uid) return uid;
@@ -8085,6 +8116,19 @@
     if (planTabBtn && !planTabBtn.classList.contains('active')) planTabBtn.click();
     window.requestAnimationFrame(() => {
       const section = document.getElementById('settings-subscription-plan-section');
+      if (!section) return;
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      section.classList.add('settings-section-focus');
+      window.setTimeout(() => section.classList.remove('settings-section-focus'), 1200);
+    });
+  }
+
+  function openSettingsReferralProgramSection() {
+    handleOpenSettingsClick();
+    const referralTabBtn = settingsOverlay?.querySelector('.settings-tab-btn[data-tab="referral"]');
+    if (referralTabBtn && !referralTabBtn.classList.contains('active')) referralTabBtn.click();
+    window.requestAnimationFrame(() => {
+      const section = document.getElementById('settings-content-referral');
       if (!section) return;
       section.scrollIntoView({ behavior: 'smooth', block: 'start' });
       section.classList.add('settings-section-focus');
@@ -8567,6 +8611,14 @@
     }
   }
 
+  function handleCustomerFormSyncGoogleCalendarToggle(event) {
+    const checkbox = event?.target;
+    if (!checkbox || checkbox.checked !== true) return;
+    if (canUseCalendarSyncFeature()) return;
+    checkbox.checked = false;
+    promptCalendarSyncRestrictedNotice();
+  }
+
   function handleGoogleLogoutClick() {
     isLoggedIn = false;
     mergePromptedUid = null;
@@ -8661,6 +8713,7 @@
     bindEventOnce(document.getElementById('form-revenue'), 'input', syncAdjustmentFromRevenueInput, 'form-revenue-input');
     bindEventOnce(document.getElementById('form-expense'), 'input', handleExpenseInputChange, 'form-expense-input');
     bindEventOnce(document.getElementById('form-total-price'), 'input', syncAdjustmentFromTotalInput, 'form-total-price-input');
+    bindEventOnce(document.getElementById('form-syncGoogleCalendar'), 'change', handleCustomerFormSyncGoogleCalendarToggle, 'form-sync-google-calendar-toggle');
     bindEventOnce(document.getElementById('btn-add'), 'click', handleAddCustomerClick, 'add-customer-click');
     bindEventOnce(document.getElementById('btn-add-fab'), 'click', handleAddCustomerClick, 'add-customer-fab-click');
     bindEventOnce(document.getElementById('btn-settings'), 'click', handleOpenSettingsClick, 'open-settings-click');
