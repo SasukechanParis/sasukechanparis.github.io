@@ -1149,21 +1149,64 @@
     return records.map((record) => ({ ...record, userId: uid }));
   }
 
+  function sanitizeFirestoreFriendlyValue(value) {
+    if (value === undefined || value === null) return '';
+    if (value instanceof Date) return value.toISOString();
+    if (Array.isArray(value)) {
+      return value.map((item) => sanitizeFirestoreFriendlyValue(item));
+    }
+    if (value && typeof value === 'object') {
+      const sanitized = {};
+      Object.entries(value).forEach(([key, entry]) => {
+        sanitized[key] = sanitizeFirestoreFriendlyValue(entry);
+      });
+      return sanitized;
+    }
+    if (typeof value === 'number' && !Number.isFinite(value)) return 0;
+    return value;
+  }
+
+  function sanitizeCustomerRecordForSave(record) {
+    const source = (record && typeof record === 'object') ? record : {};
+    const sanitized = sanitizeFirestoreFriendlyValue(source);
+    const defaultTimes = getDefaultShootingTimes();
+    const currentUid = String(window.FirebaseService?.getCurrentUser?.()?.uid || '').trim();
+    const startTime = normalizeTimeString(sanitized.startTime) || defaultTimes.startTime;
+    const endTime = normalizeTimeString(sanitized.endTime) || addOneHourToTimeString(startTime);
+    const userId = String(sanitized.userId || currentUid || '').trim();
+    const googleEventId = String(sanitized.google_event_id || sanitized.calendarEventId || '').trim();
+    const googleEventCalendarId = String(sanitized.google_event_calendar_id || '').trim();
+
+    return {
+      ...sanitized,
+      userId,
+      startTime,
+      endTime,
+      calendarEventId: googleEventId,
+      google_event_id: googleEventId,
+      google_event_calendar_id: googleEventCalendarId,
+    };
+  }
+
   function saveCustomers(data, options = {}) {
     try {
       const records = Array.isArray(data) ? data : [];
       const normalized = records.map((record) => {
-        const normalizedExtraChargeItems = normalizeExtraChargeItems(record?.extraChargeItems);
-        const fallbackExpense = toSafeNumber(record?.planCost, toSafeNumber(record?.planDetails?.planCost, 0))
+        const sanitizedRecord = sanitizeCustomerRecordForSave(record);
+        const normalizedExtraChargeItems = normalizeExtraChargeItems(sanitizedRecord?.extraChargeItems);
+        const fallbackExpense = toSafeNumber(
+          sanitizedRecord?.planCost,
+          toSafeNumber(sanitizedRecord?.planDetails?.planCost, 0)
+        )
           + normalizedExtraChargeItems.reduce((sum, item) => sum + toSafeNumber(item?.cost, 0), 0);
         return {
-          ...(record || {}),
-          planDetails: normalizePlanDetails(record?.planDetails, record?.revenue),
+          ...sanitizedRecord,
+          planDetails: normalizePlanDetails(sanitizedRecord?.planDetails, sanitizedRecord?.revenue),
           extraChargeItems: normalizedExtraChargeItems,
-          workflowStatus: normalizeWorkflowStatus(record?.workflowStatus),
-          expense: toSafeNumber(record?.expense, fallbackExpense),
-          costumePrice: toSafeNumber(record?.costumePrice, 0),
-          hairMakeupPrice: toSafeNumber(record?.hairMakeupPrice, 0),
+          workflowStatus: normalizeWorkflowStatus(sanitizedRecord?.workflowStatus),
+          expense: toSafeNumber(sanitizedRecord?.expense, fallbackExpense),
+          costumePrice: toSafeNumber(sanitizedRecord?.costumePrice, 0),
+          hairMakeupPrice: toSafeNumber(sanitizedRecord?.hairMakeupPrice, 0),
         };
       });
       return saveCloudValue(STORAGE_KEY, withCurrentUserId(normalized), options);
@@ -5668,6 +5711,7 @@
       ? (customers.find((entry) => entry.id === editingId) || null)
       : null;
     const customersSnapshot = cloneCustomerSnapshot(customers);
+    let payloadForDebug = null;
 
     if (editingId) assertCustomerWriteAccess(previousCustomer);
     setActionButtonLoadingState(
@@ -5677,17 +5721,26 @@
     );
 
     try {
-      const data = {};
+      let data = {};
       fields.forEach(f => {
         const el = $(`#form-${f.key}`);
         if (!el) return;
         if (f.type === 'checkbox') data[f.key] = el.checked;
-        else if (f.type === 'number') data[f.key] = el.value ? Number(el.value) : null;
+        else if (f.type === 'number') data[f.key] = el.value === '' ? '' : Number(el.value);
         else data[f.key] = el.value || '';
       });
       if (!canUseCalendarSyncFeature()) {
         data.syncGoogleCalendar = false;
       }
+      const activeUserId = String(window.FirebaseService?.getCurrentUser?.()?.uid || '').trim();
+      if (activeUserId) data.userId = activeUserId;
+      const fallbackTimes = getDefaultShootingTimes();
+      const normalizedStartTime = normalizeTimeString(data.startTime) || fallbackTimes.startTime;
+      data.startTime = normalizedStartTime;
+      data.endTime = normalizeTimeString(data.endTime) || addOneHourToTimeString(normalizedStartTime);
+      data.calendarEventId = String(data.calendarEventId || data.google_event_id || '').trim();
+      data.google_event_id = String(data.google_event_id || '').trim();
+      data.google_event_calendar_id = String(data.google_event_calendar_id || '').trim();
       if (!isFormFieldVisible('assignedTo') && !String(data.assignedTo || '').trim()) {
         data.assignedTo = resolveDefaultAssignedToValue();
       }
@@ -5765,6 +5818,8 @@
         totalPrice: finalRevenue,
       };
       data.planDetails = normalizePlanDetails(rawPlanDetails, data.revenue);
+      data = sanitizeCustomerRecordForSave(data);
+      payloadForDebug = cloneCustomerSnapshot([data])[0] || null;
 
       if (editingId) {
         const idx = customers.findIndex(c => c.id === editingId);
@@ -5803,11 +5858,15 @@
       customers = customersSnapshot;
       saveCustomers(customers).catch(() => {});
       const normalizedCode = normalizeOperationErrorCode(err);
+      console.error('[Customer Save Debug] error.code:', err?.code || '');
+      console.error('[Customer Save Debug] error.message:', err?.message || '');
+      console.error('[Customer Save Debug] payload:', payloadForDebug);
       console.error('[Customer Save] failed', {
         operationType,
         editingId,
         code: normalizedCode || 'unknown',
         message: err?.message || '',
+        payload: payloadForDebug,
         error: err,
       });
       const userMessage = buildCustomerOperationErrorMessage(operationType, err);
