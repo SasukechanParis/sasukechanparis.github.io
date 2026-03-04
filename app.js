@@ -37,6 +37,7 @@
   const REFERRAL_CODE_KEY = 'photocrm_referral_code';
   const GOOGLE_CALENDAR_AUTH_GRANTED_KEY = 'photocrm_google_calendar_auth_granted';
   const ADMIN_MANAGEMENT_EMAILS = new Set(['sasuke.photographe@gmail.com']);
+  const ADMIN_UID_CACHE_KEY = 'photocrm_admin_uid';
   const GOOGLE_CALENDAR_DEFAULT_ID = 'sasuke.photographe@gmail.com';
   const GOOGLE_CALENDAR_API_KEY = 'AIzaSyD6fb5NWN0bAe0vW1Z9piQxv9aYE0e-tGs';
   const GOOGLE_CALENDAR_OAUTH_CLIENT_ID = '1022053730718-hsfcha1a9fjcggpmiffqhitnkmp64600.apps.googleusercontent.com';
@@ -5784,12 +5785,16 @@
 
       showToast(editingId ? t('msgUpdated') : t('msgCreated'));
       const savedCustomerId = data.id || editingId;
-      runGoogleCalendarAutoSync(
-        savedCustomerId,
-        previousCustomer ? { ...previousCustomer } : null
-      ).catch((error) => {
-        console.error('Google Calendar sync scheduling failed', error);
-      });
+      const canAttemptCalendarSync = canUseCalendarSyncFeature()
+        && (data.syncGoogleCalendar === true || googleCalendarAutoSyncEnabled === true);
+      if (canAttemptCalendarSync) {
+        runGoogleCalendarAutoSync(
+          savedCustomerId,
+          previousCustomer ? { ...previousCustomer } : null
+        ).catch((error) => {
+          console.error('Google Calendar sync scheduling failed', error);
+        });
+      }
       closeModal();
       renderTable();
       if (calendarView.classList.contains('active')) renderCalendar();
@@ -7937,7 +7942,23 @@
     };
   }
 
+  function isCalendarSyncAdminOverrideUser(user = window.FirebaseService?.getCurrentUser?.()) {
+    if (!user) return false;
+    const uid = String(user.uid || '').trim();
+    const cachedAdminUid = String(getLocalValue(ADMIN_UID_CACHE_KEY, '') || '').trim();
+    if (uid && cachedAdminUid && uid === cachedAdminUid) return true;
+
+    const email = String(user.email || '').trim();
+    if (!isAdminEmail(email)) return false;
+
+    if (uid && uid !== cachedAdminUid) {
+      saveLocalValue(ADMIN_UID_CACHE_KEY, uid);
+    }
+    return true;
+  }
+
   function canUseCalendarSyncFeature() {
+    if (isCalendarSyncAdminOverrideUser()) return true;
     const achievedReferrals = getReferralProgressState().acceptedCount;
     return achievedReferrals >= 10 || hasPaidPlanAccess(currentUserPlan);
   }
