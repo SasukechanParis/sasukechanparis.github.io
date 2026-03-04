@@ -157,6 +157,67 @@
     return value === undefined ? fallback : value;
   }
 
+  let firestoreSdkModulePromise = null;
+  function getFirestoreSdkModule() {
+    if (!firestoreSdkModulePromise) {
+      firestoreSdkModulePromise = import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+    }
+    return firestoreSdkModulePromise;
+  }
+
+  function getDbCompatBridge() {
+    return {
+      collection(collectionName) {
+        const safeCollectionName = String(collectionName || '').trim();
+        return {
+          async add(data) {
+            const { collection, addDoc } = await getFirestoreSdkModule();
+            const { db: dbInstance } = await window.FirebaseService.whenReady();
+            return addDoc(collection(dbInstance, safeCollectionName), data || {});
+          },
+          limit(count) {
+            const safeLimit = Math.max(1, Math.floor(Number(count) || 1));
+            return {
+              async get() {
+                const { collection, query, limit, getDocs } = await getFirestoreSdkModule();
+                const { db: dbInstance } = await window.FirebaseService.whenReady();
+                return getDocs(query(collection(dbInstance, safeCollectionName), limit(safeLimit)));
+              },
+            };
+          },
+        };
+      },
+    };
+  }
+
+  function getFirebaseCompatBridge() {
+    return {
+      auth() {
+        return {
+          get currentUser() {
+            return window.FirebaseService?.getCurrentUser?.() || null;
+          },
+          onAuthStateChanged(callback) {
+            if (typeof callback !== 'function') return () => {};
+            return window.FirebaseService?.onAuthChanged?.(callback) || (() => {});
+          },
+        };
+      },
+      firestore: {
+        FieldValue: {
+          serverTimestamp() {
+            return new Date().toISOString();
+          },
+        },
+      },
+    };
+  }
+
+  const db = window.db || getDbCompatBridge();
+  window.db = db;
+  const firebase = window.firebase || getFirebaseCompatBridge();
+  window.firebase = firebase;
+
   const State = {
     getRaw(key, fallback = null) {
       try {
@@ -1169,10 +1230,9 @@
   function sanitizeCustomerRecordForSave(record) {
     const source = (record && typeof record === 'object') ? record : {};
     const sanitized = sanitizeFirestoreFriendlyValue(source);
-    const defaultTimes = getDefaultShootingTimes();
     const currentUid = String(window.FirebaseService?.getCurrentUser?.()?.uid || '').trim();
-    const startTime = normalizeTimeString(sanitized.startTime) || defaultTimes.startTime;
-    const endTime = normalizeTimeString(sanitized.endTime) || addOneHourToTimeString(startTime);
+    const startTime = normalizeTimeString(sanitized.startTime) || '';
+    const endTime = normalizeTimeString(sanitized.endTime) || '';
     const userId = String(sanitized.userId || currentUid || '').trim();
     const googleEventId = String(sanitized.google_event_id || sanitized.calendarEventId || '').trim();
     const googleEventCalendarId = String(sanitized.google_event_calendar_id || '').trim();
@@ -1186,6 +1246,10 @@
       google_event_id: googleEventId,
       google_event_calendar_id: googleEventCalendarId,
     };
+  }
+
+  function sanitizeCustomerListForSave(records) {
+    return (Array.isArray(records) ? records : []).map((record) => sanitizeCustomerRecordForSave(record));
   }
 
   function saveCustomers(data, options = {}) {
@@ -5503,6 +5567,20 @@
     }
   }
 
+  async function syncCalendarIfEligible(user, customerData, previousCustomer = null) {
+    const resolvedUser = user || window.FirebaseService?.getCurrentUser?.() || null;
+    if (!resolvedUser?.uid) return;
+    const canAttemptCalendarSync = canUseCalendarSyncFeature()
+      && (customerData?.syncGoogleCalendar === true || googleCalendarAutoSyncEnabled === true);
+    if (!canAttemptCalendarSync) return;
+    const savedCustomerId = String(customerData?.id || '').trim();
+    if (!savedCustomerId) return;
+    await runGoogleCalendarAutoSync(
+      savedCustomerId,
+      previousCustomer ? { ...previousCustomer } : null
+    );
+  }
+
   // ===== Add / Edit Modal =====
   window.openModal = function (id) {
     if (!id && !checkCustomerLimit()) return;
@@ -5704,6 +5782,12 @@
   window.saveCustomer = async function () {
     const saveButton = document.getElementById('btn-save');
     if (saveButton?.disabled) return;
+    const user = firebase.auth().currentUser;
+    if (!user?.uid) {
+      console.error('[SAVE] 未ログイン: 保存を中断');
+      showToast(getLocaleTextOrFallback('msgErrorAuthRequired', 'ログイン状態を確認してください。再ログイン後にお試しください。'), 'error');
+      return;
+    }
     const name = $('#form-customerName').value.trim();
     if (!name) { showToast(t('msgEnterName'), 'error'); return; }
     const operationType = editingId ? 'update' : 'create';
@@ -5712,6 +5796,10 @@
       : null;
     const customersSnapshot = cloneCustomerSnapshot(customers);
     let payloadForDebug = null;
+    let firestorePayloadForDebug = null;
+    const currentUidForDebug = String(user.uid || '').trim();
+    console.log('[SAVE] 関数: window.saveCustomer');
+    console.log('[SAVE] 現在ログインしているユーザーのUID:', currentUidForDebug || '(empty)');
 
     if (editingId) assertCustomerWriteAccess(previousCustomer);
     setActionButtonLoadingState(
@@ -5729,15 +5817,12 @@
         else if (f.type === 'number') data[f.key] = el.value === '' ? '' : Number(el.value);
         else data[f.key] = el.value || '';
       });
-      if (!canUseCalendarSyncFeature()) {
-        data.syncGoogleCalendar = false;
-      }
-      const activeUserId = String(window.FirebaseService?.getCurrentUser?.()?.uid || '').trim();
-      if (activeUserId) data.userId = activeUserId;
-      const fallbackTimes = getDefaultShootingTimes();
-      const normalizedStartTime = normalizeTimeString(data.startTime) || fallbackTimes.startTime;
+      if (String(user.uid || '').trim()) data.userId = String(user.uid || '').trim();
+      data.uid = String(user.uid || '').trim();
+      data.createdAt = data.createdAt || firebase.firestore.FieldValue.serverTimestamp();
+      const normalizedStartTime = normalizeTimeString(data.startTime) || '';
       data.startTime = normalizedStartTime;
-      data.endTime = normalizeTimeString(data.endTime) || addOneHourToTimeString(normalizedStartTime);
+      data.endTime = normalizeTimeString(data.endTime) || '';
       data.calendarEventId = String(data.calendarEventId || data.google_event_id || '').trim();
       data.google_event_id = String(data.google_event_id || '').trim();
       data.google_event_calendar_id = String(data.google_event_calendar_id || '').trim();
@@ -5837,36 +5922,45 @@
         customers.push(data);
       }
 
-      await saveCustomers(customers, { propagateError: hasCloudAuthenticatedUser() });
+      firestorePayloadForDebug = withCurrentUserId(sanitizeCustomerListForSave(customers));
+      console.log('[SAVE] 保存直前のデータ:', JSON.stringify(data, null, 2));
+      console.log('[SAVE] 認証ユーザー:', user.uid, user.email || '');
+      console.log('[SAVE] 書き込み先: customers');
+      console.log('[SAVE] Firestoreに送ろうとしている全データ:', JSON.stringify(firestorePayloadForDebug, null, 2));
+      data = sanitizeCustomerRecordForSave({
+        ...data,
+        uid: String(user.uid || '').trim(),
+        userId: String(user.uid || '').trim(),
+      });
+      await db.collection('customers').add(data);
+      saveLocalValue(STORAGE_KEY, customers);
+      console.log('[SAVE] Firestore保存: 成功');
 
       showToast(editingId ? t('msgUpdated') : t('msgCreated'));
-      const savedCustomerId = data.id || editingId;
-      const canAttemptCalendarSync = canUseCalendarSyncFeature()
-        && (data.syncGoogleCalendar === true || googleCalendarAutoSyncEnabled === true);
-      if (canAttemptCalendarSync) {
-        runGoogleCalendarAutoSync(
-          savedCustomerId,
-          previousCustomer ? { ...previousCustomer } : null
-        ).catch((error) => {
-          console.error('Google Calendar sync scheduling failed', error);
-        });
-      }
       closeModal();
       renderTable();
       if (calendarView.classList.contains('active')) renderCalendar();
+
+      try {
+        await syncCalendarIfEligible(user, data, previousCustomer);
+      } catch (calErr) {
+        console.warn('[CALENDAR] 同期失敗（保存は成功済み）:', calErr?.message || calErr);
+      }
     } catch (err) {
       customers = customersSnapshot;
-      saveCustomers(customers).catch(() => {});
+      saveLocalValue(STORAGE_KEY, customers);
       const normalizedCode = normalizeOperationErrorCode(err);
-      console.error('[Customer Save Debug] error.code:', err?.code || '');
-      console.error('[Customer Save Debug] error.message:', err?.message || '');
-      console.error('[Customer Save Debug] payload:', payloadForDebug);
+      console.error('[SAVE] エラー発生箇所:', 'window.saveCustomer');
+      console.error('[SAVE] Firestoreエラー:', err?.code || normalizedCode || 'unknown', err?.message || '');
+      console.error('[SAVE] 認証ユーザーUID:', currentUidForDebug || '(empty)');
+      console.error('[SAVE] Firestoreに送ろうとしていたデータ:', JSON.stringify(firestorePayloadForDebug, null, 2));
       console.error('[Customer Save] failed', {
         operationType,
         editingId,
         code: normalizedCode || 'unknown',
         message: err?.message || '',
         payload: payloadForDebug,
+        firestorePayload: firestorePayloadForDebug,
         error: err,
       });
       const userMessage = buildCustomerOperationErrorMessage(operationType, err);
@@ -5874,6 +5968,8 @@
         normalizedCode ? `${userMessage} (${normalizedCode})` : userMessage,
         'error'
       );
+      alert(`保存に失敗しました: ${err?.message || normalizedCode || 'unknown_error'}`);
+      return;
     } finally {
       setActionButtonLoadingState(
         saveButton,
@@ -9564,6 +9660,22 @@
     });
   }
 
+  let firestoreConnectionTestRegistered = false;
+  function registerStartupFirestoreConnectionTest() {
+    if (firestoreConnectionTestRegistered) return;
+    firestoreConnectionTestRegistered = true;
+    firebase.auth().onAuthStateChanged(async (user) => {
+      if (!user) return;
+      console.log('[TEST] 接続テスト開始 ユーザー:', user.email || user.uid || '');
+      try {
+        await db.collection('customers').limit(1).get();
+        console.log('[TEST] Firestore読み取り: 成功');
+      } catch (e) {
+        console.error('[TEST] Firestore読み取り失敗:', e?.code || '', e?.message || e);
+      }
+    });
+  }
+
   async function initializeFirebaseAuthFlow() {
     try {
       if (shouldStartInLocalGuestMode()) {
@@ -9597,6 +9709,7 @@
       }
 
       await window.FirebaseService.whenReady();
+      registerStartupFirestoreConnectionTest();
 
       authWatcherDisabled = false;
       if (typeof authUnsubscribe === 'function') {

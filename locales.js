@@ -4305,6 +4305,16 @@ const REQUIRED_RECENT_KEYS = {
         "zh-TW": "為攝影師打造的客戶管理與營收分析應用",
         ko: "사진작가를 위한 고객 관리·매출 분석 앱",
     },
+    demoEstimatedRevenue: {
+        ja: "今月の見込み売上: ¥200,000 / 1.400 €",
+        en: "Estimated Revenue: ¥200,000 / 1.400 €",
+        fr: "Revenu estimé : ¥200,000 / 1.400 €",
+        de: "Geschätzter Umsatz: ¥200,000 / 1.400 €",
+        es: "Ingresos estimados: ¥200,000 / 1.400 €",
+        "zh-CN": "本月預計收入: ¥200,000 / 1.400 €",
+        "zh-TW": "本月預計收入: ¥200,000 / 1.400 €",
+        ko: "이번 달 예상 매출: ¥200,000 / 1.400 €",
+    },
     googleLogin: {
         ja: "Googleでログイン",
         en: "Sign in with Google",
