@@ -33,8 +33,14 @@
   const STUDIO_NAME_KEY = 'photocrm_studio_name';
   const ENTERPRISE_CONTACT_REQUESTS_KEY = 'photocrm_enterprise_contact_requests';
   const SUPPORT_REPLY_NOTICE_SEEN_KEY = 'photocrm_support_reply_notice_seen';
+  const REFERRAL_PROGRESS_KEY = 'photocrm_referral_progress';
+  const REFERRAL_CODE_KEY = 'photocrm_referral_code';
+  const GOOGLE_CALENDAR_AUTH_GRANTED_KEY = 'photocrm_google_calendar_auth_granted';
   const ADMIN_MANAGEMENT_EMAILS = new Set(['sasuke.photographe@gmail.com']);
+  const ADMIN_UID_CACHE_KEY = 'photocrm_admin_uid';
   const GOOGLE_CALENDAR_DEFAULT_ID = 'sasuke.photographe@gmail.com';
+  const GOOGLE_CALENDAR_API_KEY = 'AIzaSyD6fb5NWN0bAe0vW1Z9piQxv9aYE0e-tGs';
+  const GOOGLE_CALENDAR_OAUTH_CLIENT_ID = '1022053730718-hsfcha1a9fjcggpmiffqhitnkmp64600.apps.googleusercontent.com';
   const LOCAL_GUEST_MODE_KEY = 'photocrm_local_guest_mode';
   const IDB_MIRROR_DB_NAME = 'PholioDB';
   const IDB_MIRROR_DB_VERSION = 1;
@@ -259,6 +265,7 @@
       GOOGLE_CALENDAR_SELECTED_ID_KEY,
       USER_PLAN_KEY,
       USER_BILLING_PROFILE_KEY,
+      REFERRAL_PROGRESS_KEY,
       STUDIO_NAME_KEY,
       ENTERPRISE_CONTACT_REQUESTS_KEY,
     ];
@@ -483,6 +490,7 @@
       { code: 'ja', label: '🇯🇵 日本語' },
       { code: 'en', label: '🇺🇸 English' },
       { code: 'fr', label: '🇫🇷 Français' },
+      { code: 'es', label: '🇪🇸 Español' },
       { code: 'zh-CN', label: '🇨🇳 简体中文' },
       { code: 'zh-TW', label: '🇹🇼 繁體中文' },
       { code: 'ko', label: '🇰🇷 한국어' },
@@ -990,6 +998,7 @@
     updateGraphToggleButtonLabel();
     updateHeroStatsToggleButtonLabel();
     renderSettings();
+    renderReferralProgramPanel();
     updateTeamManagementTabAvailability();
     syncDynamicItemRowsWithSettings();
   }
@@ -1098,6 +1107,7 @@
     if (State.getRaw(OPTIONS_KEY, null) === null) State.setJSON(OPTIONS_KEY, DEFAULT_OPTIONS);
     if (State.getRaw(USER_PLAN_KEY, null) === null) State.setJSON(USER_PLAN_KEY, 'free');
     if (State.getRaw(USER_BILLING_PROFILE_KEY, null) === null) State.setJSON(USER_BILLING_PROFILE_KEY, {});
+    if (State.getRaw(REFERRAL_PROGRESS_KEY, null) === null) State.setJSON(REFERRAL_PROGRESS_KEY, { acceptedCount: 0 });
     if (State.getRaw(STUDIO_NAME_KEY, null) === null) State.setJSON(STUDIO_NAME_KEY, '');
     if (State.getRaw(ACCENT_COLOR_KEY, null) === null) State.setJSON(ACCENT_COLOR_KEY, DEFAULT_ACCENT_COLOR);
   }
@@ -1139,21 +1149,64 @@
     return records.map((record) => ({ ...record, userId: uid }));
   }
 
+  function sanitizeFirestoreFriendlyValue(value) {
+    if (value === undefined || value === null) return '';
+    if (value instanceof Date) return value.toISOString();
+    if (Array.isArray(value)) {
+      return value.map((item) => sanitizeFirestoreFriendlyValue(item));
+    }
+    if (value && typeof value === 'object') {
+      const sanitized = {};
+      Object.entries(value).forEach(([key, entry]) => {
+        sanitized[key] = sanitizeFirestoreFriendlyValue(entry);
+      });
+      return sanitized;
+    }
+    if (typeof value === 'number' && !Number.isFinite(value)) return 0;
+    return value;
+  }
+
+  function sanitizeCustomerRecordForSave(record) {
+    const source = (record && typeof record === 'object') ? record : {};
+    const sanitized = sanitizeFirestoreFriendlyValue(source);
+    const defaultTimes = getDefaultShootingTimes();
+    const currentUid = String(window.FirebaseService?.getCurrentUser?.()?.uid || '').trim();
+    const startTime = normalizeTimeString(sanitized.startTime) || defaultTimes.startTime;
+    const endTime = normalizeTimeString(sanitized.endTime) || addOneHourToTimeString(startTime);
+    const userId = String(sanitized.userId || currentUid || '').trim();
+    const googleEventId = String(sanitized.google_event_id || sanitized.calendarEventId || '').trim();
+    const googleEventCalendarId = String(sanitized.google_event_calendar_id || '').trim();
+
+    return {
+      ...sanitized,
+      userId,
+      startTime,
+      endTime,
+      calendarEventId: googleEventId,
+      google_event_id: googleEventId,
+      google_event_calendar_id: googleEventCalendarId,
+    };
+  }
+
   function saveCustomers(data, options = {}) {
     try {
       const records = Array.isArray(data) ? data : [];
       const normalized = records.map((record) => {
-        const normalizedExtraChargeItems = normalizeExtraChargeItems(record?.extraChargeItems);
-        const fallbackExpense = toSafeNumber(record?.planCost, toSafeNumber(record?.planDetails?.planCost, 0))
+        const sanitizedRecord = sanitizeCustomerRecordForSave(record);
+        const normalizedExtraChargeItems = normalizeExtraChargeItems(sanitizedRecord?.extraChargeItems);
+        const fallbackExpense = toSafeNumber(
+          sanitizedRecord?.planCost,
+          toSafeNumber(sanitizedRecord?.planDetails?.planCost, 0)
+        )
           + normalizedExtraChargeItems.reduce((sum, item) => sum + toSafeNumber(item?.cost, 0), 0);
         return {
-          ...(record || {}),
-          planDetails: normalizePlanDetails(record?.planDetails, record?.revenue),
+          ...sanitizedRecord,
+          planDetails: normalizePlanDetails(sanitizedRecord?.planDetails, sanitizedRecord?.revenue),
           extraChargeItems: normalizedExtraChargeItems,
-          workflowStatus: normalizeWorkflowStatus(record?.workflowStatus),
-          expense: toSafeNumber(record?.expense, fallbackExpense),
-          costumePrice: toSafeNumber(record?.costumePrice, 0),
-          hairMakeupPrice: toSafeNumber(record?.hairMakeupPrice, 0),
+          workflowStatus: normalizeWorkflowStatus(sanitizedRecord?.workflowStatus),
+          expense: toSafeNumber(sanitizedRecord?.expense, fallbackExpense),
+          costumePrice: toSafeNumber(sanitizedRecord?.costumePrice, 0),
+          hairMakeupPrice: toSafeNumber(sanitizedRecord?.hairMakeupPrice, 0),
         };
       });
       return saveCloudValue(STORAGE_KEY, withCurrentUserId(normalized), options);
@@ -2005,6 +2058,8 @@
     { key: 'contractDate', labelKey: 'thContractDate', type: 'date' },
     { key: 'deliveryDate', labelKey: 'labelDeliveryDate', type: 'date' },
     { key: 'shootingDate', labelKey: 'thShootingDate', type: 'date' },
+    { key: 'startTime', labelKey: 'labelStartTime', type: 'time' },
+    { key: 'endTime', labelKey: 'labelEndTime', type: 'time' },
     { key: 'customerName', labelKey: 'thCustomerName', type: 'text' },
     { key: 'contact', labelKey: 'thContact', type: 'text' },
     { key: 'leadSource', labelKey: 'labelLeadSource', type: 'select' },
@@ -2014,6 +2069,7 @@
     { key: 'billingDate', labelKey: 'labelBillingDate', type: 'date' },
     { key: 'paymentConfirmDate', labelKey: 'labelPaymentConfirmDate', type: 'date' },
     { key: 'paymentChecked', labelKey: 'labelPaymentChecked', type: 'checkbox' },
+    { key: 'syncGoogleCalendar', labelKey: 'labelSyncGoogleCalendar', type: 'checkbox' },
     { key: 'details', labelKey: 'labelDetails', type: 'textarea' },
     { key: 'notes', labelKey: 'labelNotes', type: 'textarea' },
     { key: 'revenue', labelKey: 'thRevenue', type: 'number' },
@@ -2121,6 +2177,42 @@
     saveCloudValue(GOOGLE_CALENDAR_SELECTED_ID_KEY, normalized);
   }
 
+  function markGoogleCalendarAuthGranted() {
+    saveLocalValue(GOOGLE_CALENDAR_AUTH_GRANTED_KEY, true);
+  }
+
+  function hasGoogleCalendarAuthGrantedFlag() {
+    return getLocalValue(GOOGLE_CALENDAR_AUTH_GRANTED_KEY, false) === true;
+  }
+
+  async function ensureGoogleCalendarAccessToken() {
+    let token = String(window.FirebaseService?.getGoogleAccessToken?.() || '').trim();
+    if (token) {
+      markGoogleCalendarAuthGranted();
+      return token;
+    }
+
+    // Keep this guard explicit so invalid credentials fail fast in UI.
+    if (!String(GOOGLE_CALENDAR_API_KEY || '').trim() || !String(GOOGLE_CALENDAR_OAUTH_CLIENT_ID || '').trim()) {
+      throw new Error('google_calendar_credentials_missing');
+    }
+
+    const user = window.FirebaseService?.getCurrentUser?.();
+    if (!user) return '';
+
+    // Open Google consent only on first authorization request.
+    if (hasGoogleCalendarAuthGrantedFlag()) return '';
+
+    const loginFn = window.FirebaseService?.signInWithPopup
+      ?? window.FirebaseService?.signInWithGoogle;
+    if (typeof loginFn !== 'function') return '';
+
+    await loginFn.call(window.FirebaseService);
+    token = String(window.FirebaseService?.getGoogleAccessToken?.() || '').trim();
+    if (token) markGoogleCalendarAuthGranted();
+    return token;
+  }
+
   function getTargetGoogleCalendarId() {
     const normalized = String(googleCalendarSelectedId || '').trim();
     return normalized || GOOGLE_CALENDAR_DEFAULT_ID;
@@ -2157,7 +2249,7 @@
   }
 
   async function fetchGoogleCalendarList(force = false) {
-    const token = window.FirebaseService?.getGoogleAccessToken?.() || '';
+    const token = await ensureGoogleCalendarAccessToken();
     if (!token) {
       googleCalendarList = [];
       googleCalendarListLoaded = false;
@@ -2167,7 +2259,7 @@
     if (googleCalendarListPromise && !force) return googleCalendarListPromise;
 
     googleCalendarListPromise = (async () => {
-      const response = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
+      const response = await fetch(`https://www.googleapis.com/calendar/v3/users/me/calendarList?key=${encodeURIComponent(GOOGLE_CALENDAR_API_KEY)}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -2245,6 +2337,7 @@
   function getLocaleForDates() {
     if (currentLang === 'fr') return 'fr-FR';
     if (currentLang === 'ja') return 'ja-JP';
+    if (currentLang === 'es') return 'es-ES';
     return 'en-US';
   }
 
@@ -4293,7 +4386,11 @@
   }
 
   function getDashboardChartMonthLabels() {
-    const locale = currentLang === 'fr' ? 'fr-FR' : (currentLang === 'ja' ? 'ja-JP' : 'en-US');
+    const locale = currentLang === 'fr'
+      ? 'fr-FR'
+      : (currentLang === 'ja'
+        ? 'ja-JP'
+        : (currentLang === 'es' ? 'es-ES' : 'en-US'));
     return Array.from({ length: 12 }, (_, index) => (
       new Date(2000, index, 1).toLocaleString(locale, { month: 'short' })
     ));
@@ -5132,8 +5229,11 @@
   }
 
   function shouldSyncGoogleCalendarEvent(previousCustomer, nextCustomer) {
-    if (!googleCalendarAutoSyncEnabled) return false;
+    if (!canUseCalendarSyncFeature()) return false;
     if (!nextCustomer || !String(nextCustomer.shootingDate || '').trim()) return false;
+    const hasPerCustomerSync = nextCustomer.syncGoogleCalendar === true;
+    if (!hasPerCustomerSync && !googleCalendarAutoSyncEnabled) return false;
+    if (nextCustomer.syncGoogleCalendar === false) return false;
     const targetCalendarId = getTargetGoogleCalendarId();
     if (String(nextCustomer.google_event_calendar_id || '').trim() !== targetCalendarId) return true;
     if (!previousCustomer) return true;
@@ -5145,6 +5245,9 @@
       || (previousCustomer.plan || '') !== (nextCustomer.plan || '')
       || (previousCustomer.location || '') !== (nextCustomer.location || '')
       || (previousCustomer.notes || '') !== (nextCustomer.notes || '')
+      || normalizeTimeString(previousCustomer.startTime) !== normalizeTimeString(nextCustomer.startTime)
+      || normalizeTimeString(previousCustomer.endTime) !== normalizeTimeString(nextCustomer.endTime)
+      || !!previousCustomer.syncGoogleCalendar !== !!nextCustomer.syncGoogleCalendar
       || toSafeNumber(previousCustomer.revenue, 0) !== toSafeNumber(nextCustomer.revenue, 0)
     );
   }
@@ -5159,23 +5262,71 @@
     return `${y}-${m}-${d}T${hh}:${mm}:${ss}`;
   }
 
-  function resolveShootingEventDateRange(shootingDateValue) {
-    const raw = String(shootingDateValue || '').trim();
-    if (!raw) return null;
+  function toTimeString(dateValue) {
+    if (!(dateValue instanceof Date) || Number.isNaN(dateValue.getTime())) return '';
+    return `${String(dateValue.getHours()).padStart(2, '0')}:${String(dateValue.getMinutes()).padStart(2, '0')}`;
+  }
 
-    let startDate;
-    if (raw.includes('T')) {
-      startDate = new Date(raw);
-    } else {
-      startDate = new Date(`${raw}T10:00:00`);
+  function normalizeTimeString(rawTimeValue) {
+    const text = String(rawTimeValue || '').trim();
+    if (!text) return '';
+    const matched = text.match(/^(\d{1,2}):(\d{2})$/);
+    if (!matched) return '';
+    const hour = Number(matched[1]);
+    const minute = Number(matched[2]);
+    if (!Number.isFinite(hour) || !Number.isFinite(minute)) return '';
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return '';
+    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  }
+
+  function addOneHourToTimeString(timeString) {
+    const normalized = normalizeTimeString(timeString);
+    if (!normalized) return '11:00';
+    const [hourText, minuteText] = normalized.split(':');
+    const hour = Number(hourText);
+    const minute = Number(minuteText);
+    const date = new Date(2000, 0, 1, hour, minute, 0);
+    date.setHours(date.getHours() + 1);
+    return toTimeString(date);
+  }
+
+  function getDefaultShootingTimes() {
+    const now = new Date();
+    const startTime = toTimeString(now);
+    const endTime = toTimeString(new Date(now.getTime() + (60 * 60 * 1000)));
+    return { startTime, endTime };
+  }
+
+  function resolveShootingEventDateRange(sourceValue, sourceStartTime = '', sourceEndTime = '') {
+    const isObjectSource = !!sourceValue && typeof sourceValue === 'object';
+    const rawDate = isObjectSource
+      ? String(sourceValue.shootingDate || '').trim()
+      : String(sourceValue || '').trim();
+    const rawStartTime = normalizeTimeString(isObjectSource ? sourceValue.startTime : sourceStartTime);
+    const rawEndTime = normalizeTimeString(isObjectSource ? sourceValue.endTime : sourceEndTime);
+    if (!rawDate) return null;
+
+    if (rawDate.includes('T') && !rawStartTime && !rawEndTime) {
+      const startDate = new Date(rawDate);
+      if (Number.isNaN(startDate.getTime())) return null;
+      const endDate = new Date(startDate.getTime() + (60 * 60 * 1000));
+      return { startDate, endDate };
     }
+
+    const startTime = rawStartTime || '10:00';
+    const endTime = rawEndTime || addOneHourToTimeString(startTime);
+    const startDate = new Date(`${rawDate}T${startTime}:00`);
     if (Number.isNaN(startDate.getTime())) return null;
-    const endDate = new Date(startDate.getTime() + (60 * 60 * 1000));
+    const endDate = new Date(`${rawDate}T${endTime}:00`);
+    if (Number.isNaN(endDate.getTime())) return null;
+    if (endDate.getTime() <= startDate.getTime()) {
+      endDate.setDate(endDate.getDate() + 1);
+    }
     return { startDate, endDate };
   }
 
-  function parseBookingSlot(rawDateTimeValue) {
-    const range = resolveShootingEventDateRange(rawDateTimeValue);
+  function parseBookingSlot(sourceValue, sourceStartTime = '', sourceEndTime = '') {
+    const range = resolveShootingEventDateRange(sourceValue, sourceStartTime, sourceEndTime);
     if (!range) return null;
 
     const dateKey = `${range.startDate.getFullYear()}-${String(range.startDate.getMonth() + 1).padStart(2, '0')}-${String(range.startDate.getDate()).padStart(2, '0')}`;
@@ -5200,14 +5351,14 @@
       && targetSlot.startMinutes < sourceSlot.endMinutes;
   }
 
-  function findDoubleBookingConflict(candidateShootingDate, ignoreCustomerId = '') {
-    const candidateSlot = parseBookingSlot(candidateShootingDate);
+  function findDoubleBookingConflict(candidateBookingInput, ignoreCustomerId = '') {
+    const candidateSlot = parseBookingSlot(candidateBookingInput);
     if (!candidateSlot) return null;
 
     for (const customer of customers) {
       if (!customer) continue;
       if (ignoreCustomerId && customer.id === ignoreCustomerId) continue;
-      const targetSlot = parseBookingSlot(customer.shootingDate);
+      const targetSlot = parseBookingSlot(customer);
       if (!targetSlot) continue;
       if (isBookingSlotOverlapped(candidateSlot, targetSlot)) {
         return { customer, slot: targetSlot };
@@ -5227,7 +5378,7 @@
 
     const tomorrowKey = getTomorrowDateKey();
     const tomorrowBookings = customers
-      .map((customer) => ({ customer, slot: parseBookingSlot(customer?.shootingDate) }))
+      .map((customer) => ({ customer, slot: parseBookingSlot(customer) }))
       .filter((entry) => entry.slot && entry.slot.dateKey === tomorrowKey)
       .sort((a, b) => a.slot.startMinutes - b.slot.startMinutes);
 
@@ -5251,7 +5402,7 @@
   }
 
   function buildGoogleCalendarEventPayload(customer) {
-    const range = resolveShootingEventDateRange(customer?.shootingDate);
+    const range = resolveShootingEventDateRange(customer);
     if (!range) return null;
 
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -5283,7 +5434,7 @@
   async function upsertGoogleCalendarEvent(customer) {
     const payload = buildGoogleCalendarEventPayload(customer);
     if (!payload) return null;
-    const accessToken = window.FirebaseService?.getGoogleAccessToken?.() || '';
+    const accessToken = await ensureGoogleCalendarAccessToken();
     if (!accessToken) {
       throw new Error('missing_google_access_token');
     }
@@ -5294,8 +5445,8 @@
     const existingEventCalendarId = String(customer?.google_event_calendar_id || '').trim();
     const shouldUpdateExisting = !!existingEventId && existingEventCalendarId === calendarId;
     const endpoint = shouldUpdateExisting
-      ? `${baseUrl}/${encodeURIComponent(existingEventId)}`
-      : baseUrl;
+      ? `${baseUrl}/${encodeURIComponent(existingEventId)}?key=${encodeURIComponent(GOOGLE_CALENDAR_API_KEY)}`
+      : `${baseUrl}?key=${encodeURIComponent(GOOGLE_CALENDAR_API_KEY)}`;
     const resolvedMethod = shouldUpdateExisting ? 'PUT' : 'POST';
 
     const response = await fetch(endpoint, {
@@ -5392,6 +5543,21 @@
           el.value = c[f.key] || '';
         }
       });
+      const startTimeInput = $('#form-startTime');
+      const endTimeInput = $('#form-endTime');
+      const legacySlot = parseBookingSlot(c.shootingDate);
+      const fallbackStartTime = normalizeTimeString(c.startTime) || String(legacySlot?.startLabel || '');
+      const fallbackEndTime = normalizeTimeString(c.endTime) || String(legacySlot?.endLabel || '');
+      if (startTimeInput) startTimeInput.value = fallbackStartTime || '';
+      if (endTimeInput) {
+        const inferredEndTime = fallbackStartTime ? addOneHourToTimeString(fallbackStartTime) : '';
+        endTimeInput.value = fallbackEndTime || inferredEndTime;
+      }
+      const syncGoogleCalendarInput = $('#form-syncGoogleCalendar');
+      if (syncGoogleCalendarInput) {
+        const allowed = canUseCalendarSyncFeature();
+        syncGoogleCalendarInput.checked = allowed && c.syncGoogleCalendar !== false;
+      }
 
       const planDetails = normalizePlanDetails(c.planDetails, c.revenue);
       const planNameInput = $('#form-plan-name');
@@ -5442,6 +5608,15 @@
       isExpenseManuallyEdited = false;
       renderDynamicChargeItems([]);
       updateGrandTotal();
+      const { startTime, endTime } = getDefaultShootingTimes();
+      const startTimeInput = $('#form-startTime');
+      const endTimeInput = $('#form-endTime');
+      if (startTimeInput) startTimeInput.value = startTime;
+      if (endTimeInput) endTimeInput.value = endTime;
+      const syncGoogleCalendarInput = $('#form-syncGoogleCalendar');
+      if (syncGoogleCalendarInput) {
+        syncGoogleCalendarInput.checked = canUseCalendarSyncFeature() && !!googleCalendarAutoSyncEnabled;
+      }
       renderCustomFields();
     }
     applyModalFieldVisibility();
@@ -5515,6 +5690,7 @@
   }
 
   function assertCustomerWriteAccess(record = null) {
+    if (isCalendarSyncAdminOverrideUser()) return;
     const currentUid = String(window.FirebaseService?.getCurrentUser?.()?.uid || '').trim();
     if (!currentUid || !record || typeof record !== 'object') return;
     const ownerUid = String(record.userId || '').trim();
@@ -5535,6 +5711,7 @@
       ? (customers.find((entry) => entry.id === editingId) || null)
       : null;
     const customersSnapshot = cloneCustomerSnapshot(customers);
+    let payloadForDebug = null;
 
     if (editingId) assertCustomerWriteAccess(previousCustomer);
     setActionButtonLoadingState(
@@ -5544,14 +5721,26 @@
     );
 
     try {
-      const data = {};
+      let data = {};
       fields.forEach(f => {
         const el = $(`#form-${f.key}`);
         if (!el) return;
         if (f.type === 'checkbox') data[f.key] = el.checked;
-        else if (f.type === 'number') data[f.key] = el.value ? Number(el.value) : null;
+        else if (f.type === 'number') data[f.key] = el.value === '' ? '' : Number(el.value);
         else data[f.key] = el.value || '';
       });
+      if (!canUseCalendarSyncFeature()) {
+        data.syncGoogleCalendar = false;
+      }
+      const activeUserId = String(window.FirebaseService?.getCurrentUser?.()?.uid || '').trim();
+      if (activeUserId) data.userId = activeUserId;
+      const fallbackTimes = getDefaultShootingTimes();
+      const normalizedStartTime = normalizeTimeString(data.startTime) || fallbackTimes.startTime;
+      data.startTime = normalizedStartTime;
+      data.endTime = normalizeTimeString(data.endTime) || addOneHourToTimeString(normalizedStartTime);
+      data.calendarEventId = String(data.calendarEventId || data.google_event_id || '').trim();
+      data.google_event_id = String(data.google_event_id || '').trim();
+      data.google_event_calendar_id = String(data.google_event_calendar_id || '').trim();
       if (!isFormFieldVisible('assignedTo') && !String(data.assignedTo || '').trim()) {
         data.assignedTo = resolveDefaultAssignedToValue();
       }
@@ -5564,7 +5753,7 @@
       });
       data.customFields = customFields;
 
-      const bookingConflict = findDoubleBookingConflict(data.shootingDate, editingId || '');
+      const bookingConflict = findDoubleBookingConflict(data, editingId || '');
       if (bookingConflict) {
         const conflictCustomerName = String(bookingConflict.customer?.customerName || '—');
         const conflictLocation = String(bookingConflict.customer?.location || t('icsUnset'));
@@ -5629,6 +5818,8 @@
         totalPrice: finalRevenue,
       };
       data.planDetails = normalizePlanDetails(rawPlanDetails, data.revenue);
+      data = sanitizeCustomerRecordForSave(data);
+      payloadForDebug = cloneCustomerSnapshot([data])[0] || null;
 
       if (editingId) {
         const idx = customers.findIndex(c => c.id === editingId);
@@ -5650,12 +5841,16 @@
 
       showToast(editingId ? t('msgUpdated') : t('msgCreated'));
       const savedCustomerId = data.id || editingId;
-      runGoogleCalendarAutoSync(
-        savedCustomerId,
-        previousCustomer ? { ...previousCustomer } : null
-      ).catch((error) => {
-        console.error('Google Calendar sync scheduling failed', error);
-      });
+      const canAttemptCalendarSync = canUseCalendarSyncFeature()
+        && (data.syncGoogleCalendar === true || googleCalendarAutoSyncEnabled === true);
+      if (canAttemptCalendarSync) {
+        runGoogleCalendarAutoSync(
+          savedCustomerId,
+          previousCustomer ? { ...previousCustomer } : null
+        ).catch((error) => {
+          console.error('Google Calendar sync scheduling failed', error);
+        });
+      }
       closeModal();
       renderTable();
       if (calendarView.classList.contains('active')) renderCalendar();
@@ -5663,11 +5858,15 @@
       customers = customersSnapshot;
       saveCustomers(customers).catch(() => {});
       const normalizedCode = normalizeOperationErrorCode(err);
+      console.error('[Customer Save Debug] error.code:', err?.code || '');
+      console.error('[Customer Save Debug] error.message:', err?.message || '');
+      console.error('[Customer Save Debug] payload:', payloadForDebug);
       console.error('[Customer Save] failed', {
         operationType,
         editingId,
         code: normalizedCode || 'unknown',
         message: err?.message || '',
+        payload: payloadForDebug,
         error: err,
       });
       const userMessage = buildCustomerOperationErrorMessage(operationType, err);
@@ -6085,6 +6284,12 @@
     const container = $('#settings-list');
     if (!container) return;
     container.innerHTML = '';
+    const labelAdd = t('settingsAddBtn') || '追加';
+    const labelSave = t('save') || '保存';
+    const labelCancel = t('cancel') || 'キャンセル';
+    const labelSaveSettings = t('saveSettings') || labelSave;
+    const labelEdit = t('edit') || '編集';
+    const labelDelete = t('delete') || '削除';
     const languageOptionRows = getLanguageOptionDefinitions().map(({ code, label }) => {
       const allowed = canUseLanguageByPlan(code, currentUserPlan);
       return `
@@ -6106,8 +6311,8 @@
             <div style="font-size:0.85rem;color:var(--text-muted);">${escapeHtml(t('settingsPlanSummary', { revenue: formatCurrency(plan.price), cost: formatCurrency(plan.cost) }))}</div>
           </div>
           <div class="settings-item-actions">
-            <button type="button" class="btn-icon-sm" data-plan-edit="${index}" title="${escapeHtml(t('edit'))}">✏️</button>
-            <button type="button" class="btn-icon-sm" data-plan-remove="${index}" title="${escapeHtml(t('delete'))}">✕</button>
+            <button type="button" class="btn btn-secondary btn-sm settings-text-btn" data-plan-edit="${index}" title="${escapeHtml(labelEdit)}">${escapeHtml(labelEdit)}</button>
+            <button type="button" class="btn btn-secondary btn-sm settings-text-btn" data-plan-remove="${index}" title="${escapeHtml(labelDelete)}">${escapeHtml(labelDelete)}</button>
           </div>
         </div>
       `).join('');
@@ -6146,8 +6351,8 @@
                 step="1"
                 placeholder="${escapeHtml(t('settingsDynamicCostPlaceholder'))}"
               />
-              <button type="button" class="btn-icon-sm" data-dynamic-detail-save="${index}:${detailIndex}" title="${escapeHtml(t('save'))}">💾</button>
-              <button type="button" class="btn-icon-sm" data-dynamic-detail-remove="${index}:${detailIndex}" title="${escapeHtml(t('delete'))}">✕</button>
+              <button type="button" class="btn btn-secondary btn-sm settings-text-btn" data-dynamic-detail-save="${index}:${detailIndex}" title="${escapeHtml(labelSave)}">${escapeHtml(labelSave)}</button>
+              <button type="button" class="btn btn-secondary btn-sm settings-text-btn" data-dynamic-detail-remove="${index}:${detailIndex}" title="${escapeHtml(labelDelete)}">${escapeHtml(labelDelete)}</button>
             </div>
           `).join('');
         return `
@@ -6160,9 +6365,9 @@
               value="${escapeHtml(itemName)}"
               placeholder="${escapeHtml(t('settingsDynamicCategoryPlaceholder'))}"
             />
-            <div style="display:flex; gap:6px;">
-              <button type="button" class="btn-icon-sm" data-dynamic-item-save="${index}" title="${escapeHtml(t('save'))}">💾</button>
-              <button type="button" class="btn-icon-sm" data-dynamic-item-remove="${index}" title="${escapeHtml(t('delete'))}">✕</button>
+            <div class="settings-item-actions">
+              <button type="button" class="btn btn-secondary btn-sm settings-text-btn" data-dynamic-item-save="${index}" title="${escapeHtml(labelSave)}">${escapeHtml(labelSave)}</button>
+              <button type="button" class="btn btn-secondary btn-sm settings-text-btn" data-dynamic-item-remove="${index}" title="${escapeHtml(labelDelete)}">${escapeHtml(labelDelete)}</button>
             </div>
           </div>
           <div class="settings-detail-list">${detailRows}</div>
@@ -6238,7 +6443,7 @@
           >
         </div>
         <div class="settings-save-row">
-          <button type="button" class="btn btn-primary btn-sm" id="btn-save-studio-name">${escapeHtml(t('saveSettings'))}</button>
+          <button type="button" class="btn btn-secondary btn-sm settings-text-btn" id="btn-save-studio-name">${escapeHtml(labelSaveSettings)}</button>
         </div>
       </div>
       <div class="settings-section">
@@ -6282,20 +6487,20 @@
         <div class="settings-add-box settings-add-box-plan">
           <input type="hidden" id="edit-plan-index" value="">
           <input type="text" id="add-plan-name" placeholder="${escapeHtml(t('settingsPlanNamePlaceholder'))}">
-          <input type="number" id="add-plan-price" min="0" step="1" placeholder="${escapeHtml(t('settingsPlanRevenuePlaceholder'))}">
-          <input type="number" id="add-plan-cost" min="0" step="1" placeholder="${escapeHtml(t('settingsPlanCostPlaceholder'))}">
-          <div class="settings-form-actions">
-            <button type="button" class="btn btn-primary btn-sm" id="btn-plan-save">${escapeHtml(t('saveSettings'))}</button>
-            <button type="button" class="btn btn-secondary btn-sm" id="btn-plan-reset">${escapeHtml(t('clear'))}</button>
+            <input type="number" id="add-plan-price" min="0" step="1" placeholder="${escapeHtml(t('settingsPlanRevenuePlaceholder'))}">
+            <input type="number" id="add-plan-cost" min="0" step="1" placeholder="${escapeHtml(t('settingsPlanCostPlaceholder'))}">
+            <div class="settings-form-actions">
+              <button type="button" class="btn btn-secondary btn-sm settings-text-btn" id="btn-plan-save">${escapeHtml(labelSaveSettings)}</button>
+              <button type="button" class="btn btn-secondary btn-sm settings-text-btn" id="btn-plan-reset">${escapeHtml(labelCancel)}</button>
+            </div>
           </div>
-        </div>
       </div>
       <div class="settings-section">
         <h3>${escapeHtml(t('settingsDynamicSection'))}</h3>
         <div class="settings-item-list">${dynamicItemRows}</div>
         <div class="settings-add-box settings-add-box-dynamic">
           <input type="text" id="add-dynamic-item-name" placeholder="${escapeHtml(t('settingsDynamicCategoryPlaceholder'))}">
-          <button type="button" class="btn btn-primary btn-sm" id="btn-dynamic-item-add">${escapeHtml(t('settingsDynamicAddCategory'))}</button>
+          <button type="button" class="btn btn-secondary btn-sm settings-text-btn" id="btn-dynamic-item-add">${escapeHtml(labelAdd)}</button>
         </div>
       </div>
       <div class="settings-section">
@@ -6483,8 +6688,21 @@
     });
 
     const googleCalendarToggle = container.querySelector('#settings-google-calendar-sync');
+    if (googleCalendarToggle && !canUseCalendarSyncFeature()) {
+      googleCalendarToggle.checked = false;
+      if (googleCalendarAutoSyncEnabled) {
+        setGoogleCalendarAutoSyncEnabled(false);
+      }
+    }
     bindEventOnce(googleCalendarToggle, 'change', (event) => {
-      setGoogleCalendarAutoSyncEnabled(!!event.target.checked);
+      const nextEnabled = !!event?.target?.checked;
+      if (nextEnabled && !canUseCalendarSyncFeature()) {
+        event.target.checked = false;
+        setGoogleCalendarAutoSyncEnabled(false);
+        promptCalendarSyncRestrictedNotice();
+        return;
+      }
+      setGoogleCalendarAutoSyncEnabled(nextEnabled);
     }, 'settings-google-calendar-sync-toggle');
 
     const googleCalendarSelect = container.querySelector('#settings-google-calendar-select');
@@ -7544,7 +7762,6 @@
       `[Admin Debug] Error Code: ${detail.code || 'unknown'} | Context: ${detail.context} | Message: ${detail.message || 'n/a'} | Reason: ${detail.reason || 'n/a'}`,
       err
     );
-    console.log('[Admin Debug] Detail:', detail);
   }
 
   function canAccessAdminPanel() {
@@ -7776,6 +7993,122 @@
     if (messageInput) messageInput.value = '';
   }
 
+  function getReferralProgressState() {
+    const fallback = { acceptedCount: 0 };
+    const raw = getCloudValue(REFERRAL_PROGRESS_KEY, getLocalValue(REFERRAL_PROGRESS_KEY, fallback));
+    if (!raw || typeof raw !== 'object') return fallback;
+    return {
+      acceptedCount: Math.max(0, Math.floor(toSafeNumber(raw.acceptedCount ?? raw.count, 0))),
+    };
+  }
+
+  function isCalendarSyncAdminOverrideUser(user = window.FirebaseService?.getCurrentUser?.()) {
+    if (!user) return false;
+    const uid = String(user.uid || '').trim();
+    const cachedAdminUid = String(getLocalValue(ADMIN_UID_CACHE_KEY, '') || '').trim();
+    if (uid && cachedAdminUid && uid === cachedAdminUid) return true;
+
+    const email = String(user.email || '').trim();
+    if (!isAdminEmail(email)) return false;
+
+    if (uid && uid !== cachedAdminUid) {
+      saveLocalValue(ADMIN_UID_CACHE_KEY, uid);
+    }
+    return true;
+  }
+
+  function canUseCalendarSyncFeature() {
+    if (isCalendarSyncAdminOverrideUser()) return true;
+    const achievedReferrals = getReferralProgressState().acceptedCount;
+    return achievedReferrals >= 10 || hasPaidPlanAccess(currentUserPlan);
+  }
+
+  function promptCalendarSyncRestrictedNotice() {
+    const message = 'この機能は10人紹介達成者、または有料プラン限定です。紹介プログラムを確認しますか？';
+    showToast(message, 'error');
+    if (window.confirm(message)) {
+      openSettingsReferralProgramSection();
+    }
+  }
+
+  function getReferralCodeForUser(user = window.FirebaseService?.getCurrentUser?.()) {
+    const uid = String(user?.uid || '').trim();
+    if (uid) return uid;
+
+    const cached = String(getLocalValue(REFERRAL_CODE_KEY, '') || '').trim();
+    if (cached) return cached;
+
+    const generated = `guest-${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`;
+    saveLocalValue(REFERRAL_CODE_KEY, generated);
+    return generated;
+  }
+
+  function buildReferralLink(code = '') {
+    const base = `${window.location.origin}${window.location.pathname}`;
+    const normalizedCode = String(code || '').trim();
+    if (!normalizedCode) return base;
+    return `${base}?ref=${encodeURIComponent(normalizedCode)}`;
+  }
+
+  function renderReferralProgramPanel() {
+    const linkInput = document.getElementById('referral-link-output');
+    const progressEl = document.getElementById('referral-progress-count');
+    if (!linkInput && !progressEl) return;
+
+    const referralCode = getReferralCodeForUser();
+    const referralLink = buildReferralLink(referralCode);
+    const { acceptedCount } = getReferralProgressState();
+    const remaining = Math.max(0, 10 - acceptedCount);
+
+    if (linkInput) {
+      linkInput.value = referralLink;
+      linkInput.readOnly = true;
+    }
+    if (progressEl) {
+      progressEl.textContent = t('referralProgramRemaining', { count: String(remaining) });
+    }
+  }
+
+  async function handleCopyReferralLinkClick() {
+    const linkInput = document.getElementById('referral-link-output');
+    const text = String(linkInput?.value || '').trim();
+    if (!text) return;
+
+    let copied = false;
+    if (navigator?.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        copied = true;
+      } catch {
+        copied = false;
+      }
+    }
+
+    if (!copied) {
+      const tempArea = document.createElement('textarea');
+      tempArea.value = text;
+      tempArea.setAttribute('readonly', 'readonly');
+      tempArea.style.position = 'fixed';
+      tempArea.style.left = '-9999px';
+      tempArea.style.top = '0';
+      document.body.appendChild(tempArea);
+      tempArea.select();
+      try {
+        copied = document.execCommand('copy');
+      } catch {
+        copied = false;
+      } finally {
+        document.body.removeChild(tempArea);
+      }
+    }
+
+    if (copied) {
+      showToast(t('referralProgramCopied'));
+    } else {
+      showToast(t('referralProgramCopyFailed'), 'error');
+    }
+  }
+
   async function handleSupportTicketSubmit() {
     const subject = String(document.getElementById('support-ticket-subject')?.value || '').trim();
     const category = String(document.getElementById('support-ticket-category')?.value || 'bug').trim() || 'bug';
@@ -7864,6 +8197,19 @@
     if (planTabBtn && !planTabBtn.classList.contains('active')) planTabBtn.click();
     window.requestAnimationFrame(() => {
       const section = document.getElementById('settings-subscription-plan-section');
+      if (!section) return;
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      section.classList.add('settings-section-focus');
+      window.setTimeout(() => section.classList.remove('settings-section-focus'), 1200);
+    });
+  }
+
+  function openSettingsReferralProgramSection() {
+    handleOpenSettingsClick();
+    const referralTabBtn = settingsOverlay?.querySelector('.settings-tab-btn[data-tab="referral"]');
+    if (referralTabBtn && !referralTabBtn.classList.contains('active')) referralTabBtn.click();
+    window.requestAnimationFrame(() => {
+      const section = document.getElementById('settings-content-referral');
       if (!section) return;
       section.scrollIntoView({ behavior: 'smooth', block: 'start' });
       section.classList.add('settings-section-focus');
@@ -8222,6 +8568,7 @@
     loadBillingProfileSettings();
     loadContractTemplateSettings();
     renderPlanManagementSection();
+    renderReferralProgramPanel();
     updateTeamManagementTabAvailability();
     updateAdminSettingsAvailability();
     if (canAccessAdminPanel()) {
@@ -8304,6 +8651,9 @@
         if (tab === 'support') {
           refreshMySupportReplies({ notify: false });
         }
+        if (tab === 'referral') {
+          renderReferralProgramPanel();
+        }
         if (tab === 'admin') {
           refreshAdminOverview();
         }
@@ -8326,6 +8676,7 @@
       const loginFn = window.FirebaseService.signInWithPopup
         ?? window.FirebaseService.signInWithGoogle;
       await loginFn.call(window.FirebaseService);
+      markGoogleCalendarAuthGranted();
     } catch (err) {
       console.error('Firebase Auth Error:', err?.code, err?.message);
       console.error(err);
@@ -8339,6 +8690,14 @@
       showToast(t('googleLoginFailed'));
       alert(t('googleLoginFailedAlert'));
     }
+  }
+
+  function handleCustomerFormSyncGoogleCalendarToggle(event) {
+    const checkbox = event?.target;
+    if (!checkbox || checkbox.checked !== true) return;
+    if (canUseCalendarSyncFeature()) return;
+    checkbox.checked = false;
+    promptCalendarSyncRestrictedNotice();
   }
 
   function handleGoogleLogoutClick() {
@@ -8435,6 +8794,7 @@
     bindEventOnce(document.getElementById('form-revenue'), 'input', syncAdjustmentFromRevenueInput, 'form-revenue-input');
     bindEventOnce(document.getElementById('form-expense'), 'input', handleExpenseInputChange, 'form-expense-input');
     bindEventOnce(document.getElementById('form-total-price'), 'input', syncAdjustmentFromTotalInput, 'form-total-price-input');
+    bindEventOnce(document.getElementById('form-syncGoogleCalendar'), 'change', handleCustomerFormSyncGoogleCalendarToggle, 'form-sync-google-calendar-toggle');
     bindEventOnce(document.getElementById('btn-add'), 'click', handleAddCustomerClick, 'add-customer-click');
     bindEventOnce(document.getElementById('btn-add-fab'), 'click', handleAddCustomerClick, 'add-customer-fab-click');
     bindEventOnce(document.getElementById('btn-settings'), 'click', handleOpenSettingsClick, 'open-settings-click');
@@ -8451,6 +8811,7 @@
       if (event.target?.id === 'enterprise-contact-overlay') closeEnterpriseContactModal();
     }, 'enterprise-contact-overlay-close');
     bindEventOnce(document.getElementById('btn-support-submit'), 'click', handleSupportTicketSubmit, 'support-ticket-submit');
+    bindEventOnce(document.getElementById('btn-copy-referral-link'), 'click', handleCopyReferralLinkClick, 'referral-copy-link');
     bindEventOnce(document.getElementById('add-item-btn'), 'click', () => addDynamicChargeItem(), 'add-extra-item-click');
     bindEventOnce(document.getElementById('btn-google-login'), 'click', handleGoogleLoginClick, 'google-login-banner');
     bindEventOnce(document.getElementById('btn-google-login-screen'), 'click', handleGoogleLoginClick, 'google-login-screen');

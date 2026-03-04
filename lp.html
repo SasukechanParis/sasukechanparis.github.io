@@ -1,0 +1,1126 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pholio</title>
+  <meta name="description" content="Pholioはカメラマンのための管理ツール。日々の数字を可視化し、撮影に集中できる時間を増やします。" />
+  <link rel="icon" href="iconpholio.png" type="image/png" />
+  <style>
+    :root {
+      --accent: #8b5cf6;
+      --bg: #070b16;
+      --surface: rgba(255, 255, 255, 0.06);
+      --surface-strong: rgba(255, 255, 255, 0.1);
+      --line: rgba(255, 255, 255, 0.18);
+      --text: #f8fafc;
+      --muted: #cbd5e1;
+      --radius: 16px;
+      --shadow: 0 18px 40px rgba(0, 0, 0, 0.34);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      overflow-x: hidden;
+    }
+
+    body {
+      min-height: 100vh;
+      font-family: "Inter", "Noto Sans JP", "Noto Sans", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 20% -12%, color-mix(in srgb, var(--accent) 28%, transparent), transparent 52%),
+        radial-gradient(circle at 88% 2%, rgba(56, 189, 248, 0.14), transparent 42%),
+        linear-gradient(170deg, #050812 0%, #0b1020 55%, #070b16 100%);
+      line-height: 1.72;
+    }
+
+    .container {
+      width: min(980px, calc(100% - 32px));
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      width: 100%;
+      border-bottom: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
+      background: rgba(7, 11, 22, 0.84);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    .topbar-inner {
+      min-height: 74px;
+      padding: 14px 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1.08rem;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+    }
+
+    .brand img {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+    }
+
+    .lang-select {
+      min-height: 44px;
+      min-width: 186px;
+      padding: 8px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.08);
+      color: #f8fafc;
+      font-weight: 600;
+      outline: none;
+    }
+
+    main {
+      width: 100%;
+      padding: 64px 0 40px;
+    }
+
+    .hero {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      border: 1px solid color-mix(in srgb, var(--accent) 62%, var(--line));
+      background: rgba(255, 255, 255, 0.06);
+      color: color-mix(in srgb, var(--accent) 35%, #ffffff);
+      font-size: 0.82rem;
+      font-weight: 700;
+      padding: 7px 14px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2rem, 5.2vw, 3.2rem);
+      line-height: 1.25;
+      letter-spacing: 0.01em;
+      text-wrap: balance;
+    }
+
+    h1 .line {
+      display: block;
+    }
+
+    .subcopy {
+      margin: 0;
+      max-width: 64ch;
+      color: var(--muted);
+      font-size: clamp(1rem, 1.4vw, 1.1rem);
+    }
+
+    .currency-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.06);
+      color: #e2e8f0;
+      font-weight: 700;
+      font-size: 0.9rem;
+      padding: 8px 14px;
+    }
+
+    .cta-wrap {
+      margin-top: 4px;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+    }
+
+    .hero-preview {
+      width: min(560px, 100%);
+      margin-top: 16px;
+      border-radius: var(--radius);
+      border: 1px solid var(--line);
+      background: var(--surface);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: var(--shadow);
+      padding: 18px;
+      text-align: left;
+      display: grid;
+      gap: 10px;
+    }
+
+    .hero-preview-title {
+      margin: 0;
+      font-size: 0.84rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: color-mix(in srgb, var(--accent) 50%, #ffffff);
+    }
+
+    .hero-preview-revenue {
+      margin: 0;
+      font-size: clamp(0.98rem, 1.6vw, 1.08rem);
+      font-weight: 700;
+      color: #e2e8f0;
+      line-height: 1.45;
+    }
+
+    .hero-preview-schedule-title {
+      margin: 2px 0 0;
+      font-size: 0.84rem;
+      font-weight: 700;
+      color: #cbd5e1;
+    }
+
+    .hero-preview-list {
+      margin: 0;
+      padding-left: 18px;
+      display: grid;
+      gap: 6px;
+      color: #cbd5e1;
+      font-size: 0.9rem;
+    }
+
+    .hero-preview-list li {
+      line-height: 1.5;
+    }
+
+    .btn-primary {
+      min-height: 50px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 24px;
+      border-radius: 12px;
+      border: 1px solid color-mix(in srgb, var(--accent) 65%, #ffffff);
+      color: #ffffff;
+      font-weight: 800;
+      text-decoration: none;
+      letter-spacing: 0.01em;
+      background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 70%, #6366f1), var(--accent));
+      box-shadow: 0 14px 28px color-mix(in srgb, var(--accent) 35%, transparent);
+      transition: transform 0.2s ease, filter 0.2s ease;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.05);
+    }
+
+    .section {
+      width: 100%;
+      margin-top: 54px;
+    }
+
+    .section h2 {
+      margin: 0 0 10px;
+      font-size: clamp(1.45rem, 3vw, 2rem);
+    }
+
+    .section-lead {
+      margin: 0 auto;
+      max-width: 70ch;
+      color: var(--muted);
+    }
+
+    .compare-grid {
+      width: 100%;
+      margin-top: 22px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .compare-card {
+      border-radius: var(--radius);
+      border: 1px solid var(--line);
+      background: var(--surface);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: var(--shadow);
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 8px;
+    }
+
+    .compare-label {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--surface-strong);
+      padding: 4px 10px;
+      font-size: 0.8rem;
+      font-weight: 800;
+      color: color-mix(in srgb, var(--accent) 45%, #ffffff);
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    .compare-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.93rem;
+      max-width: 64ch;
+    }
+
+    .value-grid,
+    .security-grid {
+      width: 100%;
+      margin-top: 22px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+
+    .custom-card {
+      border-radius: var(--radius);
+      border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--line));
+      background: linear-gradient(140deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04));
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: var(--shadow);
+      padding: 22px 18px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .custom-kicker {
+      margin: 0;
+      color: color-mix(in srgb, var(--accent) 42%, #ffffff);
+      font-size: 1.16rem;
+      font-weight: 800;
+      letter-spacing: 0.01em;
+    }
+
+    .custom-card p {
+      margin: 0;
+      max-width: 68ch;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .value-card,
+    .security-card {
+      border-radius: var(--radius);
+      border: 1px solid var(--line);
+      background: var(--surface);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: var(--shadow);
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 8px;
+    }
+
+    .value-card h3,
+    .security-card h3 {
+      margin: 0;
+      font-size: 1.08rem;
+      font-weight: 800;
+    }
+
+    .value-card p,
+    .security-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.93rem;
+      max-width: 68ch;
+    }
+
+    .value-icon {
+      font-size: 1.35rem;
+      line-height: 1;
+      color: color-mix(in srgb, var(--accent) 65%, #ffffff);
+    }
+
+    .feature-note {
+      font-size: 0.82rem !important;
+      color: #94a3b8 !important;
+    }
+
+    .plans {
+      width: 100%;
+      margin-top: 22px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .plan-card {
+      border-radius: var(--radius);
+      border: 1px solid var(--line);
+      background: var(--surface);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: var(--shadow);
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 10px;
+    }
+
+    .plan-name {
+      font-size: 1rem;
+      font-weight: 800;
+    }
+
+    .plan-price {
+      font-size: 1.42rem;
+      font-weight: 900;
+      color: color-mix(in srgb, var(--accent) 55%, #ffffff);
+    }
+
+    .plan-description {
+      margin: 0;
+      font-size: 0.92rem;
+      color: var(--muted);
+    }
+
+    .referral-card {
+      margin-top: 22px;
+      border-radius: var(--radius);
+      border: 1px solid color-mix(in srgb, var(--accent) 52%, var(--line));
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04));
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: var(--shadow);
+      padding: 20px;
+      display: grid;
+      gap: 12px;
+      justify-items: center;
+      text-align: center;
+    }
+
+    .referral-item {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 12px;
+      padding: 14px;
+      display: grid;
+      gap: 6px;
+    }
+
+    .referral-item h3 {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 800;
+    }
+
+    .referral-item p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .referral-notes {
+      width: 100%;
+      display: grid;
+      gap: 6px;
+    }
+
+    .referral-note {
+      margin: 0;
+      color: #94a3b8;
+      font-size: 0.84rem;
+    }
+
+    footer {
+      width: 100%;
+      margin-top: 52px;
+      padding: 18px 0 36px;
+      border-top: 1px solid var(--line);
+      color: #94a3b8;
+      font-size: 0.9rem;
+      text-align: center;
+    }
+
+    @media (max-width: 900px) {
+      .compare-grid,
+      .plans {
+        grid-template-columns: 1fr;
+        max-width: 520px;
+        margin-inline: auto;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .container {
+        width: min(980px, calc(100% - 24px));
+      }
+
+      main {
+        padding-top: 48px;
+      }
+
+      .btn-primary {
+        width: 100%;
+      }
+
+      .compare-card,
+      .value-card,
+      .security-card,
+      .plan-card {
+        padding: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <div class="brand">
+        <img src="iconpholio.png" alt="Pholio" />
+        <span>Pholio</span>
+      </div>
+      <select id="langSelect" class="lang-select" aria-label="Language">
+        <option value="ja">🇯🇵 日本語</option>
+        <option value="en">🇺🇸 English</option>
+        <option value="fr">🇫🇷 Français</option>
+        <option value="zh">🇨🇳 中文</option>
+        <option value="ko">🇰🇷 한국어</option>
+        <option value="es">🇪🇸 Español</option>
+      </select>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      <section class="hero">
+        <div class="eyebrow" data-i18n="eyebrow">カメラマンのための管理ツール</div>
+        <h1 id="headline"></h1>
+        <p class="subcopy" data-i18n="subcopy">複雑な管理はいらない。撮影と編集に集中するための、いちばん身近な道具。</p>
+
+        <div class="currency-chip">
+          <span data-i18n="currencyLabel">表示通貨</span>
+          <strong id="currencySymbol">¥</strong>
+        </div>
+
+        <div class="cta-wrap">
+          <a class="btn-primary" href="index.html" data-i18n="cta">無料で使い始める</a>
+        </div>
+
+        <section class="hero-preview" aria-label="Pholio Preview">
+          <p class="hero-preview-title" data-i18n="demoPanelTitle">Pholio デモ画面</p>
+          <p class="hero-preview-revenue" data-i18n="demoEstimatedRevenue">今月の見込み売上: ¥200,000</p>
+          <p class="hero-preview-schedule-title" data-i18n="demoScheduleTitle">直近の予定</p>
+          <ul class="hero-preview-list">
+            <li data-i18n="demoSchedule1">3/20 ウェディング撮影（A様）</li>
+            <li data-i18n="demoSchedule2">3/25 ファミリーフォト（B様）</li>
+            <li data-i18n="demoSchedule3">3/28 プロフィール写真（C様）</li>
+          </ul>
+        </section>
+      </section>
+
+      <section class="section">
+        <h2 data-i18n="compareTitle">なぜPholioを導入するのか？</h2>
+        <p class="section-lead" data-i18n="compareLead">同じ入力でも、見える景色が変わる。迷いを減らし、判断を速くする仕組みです。</p>
+
+        <div class="compare-grid">
+          <article class="compare-card">
+            <div class="compare-label" data-i18n="beforeLabel">Before</div>
+            <p data-i18n="beforeBody">確定申告前や月末に、手帳やエクセルの数字と格闘する時間。</p>
+          </article>
+          <article class="compare-card">
+            <div class="compare-label" data-i18n="afterLabel">After</div>
+            <p data-i18n="afterBody">日々の入力を自動グラフ化。利益がリアルタイムで分かるから、撮影プランの見直しや機材投資の判断が迷いなくできる。</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 data-i18n="valueTitle">Pholioが選ばれる理由</h2>
+        <p class="section-lead" data-i18n="valueLead">現場のリアルな悩みを解決する、カメラマン目線の3つの価値。</p>
+
+        <div class="value-grid">
+          <article class="value-card">
+            <h3 data-i18n="benefit1Title">もう、計算に追われない</h3>
+            <p data-i18n="benefit1Body">撮影から戻って疲れている時でも、スマホやPCから数値を入力するだけ。売上・純利益・客数を自動で可視化。</p>
+          </article>
+          <article class="value-card">
+            <h3 data-i18n="benefit2Title">プランとオプションを一元管理</h3>
+            <p data-i18n="benefit2Body">自分だけの撮影メニューと正確な単価を整理。現場での見積もり相談も、もう迷わない。</p>
+          </article>
+          <article class="value-card">
+            <h3 data-i18n="benefit3Title">世界中どこでも、あなたのスタジオを管理</h3>
+            <p data-i18n="benefit3Body">6言語・多通貨対応。海外案件や多国籍なチームでも、共通のプラットフォームで状況を把握。</p>
+          </article>
+          <article class="value-card">
+            <div class="value-icon" aria-hidden="true">📅</div>
+            <h3 data-i18n="benefitCalendarTitle">Googleカレンダー自動同期</h3>
+            <p data-i18n="benefitCalendarBody">顧客情報を登録するだけで、お使いのGoogleカレンダーに予定を自動作成。二重入力の手間を省き、スケジュールの漏れをなくします。</p>
+            <p class="feature-note" data-i18n="benefitCalendarNote">※Founding Member、または有料プラン限定機能</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 data-i18n="securityTitle">安心して使えるセキュリティ</h2>
+        <p class="section-lead" data-i18n="securityLead">日々の売上や顧客情報を、事業運営レベルで安全に守る設計です。</p>
+
+        <div class="security-grid">
+          <article class="security-card">
+            <h3 data-i18n="securityPoint1Title">あなたのデータは、あなただけのもの</h3>
+            <p data-i18n="securityPoint1Body">入力されたデータは最新の暗号化技術（SSL/TLS）を用いて保護され、安全に保存されます。</p>
+          </article>
+          <article class="security-card">
+            <h3 data-i18n="securityPoint2Title">堅牢なクラウドインフラ</h3>
+            <p data-i18n="securityPoint2Body">業界標準のセキュリティを誇るプラットフォーム（Firebase）を採用し、大切なビジネスデータを24時間守ります。</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 data-i18n="customTitle">自分色に染める、愛着のわく道具</h2>
+        <div class="custom-card">
+          <p class="custom-kicker" data-i18n="customPhrase">あなたの好みに、どこまでも馴染む。</p>
+          <p data-i18n="customBody">テーマカラーを自由にカスタマイズ可能。毎日使うものだから、開くたびに愛着が湧く、あなただけの管理ノートに。</p>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 data-i18n="plansTitle">料金プラン</h2>
+        <p class="section-lead" data-i18n="plansLead">無料からチーム運用まで、必要な規模に合わせて選べます。</p>
+
+        <div class="plans">
+          <article class="plan-card">
+            <div class="plan-name" data-i18n="planFreeName">無料（Free）</div>
+            <div class="plan-price" id="planFreePrice">¥0</div>
+            <p class="plan-description" data-i18n="planFreeDesc">ダッシュボード利用、売上・利益管理、プラン管理（全機能がデバイス1台で利用可能）</p>
+            <p class="plan-description" data-i18n="planFreeTagline">まずは20件の案件登録でお試し。ツールの使い心地を十分に実感してください。</p>
+          </article>
+
+          <article class="plan-card">
+            <div class="plan-name" data-i18n="planIndividualName">個人プラン</div>
+            <div class="plan-price" id="planIndividualPrice">¥1,400</div>
+            <p class="plan-description" data-i18n="planIndividualDesc">案件登録が無制限になり、クラウド同期で全てのデバイスからアクセス可能。</p>
+            <p class="plan-description" data-i18n="planIndividualTagline">データの自動バックアップ。</p>
+          </article>
+
+          <article class="plan-card">
+            <div class="plan-name" data-i18n="planSmallTeamName">スモールチーム</div>
+            <div class="plan-price" id="planSmallTeamPrice">¥2,900〜</div>
+            <p class="plan-description" data-i18n="planSmallTeamDesc">チームメンバーとのデータ共有・共同管理。</p>
+            <p class="plan-description" data-i18n="planSmallTeamTagline">現場と事務所で同じ顧客情報を同時に確認できます。</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 data-i18n="referralTitle">仲間を助けて、自分もお得に。紹介キャンペーン実施中</h2>
+        <div class="referral-card">
+          <article class="referral-item">
+            <h3 data-i18n="referralBenefit1Title">紹介した人も、された人もお得</h3>
+            <p data-i18n="referralBenefit1Body">あなたの紹介で友人がPholioを始めると、あなたと友人の二人とも利用料が1ヶ月分無料になります。</p>
+          </article>
+          <article class="referral-item">
+            <h3 data-i18n="referralBenefit2Title">10名紹介で「一生無料」</h3>
+            <p data-i18n="referralBenefit2Body">紹介した方のうち合計10名が有料プランを1ヶ月以上継続（2ヶ月目の課金を開始）された時点で、あなたはPholioを一生無料で使い続けられる「Founding Member（創設メンバー）」として認定されます。</p>
+          </article>
+          <div class="referral-notes">
+            <p class="referral-note" data-i18n="referralNote1">※紹介された方が無料期間を終え、2ヶ月目の利用を開始した時点で1名としてカウントされます。</p>
+            <p class="referral-note" data-i18n="referralNote2">※本キャンペーンの新規受付は、一定数の達成者に達し次第終了する場合があります。なお、それまでに特典を獲得された方の『一生無料』の権利は、キャンペーン終了後も永続的に維持されます。</p>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container" data-i18n="footer">Pholio - カメラマンのための管理ツール。</div>
+  </footer>
+
+  <script>
+    (function () {
+      const LANG_KEY = 'photocrm_lang';
+      const ACCENT_KEY = 'photocrm_accent_color';
+
+      const dictionary = {
+        ja: {
+          eyebrow: 'カメラマンのための管理ツール',
+          headlineHtml: '<span class="line">事務が苦手なカメラマンが</span><span class="line">『欲しい』を詰め込みました</span>',
+          subcopy: '複雑な管理はいらない。撮影と編集に集中するための、いちばん身近な道具。',
+          demoPanelTitle: 'Pholio デモ画面',
+          demoEstimatedRevenue: '今月の見込み売上: ¥200,000',
+          demoScheduleTitle: '直近の予定',
+          demoSchedule1: '3/20 ウェディング撮影（A様）',
+          demoSchedule2: '3/25 ファミリーフォト（B様）',
+          demoSchedule3: '3/28 プロフィール写真（C様）',
+          currencyLabel: '表示通貨',
+          currencySymbol: '¥',
+          cta: '無料で使い始める',
+          compareTitle: 'なぜPholioを導入するのか？',
+          compareLead: '同じ入力でも、見える景色が変わる。迷いを減らし、判断を速くする仕組みです。',
+          beforeLabel: 'Before',
+          beforeBody: '確定申告前や月末に、手帳やエクセルの数字と格闘する時間。',
+          afterLabel: 'After',
+          afterBody: '日々の入力を自動グラフ化。利益がリアルタイムで分かるから、撮影プランの見直しや機材投資の判断が迷いなくできる。',
+          valueTitle: 'Pholioが選ばれる理由',
+          valueLead: '現場のリアルな悩みを解決する、カメラマン目線の3つの価値。',
+          benefit1Title: 'もう、計算に追われない',
+          benefit1Body: '撮影から戻って疲れている時でも、スマホやPCから数値を入力するだけ。売上・純利益・客数を自動で可視化。',
+          benefit2Title: 'プランとオプションを一元管理',
+          benefit2Body: '自分だけの撮影メニューと正確な単価を整理。現場での見積もり相談も、もう迷わない。',
+          benefit3Title: '世界中どこでも、あなたのスタジオを管理',
+          benefit3Body: '6言語・多通貨対応。海外案件や多国籍なチームでも、共通のプラットフォームで状況を把握。',
+          benefitCalendarTitle: 'Googleカレンダー自動同期',
+          benefitCalendarBody: '顧客情報を登録するだけで、お使いのGoogleカレンダーに予定を自動作成。二重入力の手間を省き、スケジュールの漏れをなくします。',
+          benefitCalendarNote: '※Founding Member、または有料プラン限定機能',
+          securityTitle: '安心して使えるセキュリティ',
+          securityLead: '日々の売上や顧客情報を、事業運営レベルで安全に守る設計です。',
+          securityPoint1Title: 'あなたのデータは、あなただけのもの',
+          securityPoint1Body: '入力されたデータは最新の暗号化技術（SSL/TLS）を用いて保護され、安全に保存されます。',
+          securityPoint2Title: '堅牢なクラウドインフラ',
+          securityPoint2Body: '業界標準のセキュリティを誇るプラットフォーム（Firebase）を採用し、大切なビジネスデータを24時間守ります。',
+          customTitle: '自分色に染める、愛着のわく道具',
+          customPhrase: 'あなたの好みに、どこまでも馴染む。',
+          customBody: 'テーマカラーを自由にカスタマイズ可能。毎日使うものだから、開くたびに愛着が湧く、あなただけの管理ノートに。',
+          plansTitle: '料金プラン',
+          plansLead: '無料からチーム運用まで、必要な規模に合わせて選べます。',
+          planFreeName: '無料（Free）',
+          planFreeDesc: 'ダッシュボード利用、売上・利益管理、プラン管理（全機能がデバイス1台で利用可能）',
+          planFreeTagline: 'まずは20件の案件登録でお試し。ツールの使い心地を十分に実感してください。',
+          planIndividualName: '個人プラン',
+          planIndividualDesc: '案件登録が無制限になり、クラウド同期で全てのデバイスからアクセス可能。',
+          planIndividualTagline: 'データの自動バックアップ。',
+          planSmallTeamName: 'スモールチーム',
+          planSmallTeamDesc: 'チームメンバーとのデータ共有・共同管理。',
+          planSmallTeamTagline: '現場と事務所で同じ顧客情報を同時に確認できます。',
+          referralTitle: '仲間を助けて、自分もお得に。紹介キャンペーン実施中',
+          referralBenefit1Title: '紹介した人も、された人もお得',
+          referralBenefit1Body: 'あなたの紹介で友人がPholioを始めると、あなたと友人の二人とも利用料が1ヶ月分無料になります。',
+          referralBenefit2Title: '10名紹介で「一生無料」',
+          referralBenefit2Body: '紹介した方のうち合計10名が有料プランを1ヶ月以上継続（2ヶ月目の課金を開始）された時点で、あなたはPholioを一生無料で使い続けられる「Founding Member（創設メンバー）」として認定されます。',
+          referralNote1: '※紹介された方が無料期間を終え、2ヶ月目の利用を開始した時点で1名としてカウントされます。',
+          referralNote2: '※本キャンペーンの新規受付は、一定数の達成者に達し次第終了する場合があります。なお、それまでに特典を獲得された方の「一生無料」の権利は、キャンペーン終了後も永続的に維持されます。',
+          footer: 'Pholio - カメラマンのための管理ツール。',
+          prices: {
+            free: '¥0',
+            individual: '¥1,400',
+            smallTeam: '¥2,900〜',
+          },
+        },
+        en: {
+          eyebrow: 'Management Tool for Photographers',
+          headlineHtml: '<span class="line">Built by photographers who struggled with admin</span><span class="line">Packed with what we actually need</span>',
+          subcopy: 'No complex process. A close, practical tool so you can focus on shooting and editing.',
+          demoPanelTitle: 'Pholio Preview',
+          demoEstimatedRevenue: 'Estimated Revenue: $1,500',
+          demoScheduleTitle: 'Upcoming Bookings',
+          demoSchedule1: '3/20 Wedding Shoot (Client A)',
+          demoSchedule2: '3/25 Family Photo (Client B)',
+          demoSchedule3: '3/28 Profile Portrait (Client C)',
+          currencyLabel: 'Currency',
+          currencySymbol: '$',
+          cta: 'Start Free',
+          compareTitle: 'Why adopt Pholio?',
+          compareLead: 'Same input, different visibility. Faster decisions with less stress.',
+          beforeLabel: 'Before',
+          beforeBody: 'At month-end or tax season, fighting numbers across notebooks and spreadsheets.',
+          afterLabel: 'After',
+          afterBody: 'Daily entries become auto-graphs. Real-time profit visibility helps you decide pricing updates and gear investments with confidence.',
+          valueTitle: 'Why photographers choose Pholio',
+          valueLead: 'Three practical values designed for real field workflow.',
+          benefit1Title: 'No more chasing calculations',
+          benefit1Body: 'Even when tired after a shoot, just input numbers on phone or PC. Revenue, net profit, and client count are visualized automatically.',
+          benefit2Title: 'Plans and options in one place',
+          benefit2Body: 'Organize your menu and exact pricing. No hesitation during on-site quote discussions.',
+          benefit3Title: 'Manage your studio from anywhere',
+          benefit3Body: '6 languages and multi-currency support for international projects and mixed teams.',
+          benefitCalendarTitle: 'Automatic Google Calendar Sync',
+          benefitCalendarBody: 'Just by registering customer details, events are created automatically in your Google Calendar. Reduce double entry and avoid schedule misses.',
+          benefitCalendarNote: '* Available only for Founding Members or paid plans.',
+          securityTitle: 'Security you can trust',
+          securityLead: 'Your sales and customer data are protected with business-grade reliability.',
+          securityPoint1Title: 'Your data belongs to you',
+          securityPoint1Body: 'All entered data is protected with modern encryption (SSL/TLS) and securely stored.',
+          securityPoint2Title: 'Robust cloud infrastructure',
+          securityPoint2Body: 'Built on Firebase, an industry-standard secure platform that protects your business data 24/7.',
+          customTitle: 'A tool you can truly make your own',
+          customPhrase: 'Fits your taste, down to every detail.',
+          customBody: 'Freely customize the theme color. Since you use it every day, it becomes a management notebook that feels personal every time you open it.',
+          plansTitle: 'Pricing Plans',
+          plansLead: 'From free to team operations, choose what fits your scale.',
+          planFreeName: 'Free',
+          planFreeDesc: 'Dashboard, revenue/profit tracking, and plan management (full functions on one device).',
+          planFreeTagline: 'Start with up to 20 projects and feel how the tool works for your workflow.',
+          planIndividualName: 'Individual',
+          planIndividualDesc: 'Unlimited project registration plus cloud sync access from all your devices.',
+          planIndividualTagline: 'Automatic data backup included.',
+          planSmallTeamName: 'Small Team',
+          planSmallTeamDesc: 'Share and co-manage data with team members.',
+          planSmallTeamTagline: 'View the same customer records instantly in both field and office.',
+          referralTitle: 'Help your peers and save together: referral campaign now live',
+          referralBenefit1Title: 'Both the referrer and friend benefit',
+          referralBenefit1Body: 'When your friend starts Pholio through your referral, both of you get one month of usage free.',
+          referralBenefit2Title: 'Refer 10 people and unlock lifetime free access',
+          referralBenefit2Body: 'Once a total of 10 referred users stay on a paid plan for at least one month (their second-month billing starts), you are certified as a \"Founding Member\" and can use Pholio for life at no cost.',
+          referralNote1: '* A referral is counted when the invited user finishes the free period and starts month-two usage.',
+          referralNote2: '* New sign-ups for this campaign may close once a certain number of achievers is reached. However, users who already earned the \"lifetime free\" benefit keep that right permanently, even after the campaign ends.',
+          footer: 'Pholio - Management tool for photographers.',
+          prices: {
+            free: '$0',
+            individual: '$9',
+            smallTeam: '$19〜',
+          },
+        },
+        fr: {
+          eyebrow: 'Outil de gestion pour photographes',
+          headlineHtml: '<span class="line">Conçu par des photographes qui détestent l\'administratif</span><span class="line">Avec exactement ce qu\'il fallait</span>',
+          subcopy: 'Un outil concret pour se concentrer sur la prise de vue et la retouche, sans complexité inutile.',
+          demoPanelTitle: 'Aperçu Pholio',
+          demoEstimatedRevenue: 'Revenu estimé : 1.400 €',
+          demoScheduleTitle: 'Prochains rendez-vous',
+          demoSchedule1: '20/03 Shooting mariage (Client A)',
+          demoSchedule2: '25/03 Photo de famille (Client B)',
+          demoSchedule3: '28/03 Portrait professionnel (Client C)',
+          currencyLabel: 'Devise',
+          currencySymbol: '€',
+          cta: 'Commencer gratuitement',
+          compareTitle: 'Pourquoi adopter Pholio ?',
+          compareLead: 'Même saisie, mais une vision totalement différente. Moins d\'hésitation, plus de décisions utiles.',
+          beforeLabel: 'Before',
+          beforeBody: 'En fin de mois ou avant la déclaration, se battre avec les chiffres entre carnet et tableur.',
+          afterLabel: 'After',
+          afterBody: 'Les saisies quotidiennes deviennent des graphiques automatiques. Le bénéfice en temps réel aide à ajuster les offres et décider des investissements matériel.',
+          valueTitle: 'Pourquoi les photographes choisissent Pholio',
+          valueLead: 'Trois bénéfices concrets pensés pour le terrain.',
+          benefit1Title: 'Ne plus subir les calculs',
+          benefit1Body: 'Même fatigué après un shooting, saisissez seulement vos chiffres. Revenus, bénéfice net et clients sont visualisés automatiquement.',
+          benefit2Title: 'Plans et options centralisés',
+          benefit2Body: 'Structurez vos offres et tarifs exacts. Plus d\'hésitation sur les devis en rendez-vous.',
+          benefit3Title: 'Piloter votre studio partout',
+          benefit3Body: '6 langues et multi-devises pour les projets internationaux et équipes multiculturelles.',
+          benefitCalendarTitle: 'Synchronisation automatique Google Agenda',
+          benefitCalendarBody: 'En enregistrant simplement les informations client, les evenements sont crees automatiquement dans Google Agenda. Evitez la double saisie et les oublis de planning.',
+          benefitCalendarNote: '* Fonction reservee aux Founding Members ou aux abonnements payants.',
+          securityTitle: 'Sécurité fiable',
+          securityLead: 'Vos données clients et financières sont protégées avec un niveau professionnel.',
+          securityPoint1Title: 'Vos données restent les vôtres',
+          securityPoint1Body: 'Toutes les données saisies sont protégées par un chiffrement moderne (SSL/TLS) et stockées de manière sécurisée.',
+          securityPoint2Title: 'Infrastructure cloud robuste',
+          securityPoint2Body: 'Pholio s\'appuie sur Firebase, une plateforme sécurisée de référence, pour protéger vos données 24h/24.',
+          customTitle: 'Un outil qui devient le vôtre',
+          customPhrase: 'S’adapte à vos goûts, jusqu’au moindre détail.',
+          customBody: 'Personnalisez librement la couleur du thème. Comme vous l’utilisez chaque jour, il devient un carnet de gestion qui vous ressemble.',
+          plansTitle: 'Formules',
+          plansLead: 'De la formule gratuite à l\'usage équipe, choisissez votre niveau.',
+          planFreeName: 'Gratuit (Free)',
+          planFreeDesc: 'Tableau de bord, suivi revenus/bénéfice, gestion des plans (toutes les fonctions sur un seul appareil).',
+          planFreeTagline: 'Commencez avec 20 projets maximum pour valider l\'adéquation à votre pratique.',
+          planIndividualName: 'Individuel',
+          planIndividualDesc: 'Projets illimités et synchronisation cloud sur tous vos appareils.',
+          planIndividualTagline: 'Sauvegarde automatique incluse.',
+          planSmallTeamName: 'Petite Équipe',
+          planSmallTeamDesc: 'Partage et gestion collaborative des données entre membres.',
+          planSmallTeamTagline: 'Même information client visible instantanément sur le terrain et au bureau.',
+          referralTitle: 'Aidez vos pairs et gagnez aussi : campagne de parrainage en cours',
+          referralBenefit1Title: 'Le parrain et le filleul y gagnent',
+          referralBenefit1Body: 'Si votre ami commence Pholio via votre parrainage, vous recevez tous les deux un mois d’utilisation offert.',
+          referralBenefit2Title: '10 parrainages = accès gratuit à vie',
+          referralBenefit2Body: 'Dès que 10 personnes parrainées maintiennent un plan payant pendant au moins un mois (début du 2e mois facturé), vous êtes reconnu comme « Founding Member » et utilisez Pholio gratuitement à vie.',
+          referralNote1: '* Une personne est comptée quand sa période gratuite se termine et que son 2e mois commence.',
+          referralNote2: '* Les nouvelles inscriptions à cette campagne peuvent être closes lorsqu’un certain nombre de bénéficiaires est atteint. Toutefois, si vous avez déjà obtenu l’avantage « gratuit à vie », ce droit reste permanent même après la fin de la campagne.',
+          footer: 'Pholio - Outil de gestion pour photographes.',
+          prices: {
+            free: '€0',
+            individual: '€9',
+            smallTeam: '€19〜',
+          },
+        },
+        zh: {
+          eyebrow: '摄影师管理工具',
+          headlineHtml: '<span class="line">由不擅长行政事务的摄影师打造</span><span class="line">把真正需要的都放进来了</span>',
+          subcopy: '不需要复杂流程，只为让你专注拍摄与修图。',
+          demoPanelTitle: 'Pholio 预览',
+          demoEstimatedRevenue: '本月預計收入: ¥10,000',
+          demoScheduleTitle: '近期日程',
+          demoSchedule1: '3/20 婚礼拍摄（A客户）',
+          demoSchedule2: '3/25 家庭写真（B客户）',
+          demoSchedule3: '3/28 个人形象照（C客户）',
+          currencyLabel: '显示货币',
+          currencySymbol: '元',
+          cta: '免费开始使用',
+          compareTitle: '为什么要导入 Pholio？',
+          compareLead: '同样的输入，不一样的决策视野。',
+          beforeLabel: 'Before',
+          beforeBody: '报税前或月末，还在手账和表格之间反复对数字。',
+          afterLabel: 'After',
+          afterBody: '日常输入自动图表化。实时利润可视化，让你在套餐调整和器材投资上更果断。',
+          valueTitle: '摄影师选择 Pholio 的原因',
+          valueLead: '从现场需求出发的三大价值。',
+          benefit1Title: '不再被计算追着跑',
+          benefit1Body: '即使拍摄后很疲惫，也只需输入数字。营收、净利润、客数自动可视化。',
+          benefit2Title: '套餐与选项统一管理',
+          benefit2Body: '整理你的拍摄菜单与精准单价，现场报价沟通不再犹豫。',
+          benefit3Title: '随时随地管理工作室',
+          benefit3Body: '支持6种语言与多币种，海外项目和多国团队也可统一协作。',
+          benefitCalendarTitle: 'Google 日历自动同步',
+          benefitCalendarBody: '只需登记客户信息，即可在你的 Google 日历中自动创建日程。减少重复录入，避免排期遗漏。',
+          benefitCalendarNote: '※仅限 Founding Member 或付费方案可用',
+          securityTitle: '值得信赖的安全性',
+          securityLead: '你的营收和客户数据将以业务级别安全标准进行保护。',
+          securityPoint1Title: '你的数据只属于你',
+          securityPoint1Body: '所有输入数据都通过最新加密技术（SSL/TLS）进行保护并安全存储。',
+          securityPoint2Title: '稳健的云基础设施',
+          securityPoint2Body: '基于行业标准安全平台 Firebase，全天候守护你的业务数据。',
+          customTitle: '可按你喜好定制的工具',
+          customPhrase: '按照你的偏好，越用越顺手。',
+          customBody: '主题色可自由自定义。每天都要打开的工具，会逐渐变成真正属于你的管理笔记。',
+          plansTitle: '价格方案',
+          plansLead: '从免费到团队协作，按规模选择。',
+          planFreeName: '免费（Free）',
+          planFreeDesc: '可使用仪表盘、营收/利润管理、套餐管理（单设备可用全部功能）。',
+          planFreeTagline: '先以最多20个案件试用，完整体验工具是否适合你的工作流。',
+          planIndividualName: '个人方案',
+          planIndividualDesc: '案件数量无限，并可通过云同步在所有设备访问。',
+          planIndividualTagline: '含自动数据备份。',
+          planSmallTeamName: '小团队',
+          planSmallTeamDesc: '团队成员可共享并协同管理数据。',
+          planSmallTeamTagline: '现场与办公室可同时查看同一客户信息。',
+          referralTitle: '帮助同行，你也受益：介绍活动进行中',
+          referralBenefit1Title: '推荐人和被推荐人都能获益',
+          referralBenefit1Body: '通过你的邀请好友开始使用 Pholio 后，你和好友双方都可获得 1 个月免费使用。',
+          referralBenefit2Title: '成功推荐10人，即可终身免费',
+          referralBenefit2Body: '当你推荐的用户中累计有10人持续使用付费方案满1个月（开始第2个月扣费）时，你将被认证为“Founding Member（创始成员）”，可终身免费使用 Pholio。',
+          referralNote1: '※ 被推荐用户结束免费期并开始第2个月使用时，计为1人。',
+          referralNote2: '※ 本活动达到一定数量的达成者后，可能停止新的参与受理。但在此之前已获得“终身免费”权益的用户，其权益将在活动结束后继续永久有效。',
+          footer: 'Pholio - 摄影师管理工具。',
+          prices: {
+            free: '元0',
+            individual: '元65',
+            smallTeam: '元135〜',
+          },
+        },
+        ko: {
+          eyebrow: '사진작가를 위한 관리 도구',
+          headlineHtml: '<span class="line">사무가 서툰 사진작가의 고민에서 출발해</span><span class="line">정말 필요한 기능만 담았습니다</span>',
+          subcopy: '복잡함 없이 촬영과 보정에 집중할 수 있도록 설계된 도구입니다.',
+          demoPanelTitle: 'Pholio 미리보기',
+          demoEstimatedRevenue: '이번 달 예상 매출: ₩1,800,000',
+          demoScheduleTitle: '다가오는 일정',
+          demoSchedule1: '3/20 웨딩 촬영 (A고객)',
+          demoSchedule2: '3/25 가족 사진 (B고객)',
+          demoSchedule3: '3/28 프로필 촬영 (C고객)',
+          currencyLabel: '표시 통화',
+          currencySymbol: '₩',
+          cta: '무료로 시작하기',
+          compareTitle: '왜 Pholio를 도입해야 할까?',
+          compareLead: '입력은 같아도, 결과를 보는 방식이 달라집니다.',
+          beforeLabel: 'Before',
+          beforeBody: '월말이나 세무 시즌마다 수첩과 엑셀 숫자와 씨름하는 시간.',
+          afterLabel: 'After',
+          afterBody: '일상 입력이 자동 그래프로 전환됩니다. 이익을 실시간으로 확인해 플랜 조정과 장비 투자 결정을 빠르게 할 수 있습니다.',
+          valueTitle: 'Pholio의 핵심 가치',
+          valueLead: '현장 문제를 해결하는 사진작가 중심의 3가지 이점.',
+          benefit1Title: '계산에 쫓기지 않기',
+          benefit1Body: '촬영 후 피곤한 상태에서도 숫자만 입력하면 매출·순이익·고객 수가 자동 시각화됩니다.',
+          benefit2Title: '플랜과 옵션을 한 곳에서 관리',
+          benefit2Body: '메뉴와 정확한 단가를 정리해 현장 견적 상담도 망설임 없이 진행할 수 있습니다.',
+          benefit3Title: '어디서든 스튜디오 운영',
+          benefit3Body: '6개 언어·다중 통화 지원으로 해외 프로젝트와 다국적 팀도 한 플랫폼에서 관리 가능합니다.',
+          benefitCalendarTitle: 'Google 캘린더 자동 동기화',
+          benefitCalendarBody: '고객 정보를 등록하면 Google 캘린더에 일정이 자동 생성됩니다. 중복 입력을 줄이고 스케줄 누락을 방지합니다.',
+          benefitCalendarNote: '※ Founding Member 또는 유료 플랜 전용 기능',
+          securityTitle: '신뢰할 수 있는 보안',
+          securityLead: '매출과 고객 데이터는 비즈니스 수준의 보안 설계로 안전하게 보호됩니다.',
+          securityPoint1Title: '데이터의 주인은 당신입니다',
+          securityPoint1Body: '입력된 모든 데이터는 최신 암호화 기술(SSL/TLS)로 보호되어 안전하게 저장됩니다.',
+          securityPoint2Title: '견고한 클라우드 인프라',
+          securityPoint2Body: '업계 표준 보안 플랫폼 Firebase를 기반으로 24시간 비즈니스 데이터를 보호합니다.',
+          customTitle: '내 스타일로 길들여지는 도구',
+          customPhrase: '취향에 맞게, 끝까지 자연스럽게.',
+          customBody: '테마 컬러를 자유롭게 커스터마이즈할 수 있습니다. 매일 쓰는 도구인 만큼 열 때마다 애착이 생기는 나만의 관리 노트가 됩니다.',
+          plansTitle: '요금 플랜',
+          plansLead: '무료부터 팀 운영까지, 규모에 맞게 선택하세요.',
+          planFreeName: '무료 (Free)',
+          planFreeDesc: '대시보드, 매출·이익 관리, 플랜 관리(한 대의 디바이스에서 전체 기능 사용).',
+          planFreeTagline: '최대 20건의 프로젝트로 먼저 사용감을 충분히 확인해 보세요.',
+          planIndividualName: '개인 플랜',
+          planIndividualDesc: '프로젝트 등록 무제한 + 클라우드 동기화로 모든 디바이스에서 접근 가능.',
+          planIndividualTagline: '자동 백업 포함.',
+          planSmallTeamName: '스몰 팀',
+          planSmallTeamDesc: '팀원과 데이터 공유 및 공동 관리.',
+          planSmallTeamTagline: '현장과 사무실에서 같은 고객 정보를 동시에 확인할 수 있습니다.',
+          referralTitle: '동료를 돕고, 나도 혜택 받는 추천 캠페인 진행 중',
+          referralBenefit1Title: '추천한 사람도, 추천받은 사람도 혜택',
+          referralBenefit1Body: '당신의 추천으로 친구가 Pholio를 시작하면, 당신과 친구 모두 1개월 이용료가 무료가 됩니다.',
+          referralBenefit2Title: '10명 추천 시 \"평생 무료\"',
+          referralBenefit2Body: '추천한 사용자 중 합계 10명이 유료 플랜을 1개월 이상 유지(2개월 차 결제 시작)하면, 당신은 \"Founding Member(창설 멤버)\"로 인증되어 Pholio를 평생 무료로 사용할 수 있습니다.',
+          referralNote1: '※ 추천받은 사용자가 무료 기간 종료 후 2개월 차 이용을 시작한 시점에 1명으로 집계됩니다.',
+          referralNote2: '※ 본 캠페인의 신규 접수는 일정 수의 달성자에 도달하면 종료될 수 있습니다. 단, 그 이전에 \"평생 무료\" 혜택을 획득한 분의 권리는 캠페인 종료 후에도 영구적으로 유지됩니다.',
+          footer: 'Pholio - 사진작가를 위한 관리 도구.',
+          prices: {
+            free: '₩0',
+            individual: '₩12,000',
+            smallTeam: '₩25,000〜',
+          },
+        },
+        es: {
+          eyebrow: 'Herramienta de gestión para fotógrafos',
+          headlineHtml: '<span class="line">Creada por fotógrafos que no disfrutan la burocracia</span><span class="line">Con todo lo que realmente necesitábamos</span>',
+          subcopy: 'Sin procesos complejos. Una herramienta cercana para enfocarte en fotografiar y editar.',
+          demoPanelTitle: 'Vista previa de Pholio',
+          demoEstimatedRevenue: 'Ingresos estimados: 1.400 €',
+          demoScheduleTitle: 'Próximas sesiones',
+          demoSchedule1: '20/03 Sesión de boda (Cliente A)',
+          demoSchedule2: '25/03 Foto familiar (Cliente B)',
+          demoSchedule3: '28/03 Foto de perfil (Cliente C)',
+          currencyLabel: 'Moneda',
+          currencySymbol: '€',
+          cta: 'Empezar gratis',
+          compareTitle: '¿Por qué adoptar Pholio?',
+          compareLead: 'Misma entrada de datos, pero una visión mucho más clara para decidir.',
+          beforeLabel: 'Before',
+          beforeBody: 'A fin de mes o antes de impuestos, peleando con cifras entre libreta y Excel.',
+          afterLabel: 'After',
+          afterBody: 'Los registros diarios se convierten en gráficos automáticos. Ver el beneficio en tiempo real te ayuda a ajustar planes e invertir en equipo con seguridad.',
+          valueTitle: 'Por qué los fotógrafos eligen Pholio',
+          valueLead: 'Tres beneficios concretos para el trabajo real de campo.',
+          benefit1Title: 'No más persecución de cálculos',
+          benefit1Body: 'Incluso cansado tras una sesión, solo introduces números en móvil o PC. Ingresos, beneficio neto y clientes se visualizan automáticamente.',
+          benefit2Title: 'Planes y opciones en un solo lugar',
+          benefit2Body: 'Organiza tu menú y precios exactos. Ya no dudas en presupuestos sobre la marcha.',
+          benefit3Title: 'Gestiona tu estudio desde cualquier lugar',
+          benefit3Body: 'Compatible con 6 idiomas y múltiples monedas para proyectos internacionales y equipos mixtos.',
+          benefitCalendarTitle: 'Sincronización automática con Google Calendar',
+          benefitCalendarBody: 'Con solo registrar la información del cliente, se crean eventos automáticamente en tu Google Calendar. Evita la doble entrada y no pierdas ninguna cita.',
+          benefitCalendarNote: '* Función disponible solo para Founding Members o planes de pago.',
+          securityTitle: 'Seguridad en la que puedes confiar',
+          securityLead: 'Tus datos de clientes y negocio se protegen con estándares de seguridad profesionales.',
+          securityPoint1Title: 'Tus datos son solo tuyos',
+          securityPoint1Body: 'Toda la información introducida se protege con cifrado moderno (SSL/TLS) y se almacena de forma segura.',
+          securityPoint2Title: 'Infraestructura cloud robusta',
+          securityPoint2Body: 'Basado en Firebase, plataforma de seguridad estándar del sector que protege tus datos 24/7.',
+          customTitle: 'Una herramienta que se vuelve tuya',
+          customPhrase: 'Se adapta a tu estilo, hasta el último detalle.',
+          customBody: 'Puedes personalizar libremente el color del tema. Como la usas cada día, se convierte en un cuaderno de gestión que te resulta propio.',
+          plansTitle: 'Planes',
+          plansLead: 'Desde gratuito hasta equipos, elige según tu escala.',
+          planFreeName: 'Gratis (Free)',
+          planFreeDesc: 'Dashboard, control de ingresos/beneficio y gestión de planes (todas las funciones en un dispositivo).',
+          planFreeTagline: 'Empieza con hasta 20 proyectos para comprobar cómodamente la experiencia.',
+          planIndividualName: 'Plan Individual',
+          planIndividualDesc: 'Registro de proyectos ilimitado y acceso desde todos tus dispositivos con sincronización en la nube.',
+          planIndividualTagline: 'Incluye copia de seguridad automática.',
+          planSmallTeamName: 'Small Team',
+          planSmallTeamDesc: 'Compartición y gestión colaborativa de datos con el equipo.',
+          planSmallTeamTagline: 'Misma información de clientes en campo y oficina al instante.',
+          referralTitle: 'Ayuda a colegas y gana también: campaña de referidos activa',
+          referralBenefit1Title: 'Ganan tanto quien recomienda como quien es recomendado',
+          referralBenefit1Body: 'Si tu amigo empieza Pholio con tu invitación, ambos reciben 1 mes de uso gratis.',
+          referralBenefit2Title: 'Con 10 referidos, obtienes uso gratuito de por vida',
+          referralBenefit2Body: 'Cuando un total de 10 personas referidas mantengan un plan de pago durante al menos 1 mes (inicio del cobro del segundo mes), serás reconocido como \"Founding Member\" y podrás usar Pholio gratis de por vida.',
+          referralNote1: '* Se cuenta 1 referido cuando termina su periodo gratuito y comienza su segundo mes de uso.',
+          referralNote2: '* La admisión de nuevos participantes en esta campaña puede cerrarse cuando se alcance un número determinado de beneficiarios. Sin embargo, quienes ya hayan obtenido el beneficio de \"uso gratuito de por vida\" conservarán ese derecho de forma permanente incluso después de finalizar la campaña.',
+          footer: 'Pholio - Herramienta de gestión para fotógrafos.',
+          prices: {
+            free: '€0',
+            individual: '€9',
+            smallTeam: '€19〜',
+          },
+        },
+      };
+
+      function normalizeLang(raw) {
+        const value = String(raw || '').trim();
+        if (!value) return 'ja';
+        if (value === 'zh-CN' || value === 'zh-TW') return 'zh';
+        return Object.prototype.hasOwnProperty.call(dictionary, value) ? value : 'ja';
+      }
+
+      function applyAccent() {
+        const color = localStorage.getItem(ACCENT_KEY);
+        if (!color || !/^#[0-9a-fA-F]{6}$/.test(color)) return;
+        document.documentElement.style.setProperty('--accent', color);
+      }
+
+      function applyLanguage(lang) {
+        const code = normalizeLang(lang);
+        const dict = dictionary[code];
+
+        document.documentElement.lang = code === 'zh' ? 'zh-CN' : code;
+        document.title = `Pholio | ${dict.subcopy}`;
+
+        document.querySelectorAll('[data-i18n]').forEach((el) => {
+          const key = el.getAttribute('data-i18n');
+          if (!key || !dict[key]) return;
+          el.textContent = dict[key];
+        });
+
+        const headline = document.getElementById('headline');
+        if (headline) headline.innerHTML = dict.headlineHtml;
+
+        const currencySymbol = document.getElementById('currencySymbol');
+        const freePrice = document.getElementById('planFreePrice');
+        const individualPrice = document.getElementById('planIndividualPrice');
+        const smallTeamPrice = document.getElementById('planSmallTeamPrice');
+
+        if (currencySymbol) currencySymbol.textContent = dict.currencySymbol;
+        if (freePrice) freePrice.textContent = dict.prices.free;
+        if (individualPrice) individualPrice.textContent = dict.prices.individual;
+        if (smallTeamPrice) smallTeamPrice.textContent = dict.prices.smallTeam;
+
+        const selector = document.getElementById('langSelect');
+        if (selector && selector.value !== code) selector.value = code;
+
+        localStorage.setItem(LANG_KEY, code === 'zh' ? 'zh-CN' : code);
+      }
+
+      const selector = document.getElementById('langSelect');
+      if (selector) {
+        selector.addEventListener('change', (event) => {
+          applyLanguage(event.target.value);
+        });
+      }
+
+      applyAccent();
+      applyLanguage(localStorage.getItem(LANG_KEY) || 'ja');
+    })();
+  </script>
+</body>
+</html>

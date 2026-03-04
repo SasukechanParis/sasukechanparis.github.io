@@ -214,6 +214,8 @@ const LOCALE = {
         msgErrorAuthRequired: "ログイン状態を確認してください。再ログイン後にお試しください。",
         msgCustomerSaveFailed: "顧客データの保存に失敗しました。",
         msgCustomerDeleteFailed: "顧客データの削除に失敗しました。",
+        cloudSaveRetryMessage: "クラウド保存に失敗しました。通信状態を確認して再試行してください。",
+        cloudDataLoadRetryMessage: "クラウドデータの読み込みに失敗しました。右上の更新ボタンから再試行してください。",
         planFeatureLanguageLocked: "追加言語はIndividual以上のプランで利用できます。",
         planFeatureLegalLocked: "法定項目の入力はIndividual以上のプランで利用できます。",
         noTasks: "タスクはまだありません",
@@ -516,7 +518,7 @@ const LOCALE = {
         authLoggedOutPrompt: "🔐 Googleでログインしてクラウド同期を開始",
         authLoggedInAs: "✅ {user} でログイン中",
         authLoggedInUserFallback: "ログイン中",
-        loginScreenDescription: "クラウド同期を利用するにはGoogleログインが必要です。",
+        loginScreenDescription: "カメラマンのための顧客管理・売上分析アプリ",
         googleLogin: "Googleでログイン",
         labelLeadSource: "問い合わせ元",
         leadSourceInstagram: "インスタグラム",
@@ -1082,6 +1084,8 @@ const LOCALE = {
         msgErrorAuthRequired: "Authentication required. Please sign in again and retry.",
         msgCustomerSaveFailed: "Failed to save customer data.",
         msgCustomerDeleteFailed: "Failed to delete customer data.",
+        cloudSaveRetryMessage: "Cloud save failed. Please check your network and try again.",
+        cloudDataLoadRetryMessage: "Failed to load cloud data. Please retry using the refresh button.",
         planFeatureLanguageLocked: "Additional languages are available on Individual plan or higher.",
         planFeatureLegalLocked: "Legal invoice fields are available on Individual plan or higher.",
         noTasks: "No tasks yet",
@@ -1385,7 +1389,7 @@ const LOCALE = {
         authLoggedOutPrompt: "🔐 Sign in with Google to start cloud sync",
         authLoggedInAs: "✅ Logged in as {user}",
         authLoggedInUserFallback: "Logged in",
-        loginScreenDescription: "Google login is required to enable cloud sync.",
+        loginScreenDescription: "Customer management and revenue analytics app for photographers.",
         googleLogin: "Sign in with Google",
         labelLeadSource: "Lead Source",
         leadSourceInstagram: "Instagram",
@@ -1941,6 +1945,8 @@ Fee: {{total_price}}
         msgErrorAuthRequired: "Authentification requise. Reconnectez-vous puis réessayez.",
         msgCustomerSaveFailed: "Échec de l'enregistrement du client.",
         msgCustomerDeleteFailed: "Échec de la suppression du client.",
+        cloudSaveRetryMessage: "Échec de l'enregistrement cloud. Vérifiez la connexion puis réessayez.",
+        cloudDataLoadRetryMessage: "Échec du chargement cloud. Réessayez avec le bouton Actualiser.",
         planFeatureLanguageLocked: "Les langues supplementaires sont reservees au plan Individuel ou superieur.",
         planFeatureLegalLocked: "Les champs legaux de facturation sont reserves au plan Individuel ou superieur.",
         noTasks: "Aucune tâche pour le moment",
@@ -2244,7 +2250,7 @@ Fee: {{total_price}}
         authLoggedOutPrompt: "🔐 Connectez-vous avec Google pour activer la synchro cloud",
         authLoggedInAs: "✅ Connecté en tant que {user}",
         authLoggedInUserFallback: "Connecté",
-        loginScreenDescription: "La connexion Google est requise pour activer la synchronisation cloud.",
+        loginScreenDescription: "Application de gestion clients et d’analyse du chiffre d’affaires pour photographes.",
         googleLogin: "Connexion avec Google",
         labelLeadSource: "Source du lead",
         leadSourceInstagram: "Instagram",
@@ -4263,6 +4269,224 @@ Tarif : {{total_price}}`,
     }
 };
 
+if (!LOCALE.es) {
+    LOCALE.es = {
+        ...LOCALE.en,
+        appSubtitle: "Gestión de clientes para fotógrafos",
+        settingsHeader: "⚙ Ajustes",
+        addCustomer: "＋ Nuevo",
+        addNew: "Nuevo",
+        saveSettings: "Guardar ajustes",
+        settingsSaved: "Ajustes guardados",
+        themeColorSection: "Color del tema",
+        themeColorLabel: "Color del tema",
+        themeColorHelp: "Elige un color y la interfaz se actualizará al instante.",
+        themeColorReset: "Restablecer",
+        cloudSaveRetryMessage: "Error al guardar en la nube. Verifica la conexión e inténtalo de nuevo.",
+        cloudDataLoadRetryMessage: "No se pudieron cargar los datos de la nube. Reinténtalo con el botón Actualizar.",
+        cancel: "Cancelar",
+        save: "Guardar",
+        edit: "Editar",
+        delete: "Eliminar",
+        settingsAddBtn: "Añadir",
+        legalRegionGlobalLabel: "Global",
+        legalRegionJapanLabel: "Japón",
+        legalRegionEuLabel: "UE",
+    };
+}
+
+const REQUIRED_RECENT_KEYS = {
+    loginScreenDescription: {
+        ja: "カメラマンのための顧客管理・売上分析アプリ",
+        en: "Customer management and revenue analytics app for photographers.",
+        fr: "Application de gestion clients et d’analyse du chiffre d’affaires pour photographes.",
+        es: "Aplicación de gestión de clientes y análisis de ingresos para fotógrafos.",
+        "zh-CN": "面向摄影师的客户管理与营收分析应用",
+        "zh-TW": "為攝影師打造的客戶管理與營收分析應用",
+        ko: "사진작가를 위한 고객 관리·매출 분석 앱",
+    },
+    googleLogin: {
+        ja: "Googleでログイン",
+        en: "Sign in with Google",
+        fr: "Connexion avec Google",
+        es: "Iniciar sesión con Google",
+        "zh-CN": "使用 Google 登录",
+        "zh-TW": "使用 Google 登入",
+        ko: "Google로 로그인",
+    },
+    saveSettings: {
+        ja: "設定を保存",
+        en: "Save Settings",
+        fr: "Enregistrer",
+        es: "Guardar ajustes",
+        "zh-CN": "保存设置",
+        "zh-TW": "儲存設定",
+        ko: "설정 저장",
+    },
+    themeColorSection: {
+        ja: "テーマカラー",
+        en: "Theme Color",
+        fr: "Couleur du thème",
+        es: "Color del tema",
+        "zh-CN": "主题颜色",
+        "zh-TW": "主題顏色",
+        ko: "테마 색상",
+    },
+    settingsSaved: {
+        ja: "設定を保存しました",
+        en: "Settings saved",
+        fr: "Paramètres enregistrés",
+        es: "Ajustes guardados",
+        "zh-CN": "设置已保存",
+        "zh-TW": "設置已保存",
+        ko: "설정이 저장되었습니다",
+    },
+    addNew: {
+        ja: "新規追加",
+        en: "Add New",
+        fr: "Ajouter",
+        es: "Nuevo",
+        "zh-CN": "新增",
+        "zh-TW": "新增",
+        ko: "새로 추가",
+    },
+    referralProgramTab: {
+        ja: "紹介プログラム",
+        en: "Referral Program",
+        fr: "Programme de parrainage",
+        es: "Programa de referidos",
+        "zh-CN": "推荐计划",
+        "zh-TW": "推薦計畫",
+        ko: "추천 프로그램",
+    },
+    referralProgramTitle: {
+        ja: "仲間を招待して、特典をゲット",
+        en: "Invite Your Peers and Get Rewards",
+        fr: "Invitez vos collègues et obtenez des avantages",
+        es: "Invita a tus colegas y consigue beneficios",
+        "zh-CN": "邀请伙伴，领取奖励",
+        "zh-TW": "邀請夥伴，領取獎勵",
+        ko: "동료를 초대하고 혜택을 받으세요",
+    },
+    referralProgramDescription: {
+        ja: "あなたの紹介で友人がPholioを始めると、二人とも1ヶ月無料。さらに10人紹介で『一生無料』の特典を差し上げます。",
+        en: "When your friend starts using Pholio through your referral, you both get 1 month free. Refer 10 people and receive lifetime free access.",
+        fr: "Si un ami commence Pholio via votre parrainage, vous recevez tous les deux 1 mois gratuit. Avec 10 parrainages, vous obtenez l'accès gratuit à vie.",
+        es: "Si un amigo empieza a usar Pholio con tu invitación, ambos obtienen 1 mes gratis. Con 10 referidos, recibes acceso gratuito de por vida.",
+        "zh-CN": "通过你的推荐，好友开始使用 Pholio 后，你们双方都可获得 1 个月免费。累计推荐 10 人即可获得“终身免费”特权。",
+        "zh-TW": "透過你的推薦，好友開始使用 Pholio 後，雙方都可獲得 1 個月免費。累計推薦 10 人即可獲得「終身免費」特權。",
+        ko: "추천을 통해 친구가 Pholio를 시작하면 두 분 모두 1개월 무료 혜택을 받습니다. 10명을 추천하면 평생 무료 혜택이 제공됩니다.",
+    },
+    referralProgramLinkLabel: {
+        ja: "紹介リンク",
+        en: "Referral Link",
+        fr: "Lien de parrainage",
+        es: "Enlace de referido",
+        "zh-CN": "推荐链接",
+        "zh-TW": "推薦連結",
+        ko: "추천 링크",
+    },
+    referralProgramCopyButton: {
+        ja: "リンクをコピー",
+        en: "Copy Link",
+        fr: "Copier le lien",
+        es: "Copiar enlace",
+        "zh-CN": "复制链接",
+        "zh-TW": "複製連結",
+        ko: "링크 복사",
+    },
+    referralProgramCopied: {
+        ja: "紹介リンクをコピーしました",
+        en: "Referral link copied.",
+        fr: "Lien de parrainage copié.",
+        es: "Enlace de referido copiado.",
+        "zh-CN": "推荐链接已复制。",
+        "zh-TW": "推薦連結已複製。",
+        ko: "추천 링크가 복사되었습니다.",
+    },
+    referralProgramCopyFailed: {
+        ja: "紹介リンクのコピーに失敗しました",
+        en: "Failed to copy referral link.",
+        fr: "Impossible de copier le lien de parrainage.",
+        es: "No se pudo copiar el enlace de referido.",
+        "zh-CN": "复制推荐链接失败。",
+        "zh-TW": "複製推薦連結失敗。",
+        ko: "추천 링크 복사에 실패했습니다.",
+    },
+    referralProgramProgressLabel: {
+        ja: "進捗状況",
+        en: "Progress",
+        fr: "Progression",
+        es: "Progreso",
+        "zh-CN": "进度",
+        "zh-TW": "進度",
+        ko: "진행 상황",
+    },
+    referralProgramRemaining: {
+        ja: "一生無料まで あと {count}人",
+        en: "{count} referrals left until lifetime free",
+        fr: "Encore {count} parrainages avant l'accès à vie",
+        es: "Te faltan {count} referidos para acceso de por vida",
+        "zh-CN": "距离终身免费还差 {count} 人",
+        "zh-TW": "距離終身免費還差 {count} 人",
+        ko: "평생 무료까지 {count}명 남았습니다",
+    },
+    labelStartTime: {
+        ja: "開始時間",
+        en: "Start Time",
+        fr: "Heure de début",
+        es: "Hora de inicio",
+        "zh-CN": "开始时间",
+        "zh-TW": "開始時間",
+        ko: "시작 시간",
+    },
+    labelEndTime: {
+        ja: "終了時間",
+        en: "End Time",
+        fr: "Heure de fin",
+        es: "Hora de finalización",
+        "zh-CN": "结束时间",
+        "zh-TW": "結束時間",
+        ko: "종료 시간",
+    },
+    placeholderStartTime: {
+        ja: "開始時間",
+        en: "Start time",
+        fr: "Heure de début",
+        es: "Hora de inicio",
+        "zh-CN": "开始时间",
+        "zh-TW": "開始時間",
+        ko: "시작 시간",
+    },
+    placeholderEndTime: {
+        ja: "終了時間",
+        en: "End time",
+        fr: "Heure de fin",
+        es: "Hora de finalización",
+        "zh-CN": "结束时间",
+        "zh-TW": "結束時間",
+        ko: "종료 시간",
+    },
+    labelSyncGoogleCalendar: {
+        ja: "保存時にGoogleカレンダーへ同期する",
+        en: "Sync to Google Calendar when saving",
+        fr: "Synchroniser avec Google Agenda lors de l'enregistrement",
+        es: "Sincronizar con Google Calendar al guardar",
+        "zh-CN": "保存时同步到 Google 日历",
+        "zh-TW": "儲存時同步到 Google 日曆",
+        ko: "저장 시 Google 캘린더에 동기화",
+    },
+};
+
+Object.entries(REQUIRED_RECENT_KEYS).forEach(([key, labels]) => {
+    Object.entries(labels).forEach(([lang, label]) => {
+        if (!LOCALE[lang]) return;
+        if (!Object.prototype.hasOwnProperty.call(LOCALE[lang], key) || !String(LOCALE[lang][key] || '').trim()) {
+            LOCALE[lang][key] = label;
+        }
+    });
+});
+
 // Country/region specific invoice profiles.
 // To add a new market, copy one block and adjust code/currency/tax/legal fields.
 const INVOICE_COUNTRY_PROFILES = {
@@ -4367,6 +4591,29 @@ const INVOICE_COUNTRY_PROFILES = {
         ],
     },
 };
+
+if (!INVOICE_COUNTRY_PROFILES.es) {
+    INVOICE_COUNTRY_PROFILES.es = {
+        code: 'ES',
+        currency: 'EUR',
+        defaultTaxRate: 21,
+        taxLabel: 'IVA',
+        legalSectionTitle: 'Información legal (España)',
+        legalSectionHint: 'Introduce los datos fiscales necesarios para tus facturas.',
+        legalFields: [
+            {
+                key: 'nifNumber',
+                label: 'NIF/CIF',
+                placeholder: 'B12345678',
+            },
+            {
+                key: 'ivaNumber',
+                label: 'Número de IVA',
+                placeholder: 'ESX1234567X',
+            },
+        ],
+    };
+}
 
 // Export locales to window
 if (typeof window !== 'undefined') {

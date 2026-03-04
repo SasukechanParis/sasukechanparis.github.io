@@ -215,6 +215,10 @@ function userSettingsDoc(uid, key) {
 }
 
 function userProjectsCol(uid) {
+  return collection(db, 'users', uid, 'customers');
+}
+
+function userLegacyProjectsCol(uid) {
   return collection(db, 'users', uid, 'projects');
 }
 
@@ -1316,17 +1320,19 @@ function buildLocalDataSummary(payload = localMigrationPayload()) {
 }
 
 async function getCloudDataSummary(uid) {
-  const [projectsSnap, legacyClientsSnap, expensesSnap] = await Promise.all([
+  const [customersSnap, legacyProjectsSnap, legacyClientsSnap, expensesSnap] = await Promise.all([
     getDocs(userProjectsCol(uid)),
+    getDocs(userLegacyProjectsCol(uid)),
     getDocs(userLegacyClientsCol(uid)),
     getDocs(userExpensesCol(uid)),
   ]);
 
-  const projects = projectsSnap.size;
+  const customerDocs = customersSnap.docs.length > 0 ? customersSnap.docs : legacyProjectsSnap.docs;
+  const projects = customerDocs.length;
   const legacyClients = legacyClientsSnap.size;
   const expenses = expensesSnap.size;
   const latestUpdatedAtMs = Math.max(
-    getLatestUpdatedAtMsFromDocSnapshots(projectsSnap.docs),
+    getLatestUpdatedAtMsFromDocSnapshots(customerDocs),
     getLatestUpdatedAtMsFromDocSnapshots(legacyClientsSnap.docs),
     getLatestUpdatedAtMsFromDocSnapshots(expensesSnap.docs),
   );
@@ -1458,10 +1464,11 @@ async function autoSyncLocalDataWithCloud(user) {
 
 async function loadCloudDataForUser(user) {
   const uid = user.uid;
-  const [settingsSnap, settingsCollectionSnap, projectSnap, legacyClientSnap, expenseSnap] = await Promise.all([
+  const [settingsSnap, settingsCollectionSnap, customerSnap, legacyProjectSnap, legacyClientSnap, expenseSnap] = await Promise.all([
     getDoc(userMetaRef(uid)),
     getDocs(userSettingsCol(uid)),
     getDocs(userProjectsCol(uid)),
+    getDocs(userLegacyProjectsCol(uid)),
     getDocs(userLegacyClientsCol(uid)),
     getDocs(userExpensesCol(uid)),
   ]);
@@ -1474,14 +1481,19 @@ async function loadCloudDataForUser(user) {
     }
   });
 
-  const projectDocs = projectSnap.docs.length > 0 ? projectSnap.docs : legacyClientSnap.docs;
+  const projectDocs = customerSnap.docs.length > 0
+    ? customerSnap.docs
+    : (legacyProjectSnap.docs.length > 0 ? legacyProjectSnap.docs : legacyClientSnap.docs);
 
-  if (projectSnap.docs.length === 0 && legacyClientSnap.docs.length > 0) {
+  if (customerSnap.docs.length === 0 && (legacyProjectSnap.docs.length > 0 || legacyClientSnap.docs.length > 0)) {
+    const legacyRecords = legacyProjectSnap.docs.length > 0
+      ? legacyProjectSnap.docs
+      : legacyClientSnap.docs;
     mergeCollectionRecords(
       userProjectsCol(uid),
-      legacyClientSnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data(), userId: uid }))
+      legacyRecords.map((docSnap) => ({ id: docSnap.id, ...docSnap.data(), userId: uid }))
     ).catch((err) => {
-      console.warn('Legacy clients->projects migration failed', err);
+      console.warn('Legacy customers migration failed', err);
     });
   }
 
@@ -1556,7 +1568,22 @@ async function updateKey(user, key, value) {
   if (key === 'photocrm_customers') {
     const customers = normalizeRecordsForUser(normalizedValue, user.uid);
     await overwriteCollection(userProjectsCol(user.uid), customers);
-    await syncAdminUserSummary(user, { projectCount: customers.length });
+    try {
+      await syncAdminUserSummary(user, { projectCount: customers.length });
+    } catch (err) {
+      const code = String(err?.code || '').toLowerCase();
+      const message = String(err?.message || '').toLowerCase();
+      const isPermissionIssue = code.includes('permission-denied')
+        || code.includes('forbidden')
+        || code.includes('unauthenticated')
+        || message.includes('permission')
+        || message.includes('forbidden');
+      if (isPermissionIssue) {
+        console.warn('Skipping admin summary sync after customer save due to permission restriction.', err);
+      } else {
+        throw err;
+      }
+    }
     return;
   }
 
