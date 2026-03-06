@@ -404,8 +404,6 @@
       await ensureInitialized();
       const provider = new firebase.auth.GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
-      provider.addScope(GOOGLE_CALENDAR_SCOPE);
-      provider.addScope(GOOGLE_CALENDAR_READ_SCOPE);
       // リダイレクト方式: ポップアップブロッカーの影響を受けない
       await auth.signInWithRedirect(provider);
       return null;

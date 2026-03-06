@@ -11027,8 +11027,6 @@
       members.push(normalizeStaffMemberRecord(docSnap.data() || {}, docSnap.id));
     });
 
-    // オーナー本人がアクセスした場合のみ meta/staffEmails インデックスを更新
-    // このインデックスはFirestoreルールの isStaffOf() が参照する
     const currentUid = String(window.FirebaseService?.getCurrentUser?.()?.uid || '').trim();
     if (currentUid && currentUid === ownerUid) {
       try {
@@ -11043,7 +11041,7 @@
         });
         console.log('[STAFF] staffEmails index updated:', emailsList);
       } catch (e) {
-        console.warn('[STAFF] Failed to update staffEmails index:', e?.message);
+        console.warn('[STAFF] staffEmails index update failed:', e?.message);
       }
     }
 
