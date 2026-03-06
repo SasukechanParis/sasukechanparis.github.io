@@ -303,7 +303,7 @@
       const settings = settingsSnap.exists ? settingsSnap.data() : {};
       Object.keys(cache).forEach((k) => delete cache[k]);
       Object.assign(cache, settings);
-      console.log('[STAFF] Loaded owner settings uid:', uid);
+      console.log('[STAFF] owner settings loaded for:', uid);
     } catch (err) {
       console.warn('[STAFF] loadSettingsForOwnerUid failed:', err?.message);
     }

@@ -1719,17 +1719,18 @@
     }
     const ownerUid = getActiveDataOwnerUid(user.uid) || String(user.uid || '').trim();
     const currentUserEmail = normalizeEmail(user.email || getCurrentUserEmail() || '');
-    console.log('[GET] user:', ownerUid, currentUserEmail || '(no-email)');
+    console.log('[GET] ownerUid:', ownerUid, 'email:', currentUserEmail, 'isStaff:', isManagedStaffUser());
     try {
-      const { getDocs, query, where, collection, doc } = await getFirestoreSdkModule();
+      const { getDocs, query, where, collection, doc: firestoreDoc } = await getFirestoreSdkModule();
       const { db: dbInstance } = await window.FirebaseService.whenReady();
 
-      // projects パスと clients パス両方試みる（firebase-config は projects に保存）
-      const projectsRef = collection(doc(collection(dbInstance, 'users'), ownerUid), 'projects');
-      const clientsRef = collection(doc(collection(dbInstance, 'users'), ownerUid), 'clients');
+      const usersRef = collection(dbInstance, 'users');
+      const ownerDocRef = firestoreDoc(usersRef, ownerUid);
+      const projectsRef = collection(ownerDocRef, 'projects');
+      const clientsRef = collection(ownerDocRef, 'clients');
 
       let projectsSnap, clientsSnap;
-      if (isManagedStaffUser() && currentUserEmail) {
+      if (isManagedStaffUser() && currentUserEmail && getCurrentStaffViewScope() === 'own_only') {
         [projectsSnap, clientsSnap] = await Promise.all([
           getDocs(query(projectsRef, where('assignedStaffEmail', '==', currentUserEmail))),
           getDocs(query(clientsRef, where('assignedStaffEmail', '==', currentUserEmail))),
@@ -1741,16 +1742,18 @@
         ]);
       }
 
-      // projects 優先、なければ clients を使用
-      const primaryDocs = projectsSnap.docs.length > 0 ? projectsSnap.docs : clientsSnap.docs;
+      const seenIds = new Set();
       const list = [];
-      primaryDocs.forEach((docSnap) => {
-        list.push(sanitizeCustomerRecordForSave({
-          id: docSnap.id,
-          ...(docSnap.data() || {}),
-        }));
+      const primaryDocs = projectsSnap.docs.length > 0 ? projectsSnap.docs : clientsSnap.docs;
+      const secondaryDocs = projectsSnap.docs.length > 0 ? clientsSnap.docs : [];
+
+      [...primaryDocs, ...secondaryDocs].forEach((docSnap) => {
+        if (seenIds.has(docSnap.id)) return;
+        seenIds.add(docSnap.id);
+        list.push(sanitizeCustomerRecordForSave({ id: docSnap.id, ...(docSnap.data() || {}) }));
       });
-      console.log('[GET] loaded:', list.length, 'clients from ownerUid:', ownerUid);
+
+      console.log('[GET] loaded:', list.length, 'clients, projects:', projectsSnap.docs.length, 'clients:', clientsSnap.docs.length);
       return list;
     } catch (e) {
       console.error('[LOAD] failed:', e?.code || '', e?.message || e);
@@ -11029,7 +11032,7 @@
   async function fetchStaffMembersForAdmin(adminUid) {
     const ownerUid = String(adminUid || '').trim();
     if (!ownerUid) return [];
-    const { getDocs, collection, doc, setDoc } = await getFirestoreSdkModule();
+    const { getDocs, collection, doc: firestoreDoc, setDoc } = await getFirestoreSdkModule();
     const { db: dbInstance } = await window.FirebaseService.whenReady();
     const staffCollectionRef = await getUserStaffCollectionRef(ownerUid);
     const snapshot = await getDocs(staffCollectionRef);
@@ -11042,17 +11045,14 @@
     if (currentUid && currentUid === ownerUid) {
       try {
         const emailsList = members.map((m) => String(m.email || '').trim()).filter(Boolean);
-        const metaRef = doc(
-          collection(doc(collection(dbInstance, 'users'), ownerUid), 'meta'),
-          'staffEmails'
-        );
-        await setDoc(metaRef, { emails: emailsList, updatedAt: new Date().toISOString() });
+        const metaColRef = collection(firestoreDoc(collection(dbInstance, 'users'), ownerUid), 'meta');
+        const indexRef = firestoreDoc(metaColRef, 'staffEmails');
+        await setDoc(indexRef, { emails: emailsList, updatedAt: new Date().toISOString() });
         console.log('[STAFF] staffEmails index updated:', emailsList);
       } catch (e) {
         console.warn('[STAFF] staffEmails update failed:', e?.message);
       }
     }
-
     return members;
   }
 
