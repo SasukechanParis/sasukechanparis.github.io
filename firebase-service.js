@@ -1757,11 +1757,12 @@ window.FirebaseService = {
     const uid = String(ownerUid || '').trim();
     if (!uid) return;
     try {
-      const settingsSnap = await userMetaRef(uid).get();
-      const settings = settingsSnap.exists ? settingsSnap.data() : {};
+      await ensureInitialized();
+      const settingsSnap = await getDoc(userMetaRef(uid));
+      const settings = settingsSnap.exists() ? settingsSnap.data() : {};
       Object.keys(cache).forEach((k) => delete cache[k]);
       Object.assign(cache, settings);
-      console.log('[STAFF] owner settings loaded for:', uid);
+      console.log('[STAFF] owner settings loaded for:', uid, Object.keys(settings));
     } catch (err) {
       console.warn('[STAFF] loadSettingsForOwner failed:', err?.message);
     }

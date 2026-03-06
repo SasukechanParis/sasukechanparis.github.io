@@ -1744,7 +1744,7 @@
       let projectsSnap, clientsSnap;
       const currentUserUid = String(window.FirebaseService?.getCurrentUser?.()?.uid || '').trim();
       const isReadingOtherOwner = ownerUid !== currentUserUid;
-      if (isReadingOtherOwner && currentUserEmail && getCurrentStaffViewScope() === 'own_only') {
+      if (isReadingOtherOwner && currentUserEmail && isManagedStaffUser() && getCurrentStaffViewScope() === 'own_only') {
         [projectsSnap, clientsSnap] = await Promise.all([
           getDocs(query(projectsRef, where('assignedStaffEmail', '==', currentUserEmail))),
           getDocs(query(clientsRef, where('assignedStaffEmail', '==', currentUserEmail))),
