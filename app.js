@@ -11751,6 +11751,7 @@
         'error'
       );
       setCloudSyncIndicator('error');
+      setAuthScreenState('loggedOut');
     } finally {
       const appContainer = document.getElementById('app-container');
       if (appContainer) appContainer.style.display = 'block';
@@ -11829,7 +11830,7 @@
           console.warn('[AUTH] onAuthStateChanged timeout — showing login screen');
           setAuthScreenState('loggedOut');
         }
-      }, 10000);
+      }, 6000);
 
       authUnsubscribe = window.FirebaseService.onAuthChanged((user) => {
         if (!authStateSettled) {

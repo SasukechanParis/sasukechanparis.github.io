@@ -1102,7 +1102,7 @@ button,
 
 /* Visibility hardening:
    prevent white-on-white ghost buttons across staff/admin screens. */
-.btn:not(.btn-primary):not(.toolbar-add-btn):not(#btn-add):not(#btn-add-fab):not(#btn-team-add),
+.btn:not(.btn-primary):not(.toolbar-add-btn):not(#btn-add):not(#btn-add-fab):not(#btn-team-add):not(.header-actions .btn):not(#btn-sync-export):not(#btn-sync-import):not(#btn-ics-export):not(#btn-export):not(#btn-logout):not(#btn-settings):not(#btn-refresh),
 .action-button {
   background-color: #333 !important;
   color: #fff !important;
@@ -1115,6 +1115,13 @@ button,
 }
 
 /* Header top buttons should stay white-background/black-text */
+#btn-sync-export,
+#btn-sync-import,
+#btn-ics-export,
+#btn-export,
+#btn-logout,
+#btn-settings,
+#btn-refresh,
 .header-actions #btn-sync-export,
 .header-actions #btn-sync-import,
 .header-actions #btn-ics-export,
