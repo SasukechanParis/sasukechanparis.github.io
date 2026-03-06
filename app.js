@@ -10207,12 +10207,21 @@
       const loginFn = window.FirebaseService.signInWithPopup
         ?? window.FirebaseService.signInWithGoogle;
       await loginFn.call(window.FirebaseService);
+      // リダイレクト方式の場合はここに戻らない（ページ遷移するため）
       markGoogleCalendarAuthGranted();
     } catch (err) {
-      console.error('Firebase Auth Error:', err?.code, err?.message);
-      console.error(err);
+      const code = String(err?.code || '');
+      console.error('Firebase Auth Error:', code, err?.message);
 
-      if (String(err?.code || '') === 'auth/operation-not-supported-in-this-environment') {
+      // リダイレクト中のキャンセルは正常操作なので無視
+      if (
+        code === 'auth/cancelled-popup-request' ||
+        code === 'auth/popup-closed-by-user'
+      ) {
+        return;
+      }
+
+      if (code === 'auth/operation-not-supported-in-this-environment') {
         activateLocalGuestMode(t('localGuestModeUnsupported'));
         alert(t('googleLoginUnavailableAlert'));
         return;

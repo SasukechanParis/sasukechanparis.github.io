@@ -327,9 +327,20 @@
   }
 
   async function processRedirectResult() {
-    // signInWithRedirect replaced by signInWithPopup. Safe no-op.
+    if (redirectResolved) return null;
     redirectResolved = true;
-    return null;
+    try {
+      const result = await auth.getRedirectResult();
+      if (result && result.user) {
+        const credential = firebase.auth.GoogleAuthProvider.credentialFromResult(result);
+        setGoogleOAuthAccessToken(credential?.accessToken || '');
+        console.log('[AUTH] Redirect login success:', result.user.email);
+      }
+      return result;
+    } catch (err) {
+      console.warn('[AUTH] getRedirectResult failed:', err?.code, err?.message);
+      return null;
+    }
   }
 
   window.FirebaseService = {
@@ -389,10 +400,9 @@
       provider.setCustomParameters({ prompt: 'select_account' });
       provider.addScope(GOOGLE_CALENDAR_SCOPE);
       provider.addScope(GOOGLE_CALENDAR_READ_SCOPE);
-      const result = await auth.signInWithPopup(provider);
-      const credential = firebase.auth.GoogleAuthProvider.credentialFromResult(result);
-      setGoogleOAuthAccessToken(credential?.accessToken || '');
-      return result;
+      // リダイレクト方式: ポップアップブロッカーの影響を受けない
+      await auth.signInWithRedirect(provider);
+      return null;
     },
     async signInWithPopup() {
       return this.signInWithGoogle();

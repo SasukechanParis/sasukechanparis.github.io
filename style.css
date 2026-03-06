@@ -489,6 +489,17 @@ body {
   flex: 0 0 auto;
 }
 
+/* 言語・通貨セレクトをヘッダー他ボタンと色統一 */
+.header-left #languageSelect,
+.header-left #currency-select,
+#languageSelect,
+#currency-select {
+  background: #ffffff !important;
+  color: #111827 !important;
+  border: 1px solid #d5dbe8 !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.10) !important;
+}
+
 .header-left #btn-settings {
   height: 32px;
   line-height: 32px;
