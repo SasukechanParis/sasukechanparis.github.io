@@ -11042,7 +11042,7 @@
     });
 
     const currentUid = String(window.FirebaseService?.getCurrentUser?.()?.uid || '').trim();
-    if (currentUid && currentUid === ownerUid) {
+    if (currentUid && currentUid === ownerUid && !isManagedStaffUser()) {
       try {
         const emailsList = members.map((m) => String(m.email || '').trim()).filter(Boolean);
         const metaColRef = collection(firestoreDoc(collection(dbInstance, 'users'), ownerUid), 'meta');
