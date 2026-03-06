@@ -1753,6 +1753,20 @@ window.FirebaseService = {
     return ensureCloudData(targetUser);
   },
 
+  async loadSettingsForOwner(ownerUid) {
+    const uid = String(ownerUid || '').trim();
+    if (!uid) return;
+    try {
+      const settingsSnap = await userMetaRef(uid).get();
+      const settings = settingsSnap.exists ? settingsSnap.data() : {};
+      Object.keys(cache).forEach((k) => delete cache[k]);
+      Object.assign(cache, settings);
+      console.log('[STAFF] owner settings loaded for:', uid);
+    } catch (err) {
+      console.warn('[STAFF] loadSettingsForOwner failed:', err?.message);
+    }
+  },
+
   async saveKey(key, value) {
     await ensureInitialized();
     const user = auth.currentUser;
