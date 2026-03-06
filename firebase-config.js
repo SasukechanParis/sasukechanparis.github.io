@@ -294,13 +294,19 @@
     return loadCloudDataForUser(user);
   }
 
+  // スタッフ用: オーナーの設定データだけキャッシュに読み込む
   async function loadSettingsForOwnerUid(ownerUid) {
     const uid = String(ownerUid || '').trim();
     if (!uid) return;
-    const settingsSnap = await userMetaRef(uid).get();
-    const settings = settingsSnap.exists ? settingsSnap.data() : {};
-    Object.keys(cache).forEach((k) => delete cache[k]);
-    Object.assign(cache, settings);
+    try {
+      const settingsSnap = await userMetaRef(uid).get();
+      const settings = settingsSnap.exists ? settingsSnap.data() : {};
+      Object.keys(cache).forEach((k) => delete cache[k]);
+      Object.assign(cache, settings);
+      console.log('[STAFF] Loaded owner settings for uid:', uid);
+    } catch (err) {
+      console.warn('[STAFF] loadSettingsForOwnerUid failed:', err?.message);
+    }
   }
 
   async function updateKey(user, key, value) {

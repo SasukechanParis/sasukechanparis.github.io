@@ -11027,18 +11027,23 @@
       members.push(normalizeStaffMemberRecord(docSnap.data() || {}, docSnap.id));
     });
 
+    // オーナー本人がアクセスした場合のみ meta/staffEmails インデックスを更新
+    // このインデックスはFirestoreルールの isStaffOf() が参照する
     const currentUid = String(window.FirebaseService?.getCurrentUser?.()?.uid || '').trim();
-    if (currentUid && currentUid === ownerUid && members.length >= 0) {
+    if (currentUid && currentUid === ownerUid) {
       try {
-        const emailsList = members.map((m) => m.email).filter(Boolean);
-        const metaCollRef = collection(doc(collection(dbInstance, 'users'), ownerUid), 'meta');
-        await setDoc(doc(metaCollRef, 'staffEmails'), {
+        const emailsList = members.map((m) => String(m.email || '').trim()).filter(Boolean);
+        const metaRef = doc(
+          collection(doc(collection(dbInstance, 'users'), ownerUid), 'meta'),
+          'staffEmails'
+        );
+        await setDoc(metaRef, {
           emails: emailsList,
           updatedAt: new Date().toISOString(),
         });
-        console.log('[STAFF] staffEmails index updated:', emailsList.length, 'members');
+        console.log('[STAFF] staffEmails index updated:', emailsList);
       } catch (e) {
-        console.warn('[STAFF] Failed to update staffEmails index', e);
+        console.warn('[STAFF] Failed to update staffEmails index:', e?.message);
       }
     }
 
@@ -11713,7 +11718,8 @@
       await hydrateStaffAccessContext(resolvedUser);
       await hydrateStaffDashboardConfigForSession(resolvedUser);
       const ownerDataUid = getActiveDataOwnerUid(resolvedUser.uid);
-      if (isManagedStaffUser() && ownerDataUid && ownerDataUid !== resolvedUser.uid) {
+      if (isManagedStaffUser() && ownerDataUid && ownerDataUid !== String(resolvedUser.uid || '').trim()) {
+        // スタッフ: 自分の空DBではなくオーナーの設定を読む
         await window.FirebaseService.loadSettingsForOwner(ownerDataUid);
       } else {
         await window.FirebaseService.loadForUser(resolvedUser);
