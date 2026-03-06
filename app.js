@@ -617,7 +617,13 @@
   function updateHeaderBrandWordmark() {
     const brandWordmark = document.getElementById('brand-wordmark') || document.querySelector('.brand-wordmark');
     if (!brandWordmark) return;
-    brandWordmark.textContent = getStudioDisplayName();
+    if (isManagedStaffUser()) {
+      const ownerName = getStudioDisplayName();
+      const staffName = String(staffAccessContext?.staffName || staffAccessContext?.staffEmail || '').trim();
+      brandWordmark.textContent = staffName ? `${ownerName} / ${staffName}` : ownerName;
+    } else {
+      brandWordmark.textContent = getStudioDisplayName();
+    }
   }
 
   function setStudioName(name, options = {}) {
@@ -1720,6 +1726,12 @@
     const ownerUid = getActiveDataOwnerUid(user.uid) || String(user.uid || '').trim();
     const currentUserEmail = normalizeEmail(user.email || getCurrentUserEmail() || '');
     console.log('[GET] ownerUid:', ownerUid, 'email:', currentUserEmail, 'isStaff:', isManagedStaffUser());
+    console.log('[DEBUG] staffContext:', JSON.stringify({
+      isManagedStaff: staffAccessContext?.isManagedStaff,
+      adminUid: staffAccessContext?.adminUid,
+      role: staffAccessContext?.role,
+      staffEmail: staffAccessContext?.staffEmail,
+    }));
     try {
       const { getDocs, query, where, collection, doc: firestoreDoc } = await getFirestoreSdkModule();
       const { db: dbInstance } = await window.FirebaseService.whenReady();
@@ -1730,7 +1742,9 @@
       const clientsRef = collection(ownerDocRef, 'clients');
 
       let projectsSnap, clientsSnap;
-      if (isManagedStaffUser() && currentUserEmail && getCurrentStaffViewScope() === 'own_only') {
+      const currentUserUid = String(window.FirebaseService?.getCurrentUser?.()?.uid || '').trim();
+      const isReadingOtherOwner = ownerUid !== currentUserUid;
+      if (isReadingOtherOwner && currentUserEmail && getCurrentStaffViewScope() === 'own_only') {
         [projectsSnap, clientsSnap] = await Promise.all([
           getDocs(query(projectsRef, where('assignedStaffEmail', '==', currentUserEmail))),
           getDocs(query(clientsRef, where('assignedStaffEmail', '==', currentUserEmail))),
