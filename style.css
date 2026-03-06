@@ -1101,20 +1101,21 @@ button,
 }
 
 /* Visibility hardening:
-   prevent white-on-white ghost buttons across staff/admin screens. */
-.btn:not(.btn-primary):not(.toolbar-add-btn):not(#btn-add):not(#btn-add-fab):not(#btn-team-add):not(.header-actions .btn):not(#btn-sync-export):not(#btn-sync-import):not(#btn-ics-export):not(#btn-export):not(#btn-logout):not(#btn-settings):not(#btn-refresh),
+   prevent white-on-white ghost buttons across staff/admin screens.
+   ヘッダー内の要素（header-left / header-actions）は除外して白地黒文字を維持 */
+.btn:not(.btn-primary):not(.toolbar-add-btn):not(#btn-add):not(#btn-add-fab):not(#btn-team-add):not(#btn-settings):not(#btn-refresh):not(#btn-theme):not(#btn-sync-export):not(#btn-sync-import):not(#btn-ics-export):not(#btn-export):not(#btn-logout),
 .action-button {
   background-color: #333 !important;
   color: #fff !important;
   border-color: #4a4a4a !important;
 }
 
-.btn:not(.btn-primary):not(.toolbar-add-btn):not(#btn-add):not(#btn-add-fab):not(#btn-team-add) *,
+.btn:not(.btn-primary):not(.toolbar-add-btn):not(#btn-add):not(#btn-add-fab):not(#btn-team-add):not(#btn-settings):not(#btn-refresh):not(#btn-theme):not(#btn-sync-export):not(#btn-sync-import):not(#btn-ics-export):not(#btn-export):not(#btn-logout) *,
 .action-button * {
   color: #fff !important;
 }
 
-/* Header top buttons should stay white-background/black-text */
+/* Header top buttons should stay white-background/black-text（ライト・ダーク両対応） */
 #btn-sync-export,
 #btn-sync-import,
 #btn-ics-export,
@@ -1122,22 +1123,33 @@ button,
 #btn-logout,
 #btn-settings,
 #btn-refresh,
+#languageSelect,
+#currency-select,
 .header-actions #btn-sync-export,
 .header-actions #btn-sync-import,
 .header-actions #btn-ics-export,
 .header-actions #btn-export,
 .header-actions #btn-logout,
-.header-actions #btn-settings,
-.header-actions #btn-refresh,
 .header-actions .btn-secondary,
 .header-actions .btn-primary,
-.header-actions .btn {
+.header-actions .btn,
+.header-left #btn-settings,
+.header-left #btn-refresh,
+.header-left #languageSelect,
+.header-left #currency-select {
   background: #ffffff !important;
   color: #111827 !important;
   border-color: #d5dbe8 !important;
-  box-shadow: var(--shadow-sm) !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.10) !important;
 }
 
+#btn-sync-export *,
+#btn-sync-import *,
+#btn-ics-export *,
+#btn-export *,
+#btn-logout *,
+#btn-settings *,
+#btn-refresh *,
 .header-actions #btn-sync-export *,
 .header-actions #btn-sync-import *,
 .header-actions #btn-ics-export *,
@@ -1149,16 +1161,32 @@ button,
   color: #111827 !important;
 }
 
-.header-actions #btn-sync-export:hover,
-.header-actions #btn-sync-import:hover,
-.header-actions #btn-ics-export:hover,
-.header-actions #btn-export:hover,
-.header-actions #btn-logout:hover,
-.header-actions #btn-settings:hover,
-.header-actions #btn-refresh:hover,
-.header-actions .btn:hover {
-  background: #f8fafc !important;
+#btn-sync-export:hover,
+#btn-sync-import:hover,
+#btn-ics-export:hover,
+#btn-export:hover,
+#btn-logout:hover,
+#btn-settings:hover,
+#btn-refresh:hover,
+.header-actions .btn:hover,
+.header-left #btn-settings:hover,
+.header-left #btn-refresh:hover {
+  background: #f0f0f5 !important;
   border-color: #c4cfdf !important;
+}
+
+/* テーマトグル（🌙/☀️）はアイコンのみ・背景透明 */
+#btn-theme,
+.header-left .theme-toggle {
+  background: rgba(255,255,255,0.12) !important;
+  color: inherit !important;
+  border-color: rgba(255,255,255,0.18) !important;
+}
+
+[data-theme="light"] #btn-theme,
+[data-theme="light"] .header-left .theme-toggle {
+  background: rgba(0,0,0,0.07) !important;
+  border-color: rgba(0,0,0,0.12) !important;
 }
 
 /* Staff quick-action visibility */

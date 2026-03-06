@@ -11751,10 +11751,8 @@
         'error'
       );
       setCloudSyncIndicator('error');
+      // エラー時はログアウト画面に戻す（finallyで強制表示しない）
       setAuthScreenState('loggedOut');
-    } finally {
-      const appContainer = document.getElementById('app-container');
-      if (appContainer) appContainer.style.display = 'block';
     }
   }
 
