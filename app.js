@@ -1721,28 +1721,39 @@
     const currentUserEmail = normalizeEmail(user.email || getCurrentUserEmail() || '');
     console.log('[GET] user:', ownerUid, currentUserEmail || '(no-email)');
     try {
-      const { getDocs, query, where } = await getFirestoreSdkModule();
-      const clientsCollectionRef = await getUserClientsCollectionRef(ownerUid);
-      let snapshot;
+      const { getDocs, query, where, collection, doc } = await getFirestoreSdkModule();
+      const { db: dbInstance } = await window.FirebaseService.whenReady();
+
+      // projects パスと clients パス両方試みる（firebase-config は projects に保存）
+      const projectsRef = collection(doc(collection(dbInstance, 'users'), ownerUid), 'projects');
+      const clientsRef = collection(doc(collection(dbInstance, 'users'), ownerUid), 'clients');
+
+      let projectsSnap, clientsSnap;
       if (isManagedStaffUser() && currentUserEmail) {
-        snapshot = await getDocs(query(
-          clientsCollectionRef,
-          where('assignedStaffEmail', '==', currentUserEmail)
-        ));
+        [projectsSnap, clientsSnap] = await Promise.all([
+          getDocs(query(projectsRef, where('assignedStaffEmail', '==', currentUserEmail))),
+          getDocs(query(clientsRef, where('assignedStaffEmail', '==', currentUserEmail))),
+        ]);
       } else {
-        snapshot = await getDocs(clientsCollectionRef);
+        [projectsSnap, clientsSnap] = await Promise.all([
+          getDocs(projectsRef),
+          getDocs(clientsRef),
+        ]);
       }
+
+      // projects 優先、なければ clients を使用
+      const primaryDocs = projectsSnap.docs.length > 0 ? projectsSnap.docs : clientsSnap.docs;
       const list = [];
-      snapshot.forEach((docSnap) => {
+      primaryDocs.forEach((docSnap) => {
         list.push(sanitizeCustomerRecordForSave({
           id: docSnap.id,
           ...(docSnap.data() || {}),
         }));
       });
+      console.log('[GET] loaded:', list.length, 'clients from ownerUid:', ownerUid);
       return list;
     } catch (e) {
       console.error('[LOAD] failed:', e?.code || '', e?.message || e);
-      console.error('[ERROR] code:', e?.code || '', 'message:', e?.message || e);
       return null;
     }
   }
@@ -11035,13 +11046,10 @@
           collection(doc(collection(dbInstance, 'users'), ownerUid), 'meta'),
           'staffEmails'
         );
-        await setDoc(metaRef, {
-          emails: emailsList,
-          updatedAt: new Date().toISOString(),
-        });
+        await setDoc(metaRef, { emails: emailsList, updatedAt: new Date().toISOString() });
         console.log('[STAFF] staffEmails index updated:', emailsList);
       } catch (e) {
-        console.warn('[STAFF] staffEmails index update failed:', e?.message);
+        console.warn('[STAFF] staffEmails update failed:', e?.message);
       }
     }
 

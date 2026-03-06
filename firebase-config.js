@@ -303,7 +303,7 @@
       const settings = settingsSnap.exists ? settingsSnap.data() : {};
       Object.keys(cache).forEach((k) => delete cache[k]);
       Object.assign(cache, settings);
-      console.log('[STAFF] Loaded owner settings for uid:', uid);
+      console.log('[STAFF] Loaded owner settings uid:', uid);
     } catch (err) {
       console.warn('[STAFF] loadSettingsForOwnerUid failed:', err?.message);
     }
@@ -340,11 +340,10 @@
       if (result && result.user) {
         const credential = firebase.auth.GoogleAuthProvider.credentialFromResult(result);
         setGoogleOAuthAccessToken(credential?.accessToken || '');
-        console.log('[AUTH] Redirect login success:', result.user.email);
       }
       return result;
     } catch (err) {
-      console.warn('[AUTH] getRedirectResult failed:', err?.code, err?.message);
+      console.warn('[AUTH] getRedirectResult failed:', err?.code);
       return null;
     }
   }
