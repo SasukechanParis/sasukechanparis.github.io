@@ -1111,31 +1111,21 @@ button,
   border-color: rgba(255, 255, 255, 0.16);
 }
 
-/* Visibility hardening:
-   prevent white-on-white ghost buttons across staff/admin screens.
-   ヘッダー内の要素（header-left / header-actions）は除外して白地黒文字を維持 */
-.btn:not(.btn-primary):not(.toolbar-add-btn):not(#btn-add):not(#btn-add-fab):not(#btn-team-add):not(#btn-settings):not(#btn-refresh):not(#btn-theme):not(#btn-sync-export):not(#btn-sync-import):not(#btn-ics-export):not(#btn-export):not(#btn-logout),
+/* Visibility hardening: ヘッダー要素・プライマリボタン以外を暗色に */
+.btn:not(.btn-primary):not(.toolbar-add-btn):not(#btn-add):not(#btn-add-fab):not(#btn-team-add):not(#btn-settings):not(#btn-refresh):not(#btn-theme):not(#btn-sync-export):not(#btn-sync-import):not(#btn-ics-export):not(#btn-export):not(#btn-logout):not(#languageSelect):not(#currency-select),
 .action-button {
   background-color: #333 !important;
   color: #fff !important;
   border-color: #4a4a4a !important;
 }
 
-.btn:not(.btn-primary):not(.toolbar-add-btn):not(#btn-add):not(#btn-add-fab):not(#btn-team-add):not(#btn-settings):not(#btn-refresh):not(#btn-theme):not(#btn-sync-export):not(#btn-sync-import):not(#btn-ics-export):not(#btn-export):not(#btn-logout) *,
+.btn:not(.btn-primary):not(.toolbar-add-btn):not(#btn-add):not(#btn-add-fab):not(#btn-team-add):not(#btn-settings):not(#btn-refresh):not(#btn-theme):not(#btn-sync-export):not(#btn-sync-import):not(#btn-ics-export):not(#btn-export):not(#btn-logout):not(#languageSelect):not(#currency-select) *,
 .action-button * {
   color: #fff !important;
 }
 
-/* Header top buttons should stay white-background/black-text（ライト・ダーク両対応） */
-#btn-sync-export,
-#btn-sync-import,
-#btn-ics-export,
-#btn-export,
-#btn-logout,
-#btn-settings,
-#btn-refresh,
-#languageSelect,
-#currency-select,
+/* Header全体（左側・右側）のボタン・セレクトを白地黒文字に統一 */
+/* header-actions（右側）*/
 .header-actions #btn-sync-export,
 .header-actions #btn-sync-import,
 .header-actions #btn-ics-export,
@@ -1144,60 +1134,65 @@ button,
 .header-actions .btn-secondary,
 .header-actions .btn-primary,
 .header-actions .btn,
+/* header-left（左側）*/
 .header-left #btn-settings,
 .header-left #btn-refresh,
 .header-left #languageSelect,
-.header-left #currency-select {
+.header-left #currency-select,
+#btn-settings,
+#btn-refresh,
+#btn-sync-export,
+#btn-sync-import,
+#btn-ics-export,
+#btn-export,
+#btn-logout,
+#languageSelect,
+#currency-select {
   background: #ffffff !important;
   color: #111827 !important;
-  border-color: #d5dbe8 !important;
+  border: 1px solid #d5dbe8 !important;
   box-shadow: 0 1px 4px rgba(0,0,0,0.10) !important;
 }
 
-#btn-sync-export *,
-#btn-sync-import *,
-#btn-ics-export *,
-#btn-export *,
-#btn-logout *,
-#btn-settings *,
-#btn-refresh *,
 .header-actions #btn-sync-export *,
 .header-actions #btn-sync-import *,
 .header-actions #btn-ics-export *,
 .header-actions #btn-export *,
 .header-actions #btn-logout *,
-.header-actions #btn-settings *,
-.header-actions #btn-refresh *,
-.header-actions .btn * {
+.header-actions .btn *,
+.header-left #btn-settings *,
+.header-left #btn-refresh *,
+#btn-settings *,
+#btn-refresh * {
   color: #111827 !important;
 }
 
-#btn-sync-export:hover,
-#btn-sync-import:hover,
-#btn-ics-export:hover,
-#btn-export:hover,
-#btn-logout:hover,
-#btn-settings:hover,
-#btn-refresh:hover,
+.header-actions #btn-sync-export:hover,
+.header-actions #btn-sync-import:hover,
+.header-actions #btn-ics-export:hover,
+.header-actions #btn-export:hover,
+.header-actions #btn-logout:hover,
 .header-actions .btn:hover,
 .header-left #btn-settings:hover,
-.header-left #btn-refresh:hover {
+.header-left #btn-refresh:hover,
+#btn-settings:hover,
+#btn-refresh:hover {
   background: #f0f0f5 !important;
   border-color: #c4cfdf !important;
 }
 
-/* テーマトグル（🌙/☀️）はアイコンのみ・背景透明 */
+/* テーマトグル（🌙☀️）は半透明で区別 */
 #btn-theme,
 .header-left .theme-toggle {
-  background: rgba(255,255,255,0.12) !important;
+  background: rgba(255, 255, 255, 0.15) !important;
   color: inherit !important;
-  border-color: rgba(255,255,255,0.18) !important;
+  border: 1px solid rgba(200, 200, 220, 0.35) !important;
+  box-shadow: none !important;
 }
-
 [data-theme="light"] #btn-theme,
 [data-theme="light"] .header-left .theme-toggle {
-  background: rgba(0,0,0,0.07) !important;
-  border-color: rgba(0,0,0,0.12) !important;
+  background: rgba(0, 0, 0, 0.06) !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
 }
 
 /* Staff quick-action visibility */

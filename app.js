@@ -1058,7 +1058,7 @@
 
   function getSubscriptionPlanEntries() {
     const perMonthSuffix = t('settingsSubscriptionPerMonthSuffix') || '/mo';
-    const formatPlanPrice = (planKey) => `${formatCurrency(getPlanConfig(planKey).basePrice)}${perMonthSuffix}`;
+    const formatPlanPrice = (planKey) => `${formatPlanMonthlyPrice(getPlanConfig(planKey).basePrice)}${perMonthSuffix}`;
     return [
       {
         key: 'free',
@@ -1184,8 +1184,13 @@
     return Array.isArray(members) ? members.length : 0;
   }
 
-  function formatPlanMonthlyPrice(amount) {
-    return formatCurrency(Math.max(0, Math.round(toSafeNumber(amount, 0))));
+  // プラン料金はUSDベース → 現在の通貨にレート換算して表示
+  function formatPlanMonthlyPrice(usdAmount) {
+    const usd = Math.max(0, toSafeNumber(usdAmount, 0));
+    const cfg = CURRENCY_CONFIG[currentCurrency] || CURRENCY_CONFIG.USD;
+    const rate = cfg.usdRate || 1;
+    const converted = Math.round(usd * rate);
+    return formatCurrency(converted);
   }
 
   function calculatePlanEstimate(plan = currentUserPlan, memberCount = getCurrentTeamMemberCount()) {
@@ -3093,12 +3098,12 @@
     return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   }
   const CURRENCY_CONFIG = {
-    USD: { symbol: '$', locale: 'en-US' },
-    JPY: { symbol: '¥', locale: 'ja-JP' },
-    EUR: { symbol: '€', locale: 'fr-FR' },
-    KRW: { symbol: '₩', locale: 'ko-KR' },
-    CNY: { symbol: '¥', locale: 'zh-CN' },
-    TWD: { symbol: 'NT$', locale: 'zh-TW' },
+    USD: { symbol: '$', locale: 'en-US', usdRate: 1 },
+    JPY: { symbol: '¥', locale: 'ja-JP', usdRate: 150 },
+    EUR: { symbol: '€', locale: 'fr-FR', usdRate: 0.92 },
+    KRW: { symbol: '₩', locale: 'ko-KR', usdRate: 1350 },
+    CNY: { symbol: '¥', locale: 'zh-CN', usdRate: 7.2 },
+    TWD: { symbol: 'NT$', locale: 'zh-TW', usdRate: 32 },
   };
 
   let currentCurrency = getCloudValue(CURRENCY_KEY, getLocalValue(CURRENCY_KEY, 'USD'));
