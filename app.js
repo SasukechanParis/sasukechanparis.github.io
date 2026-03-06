@@ -2845,14 +2845,6 @@
     });
   }
 
-    if (!isFormFieldVisible('assignedTo')) {
-      const assignedToInput = document.getElementById('form-assignedTo');
-      if (assignedToInput && !String(assignedToInput.value || '').trim()) {
-        assignedToInput.value = resolveDefaultAssignedToValue();
-      }
-    }
-  }
-
   function loadGoogleCalendarAutoSyncEnabled() {
     if (isManagedStaffUser()) {
       return getLocalValue(GOOGLE_CALENDAR_AUTO_SYNC_KEY, false) === true;
