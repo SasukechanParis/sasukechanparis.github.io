@@ -2016,9 +2016,17 @@
     return label && label !== item.labelKey ? label : item.fallbackLabel;
   }
 
+   // スタッフに見せてはいけない一覧列（売上・入金情報）
+  const STAFF_HIDDEN_COLUMN_KEYS = new Set(['revenue', 'paymentChecked']);
+
   function getVisibleListColumns() {
+    const isStaff = isManagedStaffUser() && !isCurrentUserAdmin();
     return listColumnConfig
-      .filter((item) => item.visible !== false)
+      .filter((item) => {
+        if (item.visible === false) return false;
+        if (isStaff && STAFF_HIDDEN_COLUMN_KEYS.has(item.key)) return false;
+        return true;
+      })
       .map((item) => LIST_COLUMN_DEFINITIONS.find((entry) => entry.key === item.key))
       .filter(Boolean);
   }
@@ -2752,12 +2760,90 @@
   }
 
   function applyModalFieldVisibility() {
-    FORM_FIELD_VISIBILITY_DEFINITIONS.forEach((item) => {
-      const visible = isFormFieldVisible(item.key);
-      document.querySelectorAll(`[data-input-key="${item.key}"]`).forEach((element) => {
-        element.style.display = visible ? '' : 'none';
-      });
+  FORM_FIELD_VISIBILITY_DEFINITIONS.forEach((item) => {
+    const visible = isFormFieldVisible(item.key);
+    document.querySelectorAll(`[data-input-key="${item.key}"]`).forEach((element) => {
+      element.style.display = visible ? '' : 'none';
     });
+  });
+
+  if (!isFormFieldVisible('assignedTo')) {
+    const assignedToInput = document.getElementById('form-assignedTo');
+    if (assignedToInput && !String(assignedToInput.value || '').trim()) {
+      assignedToInput.value = resolveDefaultAssignedToValue();
+    }
+  }
+
+  // スタッフの収益フィールド隠蔽（フォーム＋詳細パネル両方に適用）
+  applyStaffRevenueFieldRestrictions();
+}
+    // スタッフ時に売上・経費・料金フィールド一式を隠蔽する
+  function applyStaffRevenueFieldRestrictions() {
+    const isStaff = isManagedStaffUser() && !isCurrentUserAdmin();
+
+    // フォームモーダル: 非表示にするフィールドIDとその親要素セレクタ
+    const REVENUE_FORM_FIELDS = [
+      '#form-plan-price',
+      '#form-plan-cost',
+      '#form-revenue',
+      '#form-expense',
+      '#form-profit',
+      '#form-billingDate',
+      '#form-paymentConfirmDate',
+      '#form-paymentChecked',
+      '#form-base-price',
+      '#form-price-adjustment',
+      '#form-total-price',
+      '#form-plan-name',
+    ];
+
+    REVENUE_FORM_FIELDS.forEach((selector) => {
+      const el = document.querySelector(selector);
+      if (!el) return;
+      // 親の .form-group / .checkbox-wrapper ごと隠す
+      const wrapper = el.closest('.form-group, .checkbox-wrapper') || el;
+      wrapper.style.display = isStaff ? 'none' : '';
+      wrapper.setAttribute('aria-hidden', isStaff ? 'true' : 'false');
+    });
+
+    // 動的追加アイテムセクション（オプション料金行）
+    const dynamicTargets = [
+      '.dynamic-items-header',
+      '#dynamic-items-container',
+      '#add-item-btn',
+    ];
+    dynamicTargets.forEach((selector) => {
+      const el = document.querySelector(selector);
+      if (!el) return;
+      const wrapper = el.closest('.form-group') || el;
+      wrapper.style.display = isStaff ? 'none' : '';
+      wrapper.setAttribute('aria-hidden', isStaff ? 'true' : 'false');
+    });
+
+    // セクションタイトルを隠す（「支払い情報」「プラン詳細」）
+    const HIDDEN_SECTION_I18N_KEYS = new Set(['secPayment', 'sectionPlanDetails']);
+    document.querySelectorAll('.form-section-title[data-i18n]').forEach((titleEl) => {
+      if (HIDDEN_SECTION_I18N_KEYS.has(titleEl.dataset.i18n)) {
+        titleEl.style.display = isStaff ? 'none' : '';
+        titleEl.setAttribute('aria-hidden', isStaff ? 'true' : 'false');
+      }
+    });
+
+    // 詳細パネル: 収益系フィールドの親 .detail-item ごと隠す
+    const REVENUE_DETAIL_IDS = [
+      'detail-revenue',
+      'detail-base-price',
+      'detail-total-price',
+      'detail-payment',
+    ];
+    REVENUE_DETAIL_IDS.forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const wrapper = el.closest('.detail-item') || el;
+      wrapper.style.display = isStaff ? 'none' : '';
+      wrapper.setAttribute('aria-hidden', isStaff ? 'true' : 'false');
+    });
+  }
 
     if (!isFormFieldVisible('assignedTo')) {
       const assignedToInput = document.getElementById('form-assignedTo');
@@ -10926,13 +11012,30 @@
   async function fetchStaffMembersForAdmin(adminUid) {
     const ownerUid = String(adminUid || '').trim();
     if (!ownerUid) return [];
-    const { getDocs } = await getFirestoreSdkModule();
+    const { getDocs, collection, doc, setDoc } = await getFirestoreSdkModule();
+    const { db: dbInstance } = await window.FirebaseService.whenReady();
     const staffCollectionRef = await getUserStaffCollectionRef(ownerUid);
     const snapshot = await getDocs(staffCollectionRef);
     const members = [];
     snapshot.forEach((docSnap) => {
       members.push(normalizeStaffMemberRecord(docSnap.data() || {}, docSnap.id));
     });
+
+    const currentUid = String(window.FirebaseService?.getCurrentUser?.()?.uid || '').trim();
+    if (currentUid && currentUid === ownerUid && members.length >= 0) {
+      try {
+        const emailsList = members.map((m) => m.email).filter(Boolean);
+        const metaCollRef = collection(doc(collection(dbInstance, 'users'), ownerUid), 'meta');
+        await setDoc(doc(metaCollRef, 'staffEmails'), {
+          emails: emailsList,
+          updatedAt: new Date().toISOString(),
+        });
+        console.log('[STAFF] staffEmails index updated:', emailsList.length, 'members');
+      } catch (e) {
+        console.warn('[STAFF] Failed to update staffEmails index', e);
+      }
+    }
+
     return members;
   }
 
@@ -11603,7 +11706,12 @@
     try {
       await hydrateStaffAccessContext(resolvedUser);
       await hydrateStaffDashboardConfigForSession(resolvedUser);
-      await window.FirebaseService.loadForUser(resolvedUser);
+      const ownerDataUid = getActiveDataOwnerUid(resolvedUser.uid);
+      if (isManagedStaffUser() && ownerDataUid && ownerDataUid !== resolvedUser.uid) {
+        await window.FirebaseService.loadSettingsForOwner(ownerDataUid);
+      } else {
+        await window.FirebaseService.loadForUser(resolvedUser);
+      }
       hydrateStateFromCloud();
       const firestoreClients = await fetchClientsForCurrentUser();
       if (Array.isArray(firestoreClients)) {

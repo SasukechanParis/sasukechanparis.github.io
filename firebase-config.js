@@ -294,6 +294,15 @@
     return loadCloudDataForUser(user);
   }
 
+  async function loadSettingsForOwnerUid(ownerUid) {
+    const uid = String(ownerUid || '').trim();
+    if (!uid) return;
+    const settingsSnap = await userMetaRef(uid).get();
+    const settings = settingsSnap.exists ? settingsSnap.data() : {};
+    Object.keys(cache).forEach((k) => delete cache[k]);
+    Object.assign(cache, settings);
+  }
+
   async function updateKey(user, key, value) {
     if (!user) return;
     cache[key] = value;
@@ -363,6 +372,10 @@
     async loadForUser(user) {
       await ensureInitialized();
       return ensureCloudData(user);
+    },
+    async loadSettingsForOwner(ownerUid) {
+      await ensureInitialized();
+      return loadSettingsForOwnerUid(ownerUid);
     },
     async saveKey(key, value) {
       await ensureInitialized();
