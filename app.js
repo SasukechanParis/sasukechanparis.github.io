@@ -38,6 +38,29 @@
   const GOOGLE_CALENDAR_AUTH_GRANTED_KEY = 'photocrm_google_calendar_auth_granted';
   const ADMIN_MANAGEMENT_EMAILS = new Set(['sasuke.photographe@gmail.com']);
   const ADMIN_UID_CACHE_KEY = 'photocrm_admin_uid';
+  const STAFF_COLLECTION_NAME = 'staffs';
+  const STAFF_DASHBOARD_SETTINGS_COLLECTION = 'settings';
+  const STAFF_DASHBOARD_SETTINGS_DOC_ID = 'staffDashboard';
+  const STAFF_DASHBOARD_LOCAL_KEY = 'photocrm_staff_dashboard_config';
+  const STAFF_ORG_SCOPED_LOCAL_KEYS = [
+    STORAGE_KEY,
+    EXPENSES_KEY,
+    OPTIONS_KEY,
+    PLAN_MASTER_KEY,
+    THEME_KEY,
+    LANG_KEY,
+    CURRENCY_KEY,
+    ACCENT_COLOR_KEY,
+    STUDIO_NAME_KEY,
+    DASHBOARD_VISIBILITY_KEY,
+    DASHBOARD_CONFIG_KEY,
+    LIST_COLUMN_CONFIG_KEY,
+    CONTRACT_TEMPLATE_KEY,
+    STATUS_COLOR_MAP_KEY,
+    HERO_METRICS_CONFIG_KEY,
+    HERO_METRICS_VISIBLE_KEY,
+    FORM_FIELD_VISIBILITY_KEY,
+  ];
   const GOOGLE_CALENDAR_DEFAULT_ID = 'sasuke.photographe@gmail.com';
   const GOOGLE_CALENDAR_API_KEY = 'AIzaSyD6fb5NWN0bAe0vW1Z9piQxv9aYE0e-tGs';
   const GOOGLE_CALENDAR_OAUTH_CLIENT_ID = '1022053730718-hsfcha1a9fjcggpmiffqhitnkmp64600.apps.googleusercontent.com';
@@ -48,6 +71,7 @@
   const SAFE_MODE_MINIMAL_BOOT = false;
   const FORCE_DARK_MODE = false;
   const ENABLE_STATS_FEATURES = true;
+  const EMERGENCY_SIMPLE_OWNER_MODE = false;
   const DEFAULT_INVOICE_MESSAGE_KEY = 'invoiceDefaultMessage';
   const FREE_PLAN_LIMIT = 20;
   const DEFAULT_ACCENT_COLOR = '#8b5cf6';
@@ -96,8 +120,34 @@
     { key: 'yearlyExpense', labelKey: 'yearlyExpenseTotal', fallbackLabel: 'Yearly Expense' },
     { key: 'yearlyProfit', labelKey: 'yearlyProfitTotal', fallbackLabel: 'Yearly Profit' },
     { key: 'unpaid', labelKey: 'cardUnpaid', fallbackLabel: 'Unpaid' },
+    { key: 'monthlyRevenueGraph', labelKey: 'dashboardChartTitle', fallbackLabel: 'Monthly Revenue / Profit Graph' },
+    { key: 'requestTrendGraph', labelKey: 'dashboardRequestChartTitle', fallbackLabel: 'Monthly Request Trend Graph' },
+    { key: 'analysisMonthlyContractsGraph', labelKey: 'dashboardContractsGraph', fallbackLabel: 'Monthly Contracts Graph' },
+    { key: 'analysisLeadSourceGraph', labelKey: 'dashboardLeadSourceGraph', fallbackLabel: 'Lead Source Graph' },
     { key: 'expenseSection', labelKey: 'expenseTracking', fallbackLabel: 'Expense Section' },
   ];
+
+  const DASHBOARD_GRAPH_KEYS = [
+    'analysisMonthlyContractsGraph',
+    'analysisLeadSourceGraph',
+    'monthlyRevenueGraph',
+    'requestTrendGraph',
+  ];
+  const STAFF_ALWAYS_HIDDEN_DASHBOARD_KEYS = new Set([
+    'monthlyRevenue',
+    'monthlyProfit',
+    'yearlyRevenue',
+    'yearlyExpense',
+    'yearlyProfit',
+    'expenseSection',
+    'monthlyRevenueGraph',
+    'requestTrendGraph',
+    'analysisMonthlyContractsGraph',
+    'analysisLeadSourceGraph',
+  ]);
+  const STAFF_DASHBOARD_CARD_KEYS = DASHBOARD_CARD_DEFINITIONS
+    .map((item) => item.key)
+    .filter((key) => !DASHBOARD_GRAPH_KEYS.includes(key) && key !== 'expenseSection');
 
   const HERO_METRIC_DEFINITIONS = [
     { key: 'monthlyNetProfit', labelKey: 'heroMetricMonthlyNetProfit', fallbackLabel: 'Monthly Net Profit' },
@@ -133,7 +183,7 @@
     { key: 'inquiryDate', labelKey: 'labelInquiryDate', fallbackLabel: 'Inquiry Date' },
     { key: 'contractDate', labelKey: 'labelContractDate', fallbackLabel: 'Contract Date' },
     { key: 'location', labelKey: 'labelLocation', fallbackLabel: 'Location' },
-    { key: 'assignedTo', labelKey: 'labelAssignedTo', fallbackLabel: 'Photographer' },
+    { key: 'assignedTo', labelKey: 'labelAssignedStaff', fallbackLabel: 'Assigned Staff' },
     { key: 'deliveryDate', labelKey: 'labelDeliveryDate', fallbackLabel: 'Delivery Date' },
     { key: 'paymentConfirmDate', labelKey: 'labelPaymentConfirmDate', fallbackLabel: 'Payment Confirmation Date' },
   ];
@@ -165,6 +215,58 @@
     return firestoreSdkModulePromise;
   }
 
+  async function normalizeFirestoreWritePayload(payload) {
+    const raw = payload && typeof payload === 'object' ? payload : {};
+    const cloned = { ...raw };
+    if (cloned.createdAt && cloned.createdAt.__pholioServerTimestamp === true) {
+      const { serverTimestamp } = await getFirestoreSdkModule();
+      cloned.createdAt = serverTimestamp();
+    }
+    return cloned;
+  }
+
+  async function getUserClientsCollectionRef(uid) {
+    const safeUid = String(uid || '').trim();
+    if (!safeUid) {
+      throw new Error('missing_user_uid');
+    }
+    const { collection, doc } = await getFirestoreSdkModule();
+    const { db: dbInstance } = await window.FirebaseService.whenReady();
+    return collection(
+      doc(collection(dbInstance, 'users'), safeUid),
+      'clients'
+    );
+  }
+
+  async function getUserStaffCollectionRef(uid) {
+    const safeUid = String(uid || '').trim();
+    if (!safeUid) {
+      throw new Error('missing_user_uid');
+    }
+    const { collection, doc } = await getFirestoreSdkModule();
+    const { db: dbInstance } = await window.FirebaseService.whenReady();
+    return collection(
+      doc(collection(dbInstance, 'users'), safeUid),
+      STAFF_COLLECTION_NAME
+    );
+  }
+
+  async function getUserStaffDashboardDocRef(uid) {
+    const safeUid = String(uid || '').trim();
+    if (!safeUid) {
+      throw new Error('missing_user_uid');
+    }
+    const { collection, doc } = await getFirestoreSdkModule();
+    const { db: dbInstance } = await window.FirebaseService.whenReady();
+    return doc(
+      collection(
+        doc(collection(dbInstance, 'users'), safeUid),
+        STAFF_DASHBOARD_SETTINGS_COLLECTION
+      ),
+      STAFF_DASHBOARD_SETTINGS_DOC_ID
+    );
+  }
+
   function getDbCompatBridge() {
     return {
       collection(collectionName) {
@@ -173,7 +275,22 @@
           async add(data) {
             const { collection, addDoc } = await getFirestoreSdkModule();
             const { db: dbInstance } = await window.FirebaseService.whenReady();
-            return addDoc(collection(dbInstance, safeCollectionName), data || {});
+            const payload = await normalizeFirestoreWritePayload(data);
+            return addDoc(collection(dbInstance, safeCollectionName), payload);
+          },
+          where(field, operator, value) {
+            const safeField = String(field || '').trim();
+            const safeOperator = String(operator || '==').trim();
+            return {
+              async get() {
+                const { collection, query, where, getDocs } = await getFirestoreSdkModule();
+                const { db: dbInstance } = await window.FirebaseService.whenReady();
+                return getDocs(query(
+                  collection(dbInstance, safeCollectionName),
+                  where(safeField, safeOperator, value)
+                ));
+              },
+            };
           },
           limit(count) {
             const safeLimit = Math.max(1, Math.floor(Number(count) || 1));
@@ -206,7 +323,7 @@
       firestore: {
         FieldValue: {
           serverTimestamp() {
-            return new Date().toISOString();
+            return { __pholioServerTimestamp: true };
           },
         },
       },
@@ -516,26 +633,166 @@
     return normalized === 'small_team' || normalized === 'medium_team' || normalized === 'enterprise';
   }
 
-  function updateTeamManagementTabAvailability() {
-    const teamTabButton = settingsOverlay?.querySelector?.('.settings-tab-btn[data-tab="team"]')
-      || document.querySelector('.settings-tab-btn[data-tab="team"]');
-    const teamTabContent = document.getElementById('settings-content-team');
-    if (!teamTabButton || !teamTabContent) return;
+  const STAFF_HIDDEN_SETTINGS_TAB_NAMES = ['profile', 'team', 'plan', 'invoice', 'contract', 'support', 'referral', 'admin'];
 
-    const allowed = canAccessTeamManagement(currentUserPlan);
-    teamTabButton.style.display = allowed ? '' : 'none';
-    teamTabButton.disabled = !allowed;
-    teamTabButton.setAttribute('aria-disabled', String(!allowed));
+  function activateSettingsMenuTabFallback() {
+    const menuTab = settingsOverlay?.querySelector?.('.settings-tab-btn[data-tab="menu"]')
+      || document.querySelector('.settings-tab-btn[data-tab="menu"]');
+    const menuContent = document.getElementById('settings-content-menu');
+    if (menuTab) menuTab.classList.add('active');
+    if (menuContent) menuContent.classList.add('active');
+    updateSettingsCurrentTabIndicator();
+  }
 
-    if (!allowed && teamTabButton.classList.contains('active')) {
-      teamTabButton.classList.remove('active');
-      teamTabContent.classList.remove('active');
-      const menuTab = settingsOverlay?.querySelector?.('.settings-tab-btn[data-tab="menu"]');
-      const menuContent = document.getElementById('settings-content-menu');
-      if (menuTab) menuTab.classList.add('active');
-      if (menuContent) menuContent.classList.add('active');
+  function toggleStaffHiddenNode(node, hidden) {
+    if (!node) return;
+    const shouldHide = !!hidden;
+    node.classList.toggle('staff-ui-hidden', shouldHide);
+    node.setAttribute('aria-hidden', shouldHide ? 'true' : 'false');
+  }
+
+  function applyStaffSettingsTabIsolation() {
+    try {
+      const isStaff = isManagedStaffUser() && !isCurrentUserAdmin();
+      let fallbackRequired = false;
+
+      STAFF_HIDDEN_SETTINGS_TAB_NAMES.forEach((tabName) => {
+        const tabBtnSelector = `.settings-tab-btn[data-tab="${tabName}"]`;
+        const contentId = `settings-content-${tabName}`;
+        const tabButton = settingsOverlay?.querySelector?.(tabBtnSelector)
+          || document.querySelector(tabBtnSelector);
+        const tabContent = document.getElementById(contentId);
+
+        if (isStaff && (tabButton?.classList.contains('active') || tabContent?.classList.contains('active'))) {
+          fallbackRequired = true;
+          tabButton?.classList.remove('active');
+          tabContent?.classList.remove('active');
+        }
+
+        if (tabButton) {
+          tabButton.disabled = isStaff;
+          tabButton.setAttribute('aria-disabled', isStaff ? 'true' : 'false');
+          toggleStaffHiddenNode(tabButton, isStaff);
+        }
+        if (tabContent) {
+          toggleStaffHiddenNode(tabContent, isStaff);
+        }
+      });
+
+      if (fallbackRequired) activateSettingsMenuTabFallback();
+    } catch (error) {
+      console.error('[UI] applyStaffSettingsTabIsolation failed', error);
     }
-    if (!allowed) teamTabContent.classList.remove('active');
+  }
+
+  function applyStaffStatsDomIsolation() {
+    try {
+      const isStaff = isManagedStaffUser() && !isCurrentUserAdmin();
+      const staffOnlyHiddenSelectors = [
+        '#dashboard-period-controls',
+      ];
+
+      staffOnlyHiddenSelectors.forEach((selector) => {
+        const node = document.querySelector(selector);
+        if (!node) return;
+        node.style.display = isStaff ? 'none' : '';
+        toggleStaffHiddenNode(node, isStaff);
+      });
+
+      if (isStaff) {
+        setDashboardQuickMenuOpen(false);
+      }
+    } catch (error) {
+      console.error('[UI] applyStaffStatsDomIsolation failed', error);
+    }
+  }
+
+  function applyStaffFeatureVisibilityRestrictions() {
+    const isStaff = isManagedStaffUser() && !isCurrentUserAdmin();
+    const toggleDisplay = (selector, hideForStaff) => {
+      document.querySelectorAll(selector).forEach((node) => {
+        if (!node) return;
+        node.style.display = (isStaff && hideForStaff) ? 'none' : '';
+      });
+    };
+
+    // Settings sections/tabs
+    toggleDisplay('.settings-tab-btn[data-tab="profile"]', true);
+    toggleDisplay('#settings-content-profile', true);
+    toggleDisplay('.settings-tab-btn[data-tab="plan"]', true);
+    toggleDisplay('#settings-content-plan', true);
+    toggleDisplay('.settings-tab-btn[data-tab="referral"]', true);
+    toggleDisplay('#settings-content-referral', true);
+    toggleDisplay('[data-settings-section="studio"]', true);
+    toggleDisplay('[data-settings-section="dynamic"]', true);
+    toggleDisplay('#btn-dynamic-item-add', true);
+    toggleDisplay('.subscription-plan-action-btn', true);
+    toggleDisplay('[data-subscription-plan-target]', true);
+    toggleDisplay('[data-subscription-contact]', true);
+
+    // Hero metrics and financial/stat cards
+    toggleDisplay('.dashboard-hero-metrics', true);
+    document.querySelectorAll('#dashboard-cards-grid [data-dashboard-key]').forEach((card) => {
+      const key = String(card?.dataset?.dashboardKey || '').trim();
+      if (!key) return;
+      if (!isStaff) {
+        card.style.display = '';
+        return;
+      }
+      if (STAFF_ALWAYS_HIDDEN_DASHBOARD_KEYS.has(key)) {
+        card.style.display = 'none';
+        return;
+      }
+      const allowed = staffDashboardConfig?.[key] !== false;
+      card.style.display = allowed ? '' : 'none';
+    });
+  }
+
+  function updateTeamManagementTabAvailability() {
+    try {
+      const teamTabButton = settingsOverlay?.querySelector?.('.settings-tab-btn[data-tab="team"]')
+        || document.querySelector('.settings-tab-btn[data-tab="team"]');
+      const teamTabContent = document.getElementById('settings-content-team');
+      const planTabButton = settingsOverlay?.querySelector?.('.settings-tab-btn[data-tab="plan"]')
+        || document.querySelector('.settings-tab-btn[data-tab="plan"]');
+      const planTabContent = document.getElementById('settings-content-plan');
+      const isAdmin = isCurrentUserAdmin();
+      const isStaff = isManagedStaffUser();
+
+      if (teamTabButton && teamTabContent) {
+        const teamAllowed = !isStaff || isAdmin;
+        teamTabButton.style.display = teamAllowed ? '' : 'none';
+        teamTabButton.disabled = !teamAllowed;
+        teamTabButton.setAttribute('aria-disabled', String(!teamAllowed));
+        if (!teamAllowed) {
+          if (teamTabButton.classList.contains('active')) {
+            teamTabButton.classList.remove('active');
+            teamTabContent.classList.remove('active');
+            activateSettingsMenuTabFallback();
+          }
+          teamTabContent.classList.remove('active');
+        }
+      }
+
+      if (planTabButton && planTabContent) {
+        const planAllowed = !isStaff || isAdmin;
+        planTabButton.style.display = planAllowed ? '' : 'none';
+        planTabButton.disabled = !planAllowed;
+        planTabButton.setAttribute('aria-disabled', String(!planAllowed));
+        if (!planAllowed) {
+          if (planTabButton.classList.contains('active')) {
+            planTabButton.classList.remove('active');
+            planTabContent.classList.remove('active');
+            activateSettingsMenuTabFallback();
+          }
+          planTabContent.classList.remove('active');
+        }
+      }
+
+      applyStaffSettingsTabIsolation();
+    } catch (error) {
+      console.error('[UI] updateTeamManagementTabAvailability failed', error);
+    }
   }
 
   function getHeaderCurrencySelectElements() {
@@ -551,6 +808,7 @@
       { code: 'ja', label: '🇯🇵 日本語' },
       { code: 'en', label: '🇺🇸 English' },
       { code: 'fr', label: '🇫🇷 Français' },
+      { code: 'de', label: '🇩🇪 Deutsch' },
       { code: 'es', label: '🇪🇸 Español' },
       { code: 'zh-CN', label: '🇨🇳 简体中文' },
       { code: 'zh-TW', label: '🇹🇼 繁體中文' },
@@ -1189,11 +1447,21 @@
         const normalizedExtraChargeItems = normalizeExtraChargeItems(record?.extraChargeItems);
         const fallbackExpense = toSafeNumber(record?.planCost, toSafeNumber(record?.planDetails?.planCost, 0))
           + normalizedExtraChargeItems.reduce((sum, item) => sum + toSafeNumber(item?.cost, 0), 0);
+        const normalizedStatus = normalizeWorkflowStatus(record?.status || record?.workflowStatus);
+        const assignedTo = String(record?.assignedTo || '').trim();
+        const assignedStaffEmail = normalizeEmail(resolveAssignedStaffEmail(assignedTo, record?.assignedStaffEmail));
         return {
           ...record,
+          inquiryDate: String(record?.inquiryDate || ''),
+          contractDate: String(record?.contractDate || ''),
+          leadSource: String(record?.leadSource || '').trim(),
+          plan: String(record?.plan || record?.planMasterId || ''),
+          assignedTo,
+          assignedStaffEmail,
           planDetails: normalizePlanDetails(record?.planDetails, record?.revenue),
           extraChargeItems: normalizedExtraChargeItems,
-          workflowStatus: normalizeWorkflowStatus(record?.workflowStatus),
+          workflowStatus: normalizedStatus,
+          status: normalizedStatus,
           expense: toSafeNumber(record?.expense, fallbackExpense),
           costumePrice: toSafeNumber(record?.costumePrice, 0),
           hairMakeupPrice: toSafeNumber(record?.hairMakeupPrice, 0),
@@ -1234,17 +1502,57 @@
     const startTime = normalizeTimeString(sanitized.startTime) || '';
     const endTime = normalizeTimeString(sanitized.endTime) || '';
     const userId = String(sanitized.userId || currentUid || '').trim();
+    const assignedTo = String(sanitized.assignedTo || '').trim();
+    const assignedStaffEmail = normalizeEmail(resolveAssignedStaffEmail(assignedTo, sanitized.assignedStaffEmail));
     const googleEventId = String(sanitized.google_event_id || sanitized.calendarEventId || '').trim();
     const googleEventCalendarId = String(sanitized.google_event_calendar_id || '').trim();
+    const rawCalendarSyncByUser = sanitized.calendarSyncByUser && typeof sanitized.calendarSyncByUser === 'object'
+      ? sanitized.calendarSyncByUser
+      : {};
+    const calendarSyncByUser = {};
+    Object.entries(rawCalendarSyncByUser).forEach(([uid, value]) => {
+      const safeUid = String(uid || '').trim();
+      if (!safeUid) return;
+      const safeEntry = value && typeof value === 'object' ? value : {};
+      const eventId = String(safeEntry.eventId || safeEntry.google_event_id || '').trim();
+      const calendarId = String(safeEntry.calendarId || safeEntry.google_event_calendar_id || '').trim();
+      if (!eventId && !calendarId) return;
+      calendarSyncByUser[safeUid] = { eventId, calendarId };
+    });
+    const hasStructuredMap = Object.keys(calendarSyncByUser).length > 0;
+    const actorUid = currentUid;
+    const actorState = actorUid ? (calendarSyncByUser[actorUid] || {}) : {};
+    const actorEventId = String(actorState.eventId || (!hasStructuredMap ? googleEventId : '')).trim();
+    const actorCalendarId = String(actorState.calendarId || (!hasStructuredMap ? googleEventCalendarId : '')).trim();
+    if (actorUid && (actorEventId || actorCalendarId)) {
+      calendarSyncByUser[actorUid] = {
+        eventId: actorEventId,
+        calendarId: actorCalendarId,
+      };
+    }
+    const normalizedStatus = normalizeWorkflowStatus(sanitized.status || sanitized.workflowStatus);
+    const normalizedLeadSource = String(sanitized.leadSource || '').trim();
+    const normalizedPlan = String(sanitized.plan || sanitized.planMasterId || '').trim();
+    const resolvedEventId = actorEventId || googleEventId;
+    const resolvedCalendarId = actorCalendarId || googleEventCalendarId;
 
     return {
       ...sanitized,
       userId,
+      inquiryDate: String(sanitized.inquiryDate || ''),
+      contractDate: String(sanitized.contractDate || ''),
+      leadSource: normalizedLeadSource,
+      plan: normalizedPlan,
+      assignedTo,
+      assignedStaffEmail,
+      status: normalizedStatus,
+      workflowStatus: normalizedStatus,
       startTime,
       endTime,
-      calendarEventId: googleEventId,
-      google_event_id: googleEventId,
-      google_event_calendar_id: googleEventCalendarId,
+      calendarSyncByUser,
+      calendarEventId: resolvedEventId,
+      google_event_id: resolvedEventId,
+      google_event_calendar_id: resolvedCalendarId,
     };
   }
 
@@ -1252,10 +1560,60 @@
     return (Array.isArray(records) ? records : []).map((record) => sanitizeCustomerRecordForSave(record));
   }
 
+  const FIRESTORE_SAVE_RETRY_MAX_ATTEMPTS = 3;
+
+  function waitMilliseconds(ms = 0) {
+    const delay = Math.max(0, Number(ms) || 0);
+    return new Promise((resolve) => {
+      window.setTimeout(resolve, delay);
+    });
+  }
+
+  function isRetryableFirestoreError(err) {
+    const code = normalizeOperationErrorCode(err);
+    if (!code) return false;
+    return [
+      'network',
+      'unavailable',
+      'deadline-exceeded',
+      'timeout',
+      'aborted',
+      'resource-exhausted',
+      'internal',
+      'unknown',
+    ].some((token) => code.includes(token));
+  }
+
+  async function runFirestoreWriteWithRetry(operation, label = 'firestore-write') {
+    for (let attempt = 1; attempt <= FIRESTORE_SAVE_RETRY_MAX_ATTEMPTS; attempt += 1) {
+      try {
+        return await operation();
+      } catch (err) {
+        const retryable = isRetryableFirestoreError(err);
+        const hasNextAttempt = attempt < FIRESTORE_SAVE_RETRY_MAX_ATTEMPTS;
+        if (!retryable || !hasNextAttempt) throw err;
+
+        const delayMs = 350 * attempt;
+        console.warn(
+          `[SAVE][Retry] ${label} attempt ${attempt} failed`,
+          err?.code || '',
+          err?.message || err,
+          `retry in ${delayMs}ms`
+        );
+        await waitMilliseconds(delayMs);
+      }
+    }
+    return null;
+  }
+
   function saveCustomers(data, options = {}) {
+    const propagateError = !!options?.propagateError;
     try {
+      const currentUser = firebase.auth().currentUser;
+      const currentUid = String(currentUser?.uid || '').trim();
+      const ownerUid = currentUid;
       const records = Array.isArray(data) ? data : [];
-      const normalized = records.map((record) => {
+      const normalized = records.map((record, index) => {
         const sanitizedRecord = sanitizeCustomerRecordForSave(record);
         const normalizedExtraChargeItems = normalizeExtraChargeItems(sanitizedRecord?.extraChargeItems);
         const fallbackExpense = toSafeNumber(
@@ -1263,20 +1621,124 @@
           toSafeNumber(sanitizedRecord?.planDetails?.planCost, 0)
         )
           + normalizedExtraChargeItems.reduce((sum, item) => sum + toSafeNumber(item?.cost, 0), 0);
+        const existingId = String(sanitizedRecord?.id || '').trim();
+        const resolvedId = existingId || generateId();
+        if (records[index] && typeof records[index] === 'object') {
+          records[index].id = resolvedId;
+        }
+        const resolvedCreatedAt = sanitizedRecord?.createdAt || new Date().toISOString();
+        const resolvedUpdatedAt = new Date().toISOString();
         return {
           ...sanitizedRecord,
+          id: resolvedId,
+          userId: ownerUid || String(sanitizedRecord?.userId || '').trim(),
+          uid: ownerUid || String(sanitizedRecord?.uid || '').trim(),
+          assignedTo: String(sanitizedRecord?.assignedTo || '').trim(),
+          assignedStaffEmail: normalizeEmail(
+            resolveAssignedStaffEmail(
+              sanitizedRecord?.assignedTo,
+              sanitizedRecord?.assignedStaffEmail
+            )
+          ),
+          inquiryDate: String(sanitizedRecord?.inquiryDate || ''),
+          contractDate: String(sanitizedRecord?.contractDate || ''),
+          leadSource: String(sanitizedRecord?.leadSource || '').trim(),
+          plan: String(sanitizedRecord?.plan || sanitizedRecord?.planMasterId || '').trim(),
+          status: normalizeWorkflowStatus(sanitizedRecord?.status || sanitizedRecord?.workflowStatus),
+          createdAt: resolvedCreatedAt,
+          updatedAt: resolvedUpdatedAt,
           planDetails: normalizePlanDetails(sanitizedRecord?.planDetails, sanitizedRecord?.revenue),
           extraChargeItems: normalizedExtraChargeItems,
-          workflowStatus: normalizeWorkflowStatus(sanitizedRecord?.workflowStatus),
+          workflowStatus: normalizeWorkflowStatus(sanitizedRecord?.status || sanitizedRecord?.workflowStatus),
           expense: toSafeNumber(sanitizedRecord?.expense, fallbackExpense),
           costumePrice: toSafeNumber(sanitizedRecord?.costumePrice, 0),
           hairMakeupPrice: toSafeNumber(sanitizedRecord?.hairMakeupPrice, 0),
         };
       });
-      return saveCloudValue(STORAGE_KEY, withCurrentUserId(normalized), options);
+      saveLocalValue(STORAGE_KEY, normalized);
+
+      const syncPromise = runFirestoreWriteWithRetry(async () => {
+        if (!ownerUid) {
+          const authError = new Error('missing-auth');
+          authError.code = 'unauthenticated';
+          throw authError;
+        }
+        const { getDocs, writeBatch, doc } = await getFirestoreSdkModule();
+        const { db: dbInstance } = await window.FirebaseService.whenReady();
+        const clientsCollectionRef = await getUserClientsCollectionRef(ownerUid);
+        const snapshot = await getDocs(clientsCollectionRef);
+        const nextIds = new Set(normalized.map((record) => String(record.id || '').trim()).filter(Boolean));
+        const batch = writeBatch(dbInstance);
+
+        for (const record of normalized) {
+          const docId = String(record.id || '').trim();
+          if (!docId) continue;
+          const payload = await normalizeFirestoreWritePayload({
+            ...record,
+            userId: ownerUid,
+            uid: ownerUid,
+          });
+          batch.set(doc(clientsCollectionRef, docId), payload, { merge: true });
+        }
+
+        snapshot.forEach((docSnap) => {
+          if (!nextIds.has(docSnap.id)) {
+            batch.delete(doc(clientsCollectionRef, docSnap.id));
+          }
+        });
+        await batch.commit();
+        return normalized;
+      }, 'users/{uid}/clients.saveCustomers');
+
+      if (propagateError) {
+        return syncPromise;
+      }
+      syncPromise.catch((err) => {
+        console.error('[Customer Save] clients sync failed', err);
+      });
+      return Promise.resolve(normalized);
     } catch (err) {
       console.error('[Customer Save] normalization failed', err);
-      return Promise.reject(err);
+      if (propagateError) {
+        return Promise.reject(err);
+      }
+      return Promise.resolve(Array.isArray(data) ? data : []);
+    }
+  }
+
+  async function fetchClientsForCurrentUser() {
+    const user = window.FirebaseService?.getCurrentUser?.() || firebase.auth().currentUser;
+    if (!user?.uid) {
+      console.error('[GET] currentUser が null: 取得中断');
+      return null;
+    }
+    const ownerUid = getActiveDataOwnerUid(user.uid) || String(user.uid || '').trim();
+    const currentUserEmail = normalizeEmail(user.email || getCurrentUserEmail() || '');
+    console.log('[GET] user:', ownerUid, currentUserEmail || '(no-email)');
+    try {
+      const { getDocs, query, where } = await getFirestoreSdkModule();
+      const clientsCollectionRef = await getUserClientsCollectionRef(ownerUid);
+      let snapshot;
+      if (isManagedStaffUser() && currentUserEmail) {
+        snapshot = await getDocs(query(
+          clientsCollectionRef,
+          where('assignedStaffEmail', '==', currentUserEmail)
+        ));
+      } else {
+        snapshot = await getDocs(clientsCollectionRef);
+      }
+      const list = [];
+      snapshot.forEach((docSnap) => {
+        list.push(sanitizeCustomerRecordForSave({
+          id: docSnap.id,
+          ...(docSnap.data() || {}),
+        }));
+      });
+      return list;
+    } catch (e) {
+      console.error('[LOAD] failed:', e?.code || '', e?.message || e);
+      console.error('[ERROR] code:', e?.code || '', 'message:', e?.message || e);
+      return null;
     }
   }
 
@@ -1356,11 +1818,86 @@
     return normalizeDashboardConfig(loaded);
   }
 
+  function hasVisibleDashboardGraphs(config = dashboardConfig) {
+    const normalizedConfig = Array.isArray(config) ? config : [];
+    return DASHBOARD_GRAPH_KEYS.some((key) => {
+      const item = normalizedConfig.find((entry) => entry?.key === key);
+      return item ? item.visible !== false : true;
+    });
+  }
+
   function saveDashboardConfig(config) {
     const normalized = normalizeDashboardConfig(config);
     dashboardConfig = normalized;
     saveLocalValue(DASHBOARD_CONFIG_KEY, normalized);
     saveCloudValue(DASHBOARD_CONFIG_KEY, normalized);
+  }
+
+  function getDefaultStaffDashboardConfig() {
+    const defaultConfig = {};
+    STAFF_DASHBOARD_CARD_KEYS.forEach((key) => {
+      defaultConfig[key] = key === 'monthlyShoots';
+    });
+    return defaultConfig;
+  }
+
+  function normalizeStaffDashboardConfig(config) {
+    const source = config && typeof config === 'object' && !Array.isArray(config)
+      ? config
+      : {};
+    const next = {};
+    STAFF_DASHBOARD_CARD_KEYS.forEach((key) => {
+      const defaultVisible = key === 'monthlyShoots';
+      const requested = Object.prototype.hasOwnProperty.call(source, key)
+        ? source[key] !== false
+        : defaultVisible;
+      next[key] = STAFF_ALWAYS_HIDDEN_DASHBOARD_KEYS.has(key) ? false : !!requested;
+    });
+    return next;
+  }
+
+  async function loadStaffDashboardConfigFromCloud(ownerUid) {
+    const safeOwnerUid = String(ownerUid || '').trim();
+    if (!safeOwnerUid) return getDefaultStaffDashboardConfig();
+    try {
+      const { getDoc } = await getFirestoreSdkModule();
+      const docRef = await getUserStaffDashboardDocRef(safeOwnerUid);
+      const snapshot = await getDoc(docRef);
+      if (!snapshot.exists()) return getDefaultStaffDashboardConfig();
+      const raw = snapshot.data() || {};
+      const record = raw && typeof raw === 'object'
+        ? (raw.cards && typeof raw.cards === 'object' ? raw.cards : raw)
+        : {};
+      return normalizeStaffDashboardConfig(record);
+    } catch (error) {
+      console.warn('[STAFF] Failed to load staff dashboard config', error);
+      return getDefaultStaffDashboardConfig();
+    }
+  }
+
+  async function saveStaffDashboardConfigToCloud(ownerUid, config) {
+    const safeOwnerUid = String(ownerUid || '').trim();
+    if (!safeOwnerUid) return;
+    const normalized = normalizeStaffDashboardConfig(config);
+    const { setDoc } = await getFirestoreSdkModule();
+    const docRef = await getUserStaffDashboardDocRef(safeOwnerUid);
+    await setDoc(docRef, {
+      cards: normalized,
+      updatedAt: new Date().toISOString(),
+      updatedBy: normalizeEmail(getCurrentUserEmail()),
+    }, { merge: true });
+    saveLocalValue(STAFF_DASHBOARD_LOCAL_KEY, normalized);
+  }
+
+  async function hydrateStaffDashboardConfigForSession(user = null) {
+    const resolvedUser = user || window.FirebaseService?.getCurrentUser?.() || firebase.auth().currentUser || null;
+    const ownerUid = getActiveDataOwnerUid(resolvedUser?.uid);
+    if (!ownerUid) {
+      staffDashboardConfig = normalizeStaffDashboardConfig(getLocalValue(STAFF_DASHBOARD_LOCAL_KEY, getDefaultStaffDashboardConfig()));
+      return;
+    }
+    staffDashboardConfig = await loadStaffDashboardConfigFromCloud(ownerUid);
+    saveLocalValue(STAFF_DASHBOARD_LOCAL_KEY, staffDashboardConfig);
   }
 
   function getDashboardCardLabel(itemKey) {
@@ -1594,6 +2131,9 @@
   let calendarFilters = loadCalendarFilters();
   let dashboardVisible = getCloudValue(DASHBOARD_VISIBILITY_KEY, getLocalValue(DASHBOARD_VISIBILITY_KEY, true)) !== false;
   let dashboardConfig = loadDashboardConfig();
+  let staffDashboardConfig = normalizeStaffDashboardConfig(
+    getLocalValue(STAFF_DASHBOARD_LOCAL_KEY, getDefaultStaffDashboardConfig())
+  );
   let isDashboardQuickMenuOpen = false;
   let listColumnConfig = loadListColumnConfig();
   let isListColumnsMenuOpen = false;
@@ -1608,7 +2148,7 @@
   let googleCalendarList = [];
   let googleCalendarListLoaded = false;
   let googleCalendarListPromise = null;
-  let isGraphVisible = false;
+  let isGraphVisible = hasVisibleDashboardGraphs(dashboardConfig);
   let isMobileHeaderMenuOpen = false;
   let graphHideTimer = null;
   let isExpenseManuallyEdited = false;
@@ -1620,8 +2160,13 @@
   let selectedDashboardMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   let revenueProfitChartInstance = null;
   let requestTrendChartInstance = null;
+  let analysisContractsChartInstance = null;
+  let analysisLeadSourceChartInstance = null;
 
   function reloadRuntimeStateFromStorage() {
+    if (isManagedStaffUser()) {
+      syncManagedStaffLocalStateFromOrgCloud();
+    }
     customers = loadCustomers();
     options = loadOptions();
     dynamicItemNameSuggestions = loadDynamicItemNameSuggestions();
@@ -1629,8 +2174,12 @@
     planMaster = loadPlanMaster();
     ensurePlanMasterFallbackFromOptions();
     calendarFilters = loadCalendarFilters();
-    dashboardVisible = getCloudValue(DASHBOARD_VISIBILITY_KEY, getLocalValue(DASHBOARD_VISIBILITY_KEY, true)) !== false;
+    dashboardVisible = getCloudValue(
+      DASHBOARD_VISIBILITY_KEY,
+      isManagedStaffUser() ? false : getLocalValue(DASHBOARD_VISIBILITY_KEY, true)
+    ) !== false;
     dashboardConfig = loadDashboardConfig();
+    isGraphVisible = hasVisibleDashboardGraphs(dashboardConfig);
     listColumnConfig = loadListColumnConfig();
     statusColorMap = loadStatusColorMap();
     heroMetricsConfig = loadHeroMetricsConfig();
@@ -1638,9 +2187,15 @@
     formFieldVisibilityConfig = loadFormFieldVisibilityConfig();
     googleCalendarAutoSyncEnabled = loadGoogleCalendarAutoSyncEnabled();
     googleCalendarSelectedId = loadGoogleCalendarSelectedId();
-    currentStudioName = normalizeStudioName(getCloudValue(STUDIO_NAME_KEY, getLocalValue(STUDIO_NAME_KEY, '')));
+    currentStudioName = normalizeStudioName(getCloudValue(
+      STUDIO_NAME_KEY,
+      isManagedStaffUser() ? '' : getLocalValue(STUDIO_NAME_KEY, '')
+    ));
     currentAccentColor = normalizeAccentColor(
-      getCloudValue(ACCENT_COLOR_KEY, getLocalValue(ACCENT_COLOR_KEY, DEFAULT_ACCENT_COLOR))
+      getCloudValue(
+        ACCENT_COLOR_KEY,
+        isManagedStaffUser() ? DEFAULT_ACCENT_COLOR : getLocalValue(ACCENT_COLOR_KEY, DEFAULT_ACCENT_COLOR)
+      )
     );
     syncPlanFromStorage();
     applyAccentColor(currentAccentColor, { persist: false });
@@ -2053,7 +2608,7 @@
 
   function applyMinimalSafeModeUI() {
     if (!SAFE_MODE_MINIMAL_BOOT) return;
-    ['btn-toggle-dashboard', 'btn-toggle-graph'].forEach((id) => {
+    ['toggle-stats-btn'].forEach((id) => {
       const el = document.getElementById(id);
       if (el) el.style.display = 'none';
     });
@@ -2137,7 +2692,7 @@
     { key: 'details', labelKey: 'labelDetails', type: 'textarea' },
     { key: 'notes', labelKey: 'labelNotes', type: 'textarea' },
     { key: 'revenue', labelKey: 'thRevenue', type: 'number' },
-    { key: 'assignedTo', labelKey: 'labelAssignedTo', type: 'select' },
+    { key: 'assignedTo', labelKey: 'labelAssignedStaff', type: 'select' },
     { key: 'location', labelKey: 'labelLocation', type: 'text' },
   ];
 
@@ -2213,6 +2768,9 @@
   }
 
   function loadGoogleCalendarAutoSyncEnabled() {
+    if (isManagedStaffUser()) {
+      return getLocalValue(GOOGLE_CALENDAR_AUTO_SYNC_KEY, false) === true;
+    }
     return getCloudValue(
       GOOGLE_CALENDAR_AUTO_SYNC_KEY,
       getLocalValue(GOOGLE_CALENDAR_AUTO_SYNC_KEY, false)
@@ -2222,10 +2780,16 @@
   function setGoogleCalendarAutoSyncEnabled(enabled) {
     googleCalendarAutoSyncEnabled = !!enabled;
     saveLocalValue(GOOGLE_CALENDAR_AUTO_SYNC_KEY, googleCalendarAutoSyncEnabled);
-    saveCloudValue(GOOGLE_CALENDAR_AUTO_SYNC_KEY, googleCalendarAutoSyncEnabled);
+    if (!isManagedStaffUser()) {
+      saveCloudValue(GOOGLE_CALENDAR_AUTO_SYNC_KEY, googleCalendarAutoSyncEnabled);
+    }
   }
 
   function loadGoogleCalendarSelectedId() {
+    if (isManagedStaffUser()) {
+      const localOnly = String(getLocalValue(GOOGLE_CALENDAR_SELECTED_ID_KEY, GOOGLE_CALENDAR_DEFAULT_ID) || '').trim();
+      return localOnly || GOOGLE_CALENDAR_DEFAULT_ID;
+    }
     const loaded = getCloudValue(
       GOOGLE_CALENDAR_SELECTED_ID_KEY,
       getLocalValue(GOOGLE_CALENDAR_SELECTED_ID_KEY, GOOGLE_CALENDAR_DEFAULT_ID)
@@ -2238,7 +2802,9 @@
     const normalized = String(calendarId || '').trim() || GOOGLE_CALENDAR_DEFAULT_ID;
     googleCalendarSelectedId = normalized;
     saveLocalValue(GOOGLE_CALENDAR_SELECTED_ID_KEY, normalized);
-    saveCloudValue(GOOGLE_CALENDAR_SELECTED_ID_KEY, normalized);
+    if (!isManagedStaffUser()) {
+      saveCloudValue(GOOGLE_CALENDAR_SELECTED_ID_KEY, normalized);
+    }
   }
 
   function markGoogleCalendarAuthGranted() {
@@ -2278,6 +2844,14 @@
   }
 
   function getTargetGoogleCalendarId() {
+    if (isManagedStaffUser()) {
+      const staffEmail = normalizeEmail(
+        firebase.auth().currentUser?.email
+        || window.FirebaseService?.getCurrentUser?.()?.email
+        || ''
+      );
+      if (staffEmail) return staffEmail;
+    }
     const normalized = String(googleCalendarSelectedId || '').trim();
     return normalized || GOOGLE_CALENDAR_DEFAULT_ID;
   }
@@ -2401,6 +2975,7 @@
   function getLocaleForDates() {
     if (currentLang === 'fr') return 'fr-FR';
     if (currentLang === 'ja') return 'ja-JP';
+    if (currentLang === 'de') return 'de-DE';
     if (currentLang === 'es') return 'es-ES';
     return 'en-US';
   }
@@ -3626,9 +4201,11 @@
   }
 
   function updateHeroStatsToggleButtonLabel() {
-    const label = `📊 ${t('statsButton')}`;
-    const title = t('statsMenuTitle');
-    updateToggleButtonText('btn-toggle-dashboard', label, title, isDashboardQuickMenuOpen);
+    const label = `📈 ${t('statsButton')}`;
+    const title = dashboardVisible
+      ? t('statsToggleHide')
+      : t('statsToggleShow');
+    updateToggleButtonText('toggle-stats-btn', label, title, dashboardVisible);
   }
 
   function setHeroMetricsVisibility(isVisible) {
@@ -3683,6 +4260,10 @@
       collapsible.classList.toggle('is-collapsed', !dashboardVisible);
     }
 
+    if (!dashboardVisible && isDashboardQuickMenuOpen) {
+      setDashboardQuickMenuOpen(false);
+    }
+
     saveLocalValue(DASHBOARD_VISIBILITY_KEY, dashboardVisible);
     if (visibilityChanged) {
       saveCloudValue(DASHBOARD_VISIBILITY_KEY, dashboardVisible);
@@ -3701,9 +4282,7 @@
   }
 
   function updateGraphToggleButtonLabel() {
-    const label = isGraphVisible ? `📈 ${t('graphToggleOn')}` : `📈 ${t('graphToggleOff')}`;
-    const title = isGraphVisible ? t('graphToggleHide') : t('graphToggleShow');
-    updateToggleButtonText('btn-toggle-graph', label, title, isGraphVisible);
+    updateHeroStatsToggleButtonLabel();
   }
 
   function setGraphVisibility(isVisible, shouldRender = true) {
@@ -3751,6 +4330,7 @@
     if (!menuContent) return;
 
     const rows = [];
+    rows.push(`<div class="dashboard-quick-item-main">${escapeHtml(t('statsMenuTitle'))}</div>`);
     rows.push(`
       <label class="dashboard-quick-item dashboard-quick-item-main">
         <input type="checkbox" id="dashboard-quick-visible" ${dashboardVisible ? 'checked' : ''}>
@@ -3759,28 +4339,43 @@
       <div class="dashboard-quick-divider"></div>
     `);
 
-    rows.push(`
-      <div class="dashboard-quick-item-main">${escapeHtml(t('quickMenuHeroMetrics'))}</div>
-    `);
-    normalizeHeroMetricsConfig(heroMetricsConfig).forEach((item) => {
-      rows.push(`
+    const heroMetricKeys = new Set(['monthlyNetProfit', 'averageMargin', 'yearlyNetProfit']);
+    normalizeHeroMetricsConfig(heroMetricsConfig)
+      .filter((item) => heroMetricKeys.has(item.key))
+      .forEach((item) => {
+        rows.push(`
         <label class="dashboard-quick-item">
           <input type="checkbox" data-hero-metric-key="${item.key}" ${item.visible ? 'checked' : ''}>
           <span>${escapeHtml(getHeroMetricLabel(item.key))}</span>
         </label>
       `);
-    });
-    rows.push(`<div class="dashboard-quick-divider"></div>`);
+      });
 
-    rows.push(`
-      <div class="dashboard-quick-item-main">${escapeHtml(t('quickMenuDashboardCards'))}</div>
-    `);
-
-    dashboardConfig.forEach((item) => {
+    rows.push('<div class="dashboard-quick-divider"></div>');
+    const dashboardCardItems = dashboardConfig.filter((item) => !DASHBOARD_GRAPH_KEYS.includes(item.key));
+    dashboardCardItems.forEach((item) => {
       rows.push(`
         <label class="dashboard-quick-item">
           <input type="checkbox" data-dashboard-key="${item.key}" ${item.visible ? 'checked' : ''}>
           <span>${escapeHtml(getDashboardCardLabel(item.key))}</span>
+        </label>
+      `);
+    });
+
+    rows.push('<div class="dashboard-quick-divider"></div>');
+    const graphItems = [
+      { key: 'analysisMonthlyContractsGraph', label: t('dashboardContractsGraph') },
+      { key: 'analysisLeadSourceGraph', label: t('dashboardLeadSourceGraph') },
+      { key: 'monthlyRevenueGraph', label: t('dashboardChartTitle') },
+      { key: 'requestTrendGraph', label: t('dashboardRequestChartTitle') },
+    ];
+    graphItems.forEach((graphItem) => {
+      const config = dashboardConfig.find((item) => item.key === graphItem.key);
+      const isVisible = config ? config.visible !== false : true;
+      rows.push(`
+        <label class="dashboard-quick-item">
+          <input type="checkbox" data-dashboard-key="${graphItem.key}" ${isVisible ? 'checked' : ''}>
+          <span>${escapeHtml(graphItem.label)}</span>
         </label>
       `);
     });
@@ -3809,7 +4404,7 @@
 
   function setDashboardQuickMenuOpen(isOpen) {
     const menu = document.getElementById('dashboard-quick-menu');
-    const toggleBtn = document.getElementById('btn-toggle-dashboard');
+    const toggleBtn = document.getElementById('toggle-stats-btn');
     if (!menu || !toggleBtn) return;
 
     isDashboardQuickMenuOpen = !!isOpen;
@@ -3829,20 +4424,19 @@
     event?.preventDefault?.();
     event?.stopPropagation?.();
     setListColumnsMenuOpen(false);
-    setDashboardQuickMenuOpen(!isDashboardQuickMenuOpen);
-  }
-
-  function handleGraphToggleButtonClick(event) {
-    event?.preventDefault?.();
-    event?.stopPropagation?.();
+    const nextVisible = !dashboardVisible;
+    setDashboardVisibility(nextVisible);
+    if (nextVisible) {
+      setDashboardQuickMenuOpen(true);
+      return;
+    }
     setDashboardQuickMenuOpen(false);
-    setGraphVisibility(!isGraphVisible, true);
   }
 
   function handleDashboardQuickMenuOutsideClick(event) {
     if (!isDashboardQuickMenuOpen) return;
     const menu = document.getElementById('dashboard-quick-menu');
-    const toggleBtn = document.getElementById('btn-toggle-dashboard');
+    const toggleBtn = document.getElementById('toggle-stats-btn');
     if (!menu || !toggleBtn) return;
     if (menu.contains(event.target) || toggleBtn.contains(event.target)) return;
     setDashboardQuickMenuOpen(false);
@@ -3856,34 +4450,61 @@
 
   function applyDashboardConfig() {
     const grid = document.getElementById('dashboard-cards-grid');
+    const graphContainer = document.getElementById('graph-container');
     const expenseContainer = document.getElementById('expense-container');
-    if (!grid && !expenseContainer) return;
+    if (!grid && !graphContainer && !expenseContainer) return;
+    const isStaff = isManagedStaffUser() && !isCurrentUserAdmin();
 
-    const cards = grid ? Array.from(grid.querySelectorAll('[data-dashboard-key]')) : [];
-    const cardMap = new Map(cards.map((card) => [card.dataset.dashboardKey, card]));
-    let visibleCount = 0;
+    const dashboardElements = Array.from(document.querySelectorAll('[data-dashboard-key]'));
+    const elementMap = new Map(
+      dashboardElements
+        .map((element) => [String(element.dataset.dashboardKey || '').trim(), element])
+        .filter(([key]) => key)
+    );
+    let visibleCardCount = 0;
+    let visibleGraphCount = 0;
     const expenseSetting = dashboardConfig.find((item) => item.key === 'expenseSection');
     const isExpenseVisible = expenseSetting ? expenseSetting.visible !== false : true;
+    const configuredKeys = new Set(dashboardConfig.map((item) => item.key));
 
     dashboardConfig.forEach((item) => {
       if (item.key === 'expenseSection') return;
-      const card = cardMap.get(item.key);
-      if (!card) return;
-      card.style.display = item.visible ? '' : 'none';
-      if (item.visible) visibleCount += 1;
-      if (grid) grid.appendChild(card);
-    });
-
-    cards.forEach((card) => {
-      if (!dashboardConfig.some((item) => item.key === card.dataset.dashboardKey)) {
-        card.style.display = '';
-        if (grid) grid.appendChild(card);
-        visibleCount += 1;
+      const element = elementMap.get(item.key);
+      if (!element) return;
+      const staffForcedHidden = isStaff && STAFF_ALWAYS_HIDDEN_DASHBOARD_KEYS.has(item.key);
+      const staffAllowed = !isStaff || staffDashboardConfig?.[item.key] !== false;
+      const visible = item.visible && !staffForcedHidden && staffAllowed;
+      element.style.display = visible ? '' : 'none';
+      if (visible) {
+        if (grid && grid.contains(element)) visibleCardCount += 1;
+        if (graphContainer && graphContainer.contains(element)) visibleGraphCount += 1;
       }
+      element.parentElement?.appendChild(element);
     });
 
-    if (grid) grid.style.display = visibleCount > 0 ? 'grid' : 'none';
-    if (expenseContainer) expenseContainer.style.display = isExpenseVisible ? 'block' : 'none';
+    dashboardElements.forEach((element) => {
+      const key = String(element.dataset.dashboardKey || '').trim();
+      if (!key || configuredKeys.has(key)) return;
+      const staffForcedHidden = isStaff && STAFF_ALWAYS_HIDDEN_DASHBOARD_KEYS.has(key);
+      const staffAllowed = !isStaff || staffDashboardConfig?.[key] !== false;
+      const visible = !staffForcedHidden && staffAllowed;
+      element.style.display = visible ? '' : 'none';
+      if (visible) {
+        if (grid && grid.contains(element)) visibleCardCount += 1;
+        if (graphContainer && graphContainer.contains(element)) visibleGraphCount += 1;
+      }
+      element.parentElement?.appendChild(element);
+    });
+
+    if (grid) grid.style.display = visibleCardCount > 0 ? 'grid' : 'none';
+    if (graphContainer) {
+      graphContainer.style.display = (!isStaff && isGraphVisible && visibleGraphCount > 0) ? 'block' : 'none';
+      if (visibleGraphCount === 0) {
+        graphContainer.classList.remove('is-visible');
+      }
+    }
+    if (expenseContainer) expenseContainer.style.display = (!isStaff && isExpenseVisible) ? 'block' : 'none';
+    applyStaffFeatureVisibilityRestrictions();
     renderDashboardQuickMenu();
   }
 
@@ -3892,6 +4513,8 @@
       item.key === itemKey ? { ...item, visible: !!visible } : item
     ));
     saveDashboardConfig(dashboardConfig);
+    const nextGraphVisibility = hasVisibleDashboardGraphs(dashboardConfig);
+    setGraphVisibility(nextGraphVisibility, nextGraphVisibility);
     applyDashboardConfig();
     renderDashboardQuickMenu();
     renderSettings();
@@ -3966,6 +4589,10 @@
       `<div class="list-columns-menu-hint">${escapeHtml(getListSettingsHintLabel())}</div>`,
     ];
 
+    rows.push(`
+      <div class="list-columns-section-title">${escapeHtml(t('tabList'))}</div>
+    `);
+
     listColumnConfig.forEach((item, index) => {
       rows.push(`
         <div class="list-columns-item">
@@ -4000,6 +4627,7 @@
         moveListColumn(key, direction);
       }, `list-column-move-${key}-${direction}`);
     });
+
   }
 
   function ensureListColumnsMenuMountedToBody() {
@@ -4327,11 +4955,61 @@
       const curP = pSel.value;
       const curF = fSel.value;
       const photographers = window.TeamManager.loadPhotographers();
-      const options = photographers.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
-      pSel.innerHTML = `<option value="">${t('selectDefault')}</option>` + options;
-      fSel.innerHTML = `<option value="all">${t('filterPhotographer')}</option>` + options;
+
+      pSel.innerHTML = '';
+      const unassignedOption = document.createElement('option');
+      unassignedOption.value = '';
+      unassignedOption.textContent = t('unassignedStaff');
+      pSel.appendChild(unassignedOption);
+
+      fSel.innerHTML = '';
+      const filterDefaultOption = document.createElement('option');
+      filterDefaultOption.value = 'all';
+      filterDefaultOption.textContent = t('filterPhotographer');
+      fSel.appendChild(filterDefaultOption);
+
+      photographers.forEach((photographer) => {
+        const id = String(photographer?.id || '').trim();
+        if (!id) return;
+        const name = String(photographer?.name || '').trim() || id;
+        const email = normalizeEmail(
+          photographer?.email || photographer?.mail || photographer?.userEmail || ''
+        );
+
+        const assignedOption = document.createElement('option');
+        assignedOption.value = id;
+        assignedOption.textContent = name;
+        if (email) assignedOption.dataset.email = email;
+        pSel.appendChild(assignedOption);
+
+        const filterOption = document.createElement('option');
+        filterOption.value = id;
+        filterOption.textContent = name;
+        fSel.appendChild(filterOption);
+      });
+
+      if (curP && !Array.from(pSel.options).some((option) => option.value === curP)) {
+        const legacyAssignedOption = document.createElement('option');
+        legacyAssignedOption.value = curP;
+        legacyAssignedOption.textContent = getPhotographerName(curP);
+        pSel.appendChild(legacyAssignedOption);
+      }
+      if (curF && curF !== 'all' && !Array.from(fSel.options).some((option) => option.value === curF)) {
+        const legacyFilterOption = document.createElement('option');
+        legacyFilterOption.value = curF;
+        legacyFilterOption.textContent = getPhotographerName(curF);
+        fSel.appendChild(legacyFilterOption);
+      }
+
       pSel.value = curP;
       fSel.value = curF;
+
+      if (pSel.value !== curP) {
+        pSel.value = '';
+      }
+      if (fSel.value !== curF) {
+        fSel.value = 'all';
+      }
     }
 
     if (isMobileFilterSheetOpen) {
@@ -4454,7 +5132,9 @@
       ? 'fr-FR'
       : (currentLang === 'ja'
         ? 'ja-JP'
-        : (currentLang === 'es' ? 'es-ES' : 'en-US'));
+        : (currentLang === 'de'
+          ? 'de-DE'
+          : (currentLang === 'es' ? 'es-ES' : 'en-US')));
     return Array.from({ length: 12 }, (_, index) => (
       new Date(2000, index, 1).toLocaleString(locale, { month: 'short' })
     ));
@@ -4548,7 +5228,303 @@
     return { currentYearCounts, previousYearCounts };
   }
 
+  function buildClientStats(records = []) {
+    const safeRecords = Array.isArray(records) ? records : [];
+    const monthlyContractCounts = {};
+    const leadSourceCounts = {};
+    let leadSourceTotal = 0;
+    let totalInquiries = 0;
+    let totalContracts = 0;
+
+    safeRecords.forEach((record) => {
+      const inquiryParts = parseDateParts(record?.inquiryDate);
+      if (inquiryParts && Number.isFinite(inquiryParts.year) && Number.isFinite(inquiryParts.month)) {
+        totalInquiries += 1;
+      }
+
+      const contractParts = parseDateParts(record?.contractDate);
+      if (contractParts && Number.isFinite(contractParts.year) && Number.isFinite(contractParts.month)) {
+        const monthKey = `${contractParts.year}-${String(contractParts.month + 1).padStart(2, '0')}`;
+        monthlyContractCounts[monthKey] = (monthlyContractCounts[monthKey] || 0) + 1;
+        totalContracts += 1;
+      }
+
+      const leadSourceKey = normalizeLeadSourceKey(record?.leadSource);
+      leadSourceCounts[leadSourceKey] = (leadSourceCounts[leadSourceKey] || 0) + 1;
+      leadSourceTotal += 1;
+    });
+
+    const leadSourceShares = Object.fromEntries(
+      Object.entries(leadSourceCounts).map(([source, count]) => {
+        const ratio = leadSourceTotal > 0 ? (count / leadSourceTotal) * 100 : 0;
+        return [source, Number(ratio.toFixed(1))];
+      })
+    );
+
+    return {
+      totalClients: safeRecords.length,
+      totalInquiries,
+      totalContracts,
+      conversionRate: totalInquiries > 0 ? Number(((totalContracts / totalInquiries) * 100).toFixed(1)) : 0,
+      monthlyContractCounts,
+      leadSourceCounts,
+      leadSourceShares,
+    };
+  }
+
+  async function calculateStats(sourceClients = null) {
+    if (Array.isArray(sourceClients)) {
+      return buildClientStats(sourceClients);
+    }
+    const user = firebase.auth().currentUser;
+    if (!user?.uid) {
+      return buildClientStats([]);
+    }
+    try {
+      const { getDocs } = await getFirestoreSdkModule();
+      const ownerUid = getActiveDataOwnerUid(user.uid);
+      const clientsCollectionRef = await getUserClientsCollectionRef(ownerUid);
+      const snapshot = await getDocs(clientsCollectionRef);
+      const records = [];
+      snapshot.forEach((docSnap) => {
+        records.push(sanitizeCustomerRecordForSave({
+          id: docSnap.id,
+          ...(docSnap.data() || {}),
+        }));
+      });
+      return buildClientStats(applyStaffScopeFilter(records));
+    } catch (error) {
+      console.error('[Stats] collect failed', error);
+      return buildClientStats([]);
+    }
+  }
+  window.calculateStats = calculateStats;
+
+  function normalizeLeadSourceKey(source) {
+    const raw = String(source || '').trim().toLowerCase();
+    if (!raw) return 'unknown';
+    if (
+      raw.includes('instagram')
+      || raw.includes('insta')
+      || raw.includes('インスタ')
+      || raw.includes('인스타')
+      || raw.includes('小红书')
+    ) return 'instagram';
+    if (
+      raw === 'hp'
+      || raw.includes('homepage')
+      || raw.includes('website')
+      || raw.includes('site web')
+      || raw.includes('site')
+      || raw.includes('ホームページ')
+      || raw.includes('官网')
+      || raw.includes('웹사이트')
+    ) return 'homepage';
+    if (
+      raw.includes('referral')
+      || raw.includes('referido')
+      || raw.includes('recommand')
+      || raw.includes('추천')
+      || raw.includes('紹介')
+      || raw.includes('口コミ')
+      || raw.includes('口碑')
+    ) return 'referral';
+    if (
+      raw.includes('other')
+      || raw.includes('autre')
+      || raw.includes('otro')
+      || raw.includes('その他')
+      || raw.includes('기타')
+      || raw.includes('其他')
+    ) return 'other';
+    return 'other';
+  }
+
+  function getLeadSourceLabel(source) {
+    const safeSource = normalizeLeadSourceKey(source);
+    if (safeSource === 'instagram') return t('leadSourceInstagram');
+    if (safeSource === 'homepage' || safeSource === 'website') return t('leadSourceHomepage');
+    if (safeSource === 'referral') return t('leadSourceReferral');
+    if (safeSource === 'other') return t('leadSourceOther');
+    return t('leadSourceUnknown') || t('leadSourceOther') || 'Unknown';
+  }
+
+  function renderAnalysisCharts(stats) {
+    if (!canCurrentUserViewStats()) return;
+    if (typeof window.Chart === 'undefined') return;
+    const contractsCanvas = document.getElementById('analysisContractsChart');
+    const leadSourceCanvas = document.getElementById('analysisLeadSourceChart');
+    const chartYear = selectedDashboardMonth instanceof Date
+      ? selectedDashboardMonth.getFullYear()
+      : new Date().getFullYear();
+    const monthLabels = getDashboardChartMonthLabels();
+    const monthlyContracts = monthLabels.map((_, index) => {
+      const monthKey = `${chartYear}-${String(index + 1).padStart(2, '0')}`;
+      return Number(stats?.monthlyContractCounts?.[monthKey] || 0);
+    });
+
+    if (contractsCanvas) {
+      const contractsCtx = contractsCanvas.getContext('2d');
+      if (contractsCtx) {
+        if (!analysisContractsChartInstance) {
+          analysisContractsChartInstance = new window.Chart(contractsCtx, {
+            type: 'bar',
+            data: {
+              labels: monthLabels,
+              datasets: [
+                {
+                  label: t('analysisMonthlyContracts'),
+                  data: monthlyContracts,
+                  backgroundColor: 'rgba(59, 130, 246, 0.55)',
+                  borderColor: 'rgba(59, 130, 246, 0.9)',
+                  borderWidth: 1,
+                  borderRadius: 10,
+                  maxBarThickness: 24,
+                },
+              ],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { display: false },
+              },
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  ticks: {
+                    precision: 0,
+                    color: '#64748b',
+                  },
+                  grid: {
+                    color: 'rgba(148, 163, 184, 0.2)',
+                  },
+                },
+                x: {
+                  ticks: {
+                    color: '#64748b',
+                  },
+                  grid: {
+                    display: false,
+                  },
+                },
+              },
+            },
+          });
+        } else {
+          analysisContractsChartInstance.data.labels = monthLabels;
+          analysisContractsChartInstance.data.datasets[0].label = t('analysisMonthlyContracts');
+          analysisContractsChartInstance.data.datasets[0].data = monthlyContracts;
+          analysisContractsChartInstance.update();
+        }
+      }
+    }
+
+    const leadSourceEntries = Object.entries(stats?.leadSourceCounts || {})
+      .filter(([, count]) => Number(count) > 0)
+      .sort((a, b) => Number(b[1]) - Number(a[1]));
+    const leadSourceLabels = leadSourceEntries.map(([source]) => getLeadSourceLabel(source));
+    const leadSourceValues = leadSourceEntries.map(([, count]) => Number(count));
+
+    if (!leadSourceCanvas) return;
+    const leadCtx = leadSourceCanvas.getContext('2d');
+    if (!leadCtx) return;
+
+    if (leadSourceValues.length === 0) {
+      if (analysisLeadSourceChartInstance) {
+        analysisLeadSourceChartInstance.destroy();
+        analysisLeadSourceChartInstance = null;
+      }
+      return;
+    }
+
+    const piePalette = [
+      '#3b82f6',
+      '#10b981',
+      '#f59e0b',
+      '#8b5cf6',
+      '#f97316',
+      '#64748b',
+    ];
+
+    if (!analysisLeadSourceChartInstance) {
+      analysisLeadSourceChartInstance = new window.Chart(leadCtx, {
+        type: 'doughnut',
+        data: {
+          labels: leadSourceLabels,
+          datasets: [
+            {
+              label: t('analysisLeadSource'),
+              data: leadSourceValues,
+              backgroundColor: piePalette.slice(0, leadSourceValues.length),
+              borderColor: 'rgba(15, 23, 42, 0.15)',
+              borderWidth: 1,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: {
+                usePointStyle: true,
+                pointStyle: 'circle',
+                color: '#64748b',
+              },
+            },
+          },
+        },
+      });
+    } else {
+      analysisLeadSourceChartInstance.data.labels = leadSourceLabels;
+      analysisLeadSourceChartInstance.data.datasets[0].label = t('analysisLeadSource');
+      analysisLeadSourceChartInstance.data.datasets[0].data = leadSourceValues;
+      analysisLeadSourceChartInstance.data.datasets[0].backgroundColor = piePalette.slice(0, leadSourceValues.length);
+      analysisLeadSourceChartInstance.update();
+    }
+  }
+
+  function renderAnalysisFoundation(stats) {
+    if (!canCurrentUserViewStats()) return;
+    const monthlyEl = document.getElementById('analysis-monthly-contracts-preview');
+    const leadSourceEl = document.getElementById('analysis-lead-source-preview');
+    const conversionEl = document.getElementById('analysis-conversion-rate');
+    const emptyMessageEl = document.getElementById('analysis-empty-message');
+    if (!monthlyEl && !leadSourceEl && !conversionEl && !emptyMessageEl) return;
+
+    const safeStats = stats && typeof stats === 'object' ? stats : buildClientStats([]);
+    const chartYear = selectedDashboardMonth instanceof Date
+      ? selectedDashboardMonth.getFullYear()
+      : new Date().getFullYear();
+
+    const monthlyEntries = Object.entries(safeStats.monthlyContractCounts || {})
+      .filter(([monthKey]) => monthKey.startsWith(`${chartYear}-`))
+      .sort((a, b) => a[0].localeCompare(b[0]));
+    const monthlyPreview = monthlyEntries.length > 0
+      ? monthlyEntries.map(([monthKey, count]) => `${monthKey}: ${count}`).join(' / ')
+      : '—';
+    const leadEntries = Object.entries(safeStats.leadSourceShares || {})
+      .sort((a, b) => b[1] - a[1]);
+    const leadPreview = leadEntries.length > 0
+      ? leadEntries.map(([source, ratio]) => `${getLeadSourceLabel(source)} ${ratio}%`).join(' / ')
+      : '—';
+
+    if (monthlyEl) monthlyEl.textContent = monthlyPreview;
+    if (leadSourceEl) leadSourceEl.textContent = leadPreview;
+    if (conversionEl) conversionEl.textContent = `${toSafeNumber(safeStats.conversionRate, 0).toFixed(1)}%`;
+
+    if (emptyMessageEl) {
+      const hasData = Number(safeStats.totalClients || 0) > 0;
+      emptyMessageEl.style.display = hasData ? 'none' : 'block';
+    }
+
+    renderAnalysisCharts(safeStats);
+  }
+
   function renderRevenueChart(year) {
+    if (!canCurrentUserViewStats()) return;
     const canvas = document.getElementById('revenueChart');
     if (!canvas || typeof window.Chart === 'undefined') return;
     const ctx = canvas.getContext('2d');
@@ -4639,6 +5615,7 @@
   }
 
   function renderRequestTrendChart(year) {
+    if (!canCurrentUserViewStats()) return;
     const canvas = document.getElementById('requestTrendChart');
     if (!canvas || typeof window.Chart === 'undefined') return;
     const ctx = canvas.getContext('2d');
@@ -4745,6 +5722,25 @@
   }
 
   function updateDashboard() {
+    if (!canCurrentUserViewStats()) {
+      if (revenueProfitChartInstance) {
+        revenueProfitChartInstance.destroy();
+        revenueProfitChartInstance = null;
+      }
+      if (requestTrendChartInstance) {
+        requestTrendChartInstance.destroy();
+        requestTrendChartInstance = null;
+      }
+      if (analysisContractsChartInstance) {
+        analysisContractsChartInstance.destroy();
+        analysisContractsChartInstance = null;
+      }
+      if (analysisLeadSourceChartInstance) {
+        analysisLeadSourceChartInstance.destroy();
+        analysisLeadSourceChartInstance = null;
+      }
+      return;
+    }
     const total = customers.length;
     const { year, month } = getMonthRange(selectedDashboardMonth);
 
@@ -4808,6 +5804,7 @@
     if ($('#yearly-revenue-label')) $('#yearly-revenue-label').textContent = t('yearlyRevenueTotal');
     if ($('#yearly-profit-label')) $('#yearly-profit-label').textContent = t('yearlyProfitTotal');
     if ($('#yearly-expense-label')) $('#yearly-expense-label').textContent = t('yearlyExpenseTotal');
+    renderAnalysisFoundation(buildClientStats(customers));
     if (isGraphVisible || revenueProfitChartInstance || requestTrendChartInstance) {
       renderRevenueChart(year);
       renderRequestTrendChart(year);
@@ -4837,7 +5834,7 @@
 
   // ===== Filter & Sort =====
   function getFilteredCustomers() {
-    let list = [...customers];
+    let list = applyStaffScopeFilter(customers);
     const query = (searchInput?.value || '').trim().toLowerCase();
     if (query) {
       list = list.filter(c =>
@@ -4989,31 +5986,42 @@
         const classAttr = classList.length ? ` class="${classList.join(' ')}"` : '';
         return `<td data-column-key="${column.key}"${classAttr}>${renderCustomerColumnValue(c, column.key, 'table')}</td>`;
       }).join('');
+      const canEditCustomer = canCurrentUserEditCustomer(c);
+      const canDeleteCustomer = canCurrentUserDeleteCustomer(c);
+      const editButtonHtml = canEditCustomer
+        ? `<button type="button" class="table-action-btn action-btn btn-edit" title="${escapeHtml(actionLabels.edit)}" aria-label="${escapeHtml(actionLabels.edit)}" onclick="openModal('${c.id}')">
+              <span class="table-action-icon">✏️</span>
+              <span class="table-action-label">${escapeHtml(actionLabels.edit)}</span>
+            </button>`
+        : '';
+      const deleteButtonHtml = canDeleteCustomer
+        ? `<button type="button" class="table-action-btn action-btn action-btn-delete btn-del" title="${escapeHtml(actionLabels.delete)}" aria-label="${escapeHtml(actionLabels.delete)}" onclick="openConfirm('${c.id}')">
+              <span class="table-action-icon">🗑</span>
+              <span class="table-action-label">${escapeHtml(actionLabels.delete)}</span>
+            </button>`
+        : '';
+      const sharedActionButtonsHtml = `
+        ${editButtonHtml}
+        <button type="button" class="table-action-btn action-btn" title="${escapeHtml(actionLabels.detail)}" aria-label="${escapeHtml(actionLabels.detail)}" onclick="openCustomerDetailByID('${c.id}')">
+          <span class="table-action-icon">📄</span>
+          <span class="table-action-label">${escapeHtml(actionLabels.detail)}</span>
+        </button>
+        <button type="button" class="table-action-btn action-btn" title="${escapeHtml(actionLabels.contract)}" aria-label="${escapeHtml(actionLabels.contract)}" onclick="openContractModalByID('${c.id}')">
+          <span class="table-action-icon">📋</span>
+          <span class="table-action-label">${escapeHtml(actionLabels.contract)}</span>
+        </button>
+        <button type="button" class="table-action-btn action-btn" title="${escapeHtml(actionLabels.history)}" aria-label="${escapeHtml(actionLabels.history)}" onclick="openCustomerHistoryByID('${c.id}')">
+          <span class="table-action-icon">📜</span>
+          <span class="table-action-label">${escapeHtml(actionLabels.history)}</span>
+        </button>
+        ${deleteButtonHtml}
+      `;
 
       tr.innerHTML = `
         ${dataCells}
         <td data-column-key="actions">
           <div class="table-action-group action-buttons">
-            <button type="button" class="table-action-btn action-btn btn-edit" title="${escapeHtml(actionLabels.edit)}" aria-label="${escapeHtml(actionLabels.edit)}" onclick="openModal('${c.id}')">
-              <span class="table-action-icon">✏️</span>
-              <span class="table-action-label">${escapeHtml(actionLabels.edit)}</span>
-            </button>
-            <button type="button" class="table-action-btn action-btn" title="${escapeHtml(actionLabels.detail)}" aria-label="${escapeHtml(actionLabels.detail)}" onclick="openCustomerDetailByID('${c.id}')">
-              <span class="table-action-icon">📄</span>
-              <span class="table-action-label">${escapeHtml(actionLabels.detail)}</span>
-            </button>
-            <button type="button" class="table-action-btn action-btn" title="${escapeHtml(actionLabels.contract)}" aria-label="${escapeHtml(actionLabels.contract)}" onclick="openContractModalByID('${c.id}')">
-              <span class="table-action-icon">📋</span>
-              <span class="table-action-label">${escapeHtml(actionLabels.contract)}</span>
-            </button>
-            <button type="button" class="table-action-btn action-btn" title="${escapeHtml(actionLabels.history)}" aria-label="${escapeHtml(actionLabels.history)}" onclick="openCustomerHistoryByID('${c.id}')">
-              <span class="table-action-icon">📜</span>
-              <span class="table-action-label">${escapeHtml(actionLabels.history)}</span>
-            </button>
-            <button type="button" class="table-action-btn action-btn action-btn-delete btn-del" title="${escapeHtml(actionLabels.delete)}" aria-label="${escapeHtml(actionLabels.delete)}" onclick="openConfirm('${c.id}')">
-              <span class="table-action-icon">🗑</span>
-              <span class="table-action-label">${escapeHtml(actionLabels.delete)}</span>
-            </button>
+            ${sharedActionButtonsHtml}
           </div>
         </td>
       `;
@@ -5065,26 +6073,7 @@
             <div class="customer-card-mobile-note" title="${escapeHtml(`${noteLabel}: ${noteValue}`)}">${escapeHtml(`${noteLabel}: ${noteValue}`)}</div>
           </div>
           <div class="customer-card-actions action-buttons">
-            <button type="button" class="table-action-btn action-btn btn-edit" title="${escapeHtml(actionLabels.edit)}" aria-label="${escapeHtml(actionLabels.edit)}" onclick="openModal('${c.id}')">
-              <span class="table-action-icon">✏️</span>
-              <span class="table-action-label">${escapeHtml(actionLabels.edit)}</span>
-            </button>
-            <button type="button" class="table-action-btn action-btn" title="${escapeHtml(actionLabels.detail)}" aria-label="${escapeHtml(actionLabels.detail)}" onclick="openCustomerDetailByID('${c.id}')">
-              <span class="table-action-icon">📄</span>
-              <span class="table-action-label">${escapeHtml(actionLabels.detail)}</span>
-            </button>
-            <button type="button" class="table-action-btn action-btn" title="${escapeHtml(actionLabels.contract)}" aria-label="${escapeHtml(actionLabels.contract)}" onclick="openContractModalByID('${c.id}')">
-              <span class="table-action-icon">📋</span>
-              <span class="table-action-label">${escapeHtml(actionLabels.contract)}</span>
-            </button>
-            <button type="button" class="table-action-btn action-btn" title="${escapeHtml(actionLabels.history)}" aria-label="${escapeHtml(actionLabels.history)}" onclick="openCustomerHistoryByID('${c.id}')">
-              <span class="table-action-icon">📜</span>
-              <span class="table-action-label">${escapeHtml(actionLabels.history)}</span>
-            </button>
-            <button type="button" class="table-action-btn action-btn action-btn-delete btn-del" title="${escapeHtml(actionLabels.delete)}" aria-label="${escapeHtml(actionLabels.delete)}" onclick="openConfirm('${c.id}')">
-              <span class="table-action-icon">🗑</span>
-              <span class="table-action-label">${escapeHtml(actionLabels.delete)}</span>
-            </button>
+            ${sharedActionButtonsHtml}
           </div>
         `;
         card.addEventListener('click', (e) => {
@@ -5292,18 +6281,20 @@
     bindEventOnce(filterPhotographer, 'change', renderTable, 'toolbar-filter-photographer');
   }
 
-  function shouldSyncGoogleCalendarEvent(previousCustomer, nextCustomer) {
+  function shouldSyncGoogleCalendarEvent(previousCustomer, nextCustomer, user = null) {
     if (!canUseCalendarSyncFeature()) return false;
     if (!nextCustomer || !String(nextCustomer.shootingDate || '').trim()) return false;
     const hasPerCustomerSync = nextCustomer.syncGoogleCalendar === true;
     if (!hasPerCustomerSync && !googleCalendarAutoSyncEnabled) return false;
     if (nextCustomer.syncGoogleCalendar === false) return false;
+    const currentSyncState = getCustomerCalendarSyncState(nextCustomer, user);
+    const previousSyncState = getCustomerCalendarSyncState(previousCustomer, user);
     const targetCalendarId = getTargetGoogleCalendarId();
-    if (String(nextCustomer.google_event_calendar_id || '').trim() !== targetCalendarId) return true;
+    if (String(currentSyncState.calendarId || '').trim() !== targetCalendarId) return true;
     if (!previousCustomer) return true;
     if (!String(previousCustomer.shootingDate || '').trim()) return true;
     if ((previousCustomer.shootingDate || '') !== (nextCustomer.shootingDate || '')) return true;
-    if (!String(nextCustomer.google_event_id || '').trim()) return true;
+    if (!String(currentSyncState.eventId || '').trim()) return true;
     return (
       (previousCustomer.customerName || '') !== (nextCustomer.customerName || '')
       || (previousCustomer.plan || '') !== (nextCustomer.plan || '')
@@ -5313,7 +6304,66 @@
       || normalizeTimeString(previousCustomer.endTime) !== normalizeTimeString(nextCustomer.endTime)
       || !!previousCustomer.syncGoogleCalendar !== !!nextCustomer.syncGoogleCalendar
       || toSafeNumber(previousCustomer.revenue, 0) !== toSafeNumber(nextCustomer.revenue, 0)
+      || String(previousSyncState.eventId || '') !== String(currentSyncState.eventId || '')
+      || String(previousSyncState.calendarId || '') !== String(currentSyncState.calendarId || '')
     );
+  }
+
+  function getCalendarSyncActorUid(user = null) {
+    const resolvedUser = user || firebase.auth().currentUser || window.FirebaseService?.getCurrentUser?.() || null;
+    return String(resolvedUser?.uid || '').trim();
+  }
+
+  function getCustomerCalendarSyncMap(customer) {
+    const raw = customer?.calendarSyncByUser;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+    const normalized = {};
+    Object.entries(raw).forEach(([uid, entry]) => {
+      const safeUid = String(uid || '').trim();
+      if (!safeUid) return;
+      const safeEntry = entry && typeof entry === 'object' ? entry : {};
+      const eventId = String(safeEntry.eventId || safeEntry.google_event_id || '').trim();
+      const calendarId = String(safeEntry.calendarId || safeEntry.google_event_calendar_id || '').trim();
+      if (!eventId && !calendarId) return;
+      normalized[safeUid] = { eventId, calendarId };
+    });
+    return normalized;
+  }
+
+  function getCustomerCalendarSyncState(customer, user = null) {
+    const actorUid = getCalendarSyncActorUid(user);
+    const syncMap = getCustomerCalendarSyncMap(customer);
+    const actorSync = actorUid ? syncMap[actorUid] : null;
+    return {
+      actorUid,
+      eventId: String(actorSync?.eventId || customer?.google_event_id || customer?.calendarEventId || '').trim(),
+      calendarId: String(actorSync?.calendarId || customer?.google_event_calendar_id || '').trim(),
+      map: syncMap,
+    };
+  }
+
+  function setCustomerCalendarSyncState(customer, user = null, nextState = {}) {
+    const actorUid = getCalendarSyncActorUid(user);
+    const baseCustomer = customer && typeof customer === 'object' ? customer : {};
+    const syncMap = getCustomerCalendarSyncMap(baseCustomer);
+    const eventId = String(nextState?.eventId || '').trim();
+    const calendarId = String(nextState?.calendarId || '').trim();
+
+    if (actorUid) {
+      if (eventId || calendarId) {
+        syncMap[actorUid] = { eventId, calendarId };
+      } else {
+        delete syncMap[actorUid];
+      }
+    }
+
+    return {
+      ...baseCustomer,
+      calendarSyncByUser: syncMap,
+      google_event_id: eventId,
+      calendarEventId: eventId,
+      google_event_calendar_id: calendarId,
+    };
   }
 
   function toLocalDateTimeString(date) {
@@ -5324,6 +6374,34 @@
     const mm = String(date.getMinutes()).padStart(2, '0');
     const ss = String(date.getSeconds()).padStart(2, '0');
     return `${y}-${m}-${d}T${hh}:${mm}:${ss}`;
+  }
+
+  function getBrowserTimeZone() {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return String(tz || '').trim() || 'UTC';
+  }
+
+  function toOffsetDateTimeString(date) {
+    const base = toLocalDateTimeString(date);
+    const offsetMinutes = -date.getTimezoneOffset();
+    const sign = offsetMinutes >= 0 ? '+' : '-';
+    const absMinutes = Math.abs(offsetMinutes);
+    const hours = String(Math.floor(absMinutes / 60)).padStart(2, '0');
+    const minutes = String(absMinutes % 60).padStart(2, '0');
+    return `${base}${sign}${hours}:${minutes}`;
+  }
+
+  function parseLocalDateTimeFromRaw(rawDateTime) {
+    const text = String(rawDateTime || '').trim();
+    const matched = text.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+    if (!matched) return null;
+    const year = Number(matched[1]);
+    const month = Number(matched[2]) - 1;
+    const day = Number(matched[3]);
+    const hour = Number(matched[4]);
+    const minute = Number(matched[5]);
+    const date = new Date(year, month, day, hour, minute, 0, 0);
+    return Number.isNaN(date.getTime()) ? null : date;
   }
 
   function toTimeString(dateValue) {
@@ -5371,7 +6449,7 @@
     if (!rawDate) return null;
 
     if (rawDate.includes('T') && !rawStartTime && !rawEndTime) {
-      const startDate = new Date(rawDate);
+      const startDate = parseLocalDateTimeFromRaw(rawDate) || new Date(rawDate);
       if (Number.isNaN(startDate.getTime())) return null;
       const endDate = new Date(startDate.getTime() + (60 * 60 * 1000));
       return { startDate, endDate };
@@ -5469,7 +6547,7 @@
     const range = resolveShootingEventDateRange(customer);
     if (!range) return null;
 
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    const timeZone = getBrowserTimeZone();
     const customerName = customer?.customerName || t('icsUnset');
     const planName = resolveCustomerPlanName(customer);
     const summary = t('googleCalendarEventTitle', { customer: customerName });
@@ -5485,17 +6563,17 @@
       description: descriptionLines.join('\n'),
       location: customer?.location || '',
       start: {
-        dateTime: toLocalDateTimeString(range.startDate),
+        dateTime: toOffsetDateTimeString(range.startDate),
         timeZone,
       },
       end: {
-        dateTime: toLocalDateTimeString(range.endDate),
+        dateTime: toOffsetDateTimeString(range.endDate),
         timeZone,
       },
     };
   }
 
-  async function upsertGoogleCalendarEvent(customer) {
+  async function upsertGoogleCalendarEvent(customer, user = null) {
     const payload = buildGoogleCalendarEventPayload(customer);
     if (!payload) return null;
     const accessToken = await ensureGoogleCalendarAccessToken();
@@ -5505,9 +6583,11 @@
 
     const calendarId = getTargetGoogleCalendarId();
     const baseUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
-    const existingEventId = String(customer?.google_event_id || '').trim();
-    const existingEventCalendarId = String(customer?.google_event_calendar_id || '').trim();
-    const shouldUpdateExisting = !!existingEventId && existingEventCalendarId === calendarId;
+    const syncState = getCustomerCalendarSyncState(customer, user);
+    const existingEventId = syncState.eventId;
+    const existingEventCalendarId = syncState.calendarId;
+    const shouldUpdateExisting = !!existingEventId
+      && (!existingEventCalendarId || existingEventCalendarId === calendarId);
     const endpoint = shouldUpdateExisting
       ? `${baseUrl}/${encodeURIComponent(existingEventId)}?key=${encodeURIComponent(GOOGLE_CALENDAR_API_KEY)}`
       : `${baseUrl}?key=${encodeURIComponent(GOOGLE_CALENDAR_API_KEY)}`;
@@ -5533,30 +6613,35 @@
     };
   }
 
-  async function runGoogleCalendarAutoSync(customerId, previousCustomer = null) {
-    if (!googleCalendarAutoSyncEnabled) return;
+  async function runGoogleCalendarAutoSync(customerId, previousCustomer = null, user = null) {
     const customerIndex = customers.findIndex((entry) => entry.id === customerId);
     if (customerIndex === -1) return;
 
     const currentCustomer = customers[customerIndex];
-    if (!shouldSyncGoogleCalendarEvent(previousCustomer, currentCustomer)) return;
+    if (!shouldSyncGoogleCalendarEvent(previousCustomer, currentCustomer, user)) return;
 
     try {
-      const eventData = await upsertGoogleCalendarEvent(currentCustomer);
+      const eventData = await upsertGoogleCalendarEvent(currentCustomer, user);
       const nextEventId = String(eventData?.id || '').trim();
       if (!nextEventId) return;
 
-      const currentEventId = String(currentCustomer.google_event_id || '').trim();
+      const currentSyncState = getCustomerCalendarSyncState(currentCustomer, user);
+      const currentEventId = currentSyncState.eventId;
       const nextEventCalendarId = String(eventData?.__calendarId || getTargetGoogleCalendarId()).trim();
-      const currentEventCalendarId = String(currentCustomer.google_event_calendar_id || '').trim();
+      const currentEventCalendarId = currentSyncState.calendarId;
 
       if (nextEventId !== currentEventId || nextEventCalendarId !== currentEventCalendarId) {
-        customers[customerIndex] = {
-          ...currentCustomer,
-          google_event_id: nextEventId,
-          google_event_calendar_id: nextEventCalendarId,
-          updatedAt: new Date().toISOString(),
-        };
+        customers[customerIndex] = setCustomerCalendarSyncState(
+          {
+            ...currentCustomer,
+            updatedAt: new Date().toISOString(),
+          },
+          user,
+          {
+            eventId: nextEventId,
+            calendarId: nextEventCalendarId,
+          }
+        );
         saveCustomers(customers);
       }
       showToast(t('googleCalendarSyncSuccess'));
@@ -5577,12 +6662,24 @@
     if (!savedCustomerId) return;
     await runGoogleCalendarAutoSync(
       savedCustomerId,
-      previousCustomer ? { ...previousCustomer } : null
+      previousCustomer ? { ...previousCustomer } : null,
+      resolvedUser
     );
   }
 
   // ===== Add / Edit Modal =====
   window.openModal = function (id) {
+    if (!id && !canCurrentUserCreateOrSave()) {
+      showToast(t('staffViewerReadonly'), 'error');
+      return;
+    }
+    if (id) {
+      const targetCustomer = customers.find((entry) => entry.id === id);
+      if (targetCustomer && !canCurrentUserEditCustomer(targetCustomer)) {
+        showToast(t('staffEditorOwnOnly'), 'error');
+        return;
+      }
+    }
     if (!id && !checkCustomerLimit()) return;
     editingId = id || null;
     isExpenseManuallyEdited = false;
@@ -5767,12 +6864,12 @@
     }
   }
 
-  function assertCustomerWriteAccess(record = null) {
+  function assertCustomerWriteAccess(record = null, action = 'edit') {
     if (isCalendarSyncAdminOverrideUser()) return;
-    const currentUid = String(window.FirebaseService?.getCurrentUser?.()?.uid || '').trim();
-    if (!currentUid || !record || typeof record !== 'object') return;
-    const ownerUid = String(record.userId || '').trim();
-    if (ownerUid && ownerUid !== currentUid) {
+    const allowed = action === 'delete'
+      ? canCurrentUserDeleteCustomer(record)
+      : canCurrentUserEditCustomer(record);
+    if (!allowed) {
       const err = new Error('Cross-user write operation blocked.');
       err.code = 'permission-denied';
       throw err;
@@ -5784,8 +6881,13 @@
     if (saveButton?.disabled) return;
     const user = firebase.auth().currentUser;
     if (!user?.uid) {
-      console.error('[SAVE] 未ログイン: 保存を中断');
+      console.error('[SAVE] currentUser が null: 保存中断');
       showToast(getLocaleTextOrFallback('msgErrorAuthRequired', 'ログイン状態を確認してください。再ログイン後にお試しください。'), 'error');
+      alert('ログインが確認できません。再ログインしてください。');
+      return;
+    }
+    if (!canCurrentUserCreateOrSave()) {
+      showToast(t('staffViewerReadonly'), 'error');
       return;
     }
     const name = $('#form-customerName').value.trim();
@@ -5798,6 +6900,7 @@
     let payloadForDebug = null;
     let firestorePayloadForDebug = null;
     const currentUidForDebug = String(user.uid || '').trim();
+    const ownerUidForDebug = getActiveDataOwnerUid(currentUidForDebug);
     console.log('[SAVE] 関数: window.saveCustomer');
     console.log('[SAVE] 現在ログインしているユーザーのUID:', currentUidForDebug || '(empty)');
 
@@ -5817,8 +6920,8 @@
         else if (f.type === 'number') data[f.key] = el.value === '' ? '' : Number(el.value);
         else data[f.key] = el.value || '';
       });
-      if (String(user.uid || '').trim()) data.userId = String(user.uid || '').trim();
-      data.uid = String(user.uid || '').trim();
+      if (ownerUidForDebug) data.userId = ownerUidForDebug;
+      data.uid = ownerUidForDebug;
       data.createdAt = data.createdAt || firebase.firestore.FieldValue.serverTimestamp();
       const normalizedStartTime = normalizeTimeString(data.startTime) || '';
       data.startTime = normalizedStartTime;
@@ -5829,7 +6932,20 @@
       if (!isFormFieldVisible('assignedTo') && !String(data.assignedTo || '').trim()) {
         data.assignedTo = resolveDefaultAssignedToValue();
       }
+      const assignedToValue = String(data.assignedTo || '').trim();
+      data.assignedTo = assignedToValue;
+      data.assignedStaffEmail = assignedToValue
+        ? (
+          resolveAssignedStaffEmail(assignedToValue, data.assignedStaffEmail)
+          || getCurrentUserEmail()
+        )
+        : '';
       data.workflowStatus = normalizeWorkflowStatus(data.workflowStatus);
+      data.status = data.workflowStatus;
+      data.inquiryDate = String(data.inquiryDate || '');
+      data.contractDate = String(data.contractDate || '');
+      data.leadSource = String(data.leadSource || '').trim();
+      data.plan = String(data.plan || data.planMasterId || '');
 
       const customFields = {};
       loadCustomFieldDefinitions().forEach(field => {
@@ -5914,7 +7030,26 @@
           throw notFoundError;
         }
         assertCustomerWriteAccess(customers[idx]);
-        customers[idx] = { ...customers[idx], ...data, updatedAt: new Date().toISOString() };
+        const existingRecord = customers[idx];
+        const existingSyncState = getCustomerCalendarSyncState(existingRecord, user);
+        const existingEventId = String(existingSyncState.eventId || '').trim();
+        const existingEventCalendarId = String(existingSyncState.calendarId || '').trim();
+        const nextEventId = String(data.google_event_id || data.calendarEventId || existingEventId).trim();
+        const nextEventCalendarId = String(data.google_event_calendar_id || existingEventCalendarId).trim();
+        data.id = editingId;
+        const mergedRecord = {
+          ...customers[idx],
+          ...data,
+          updatedAt: new Date().toISOString(),
+        };
+        customers[idx] = setCustomerCalendarSyncState(
+          mergedRecord,
+          user,
+          {
+            eventId: nextEventId,
+            calendarId: nextEventCalendarId,
+          }
+        );
       } else {
         data.id = generateId();
         data.createdAt = new Date().toISOString();
@@ -5923,17 +7058,20 @@
       }
 
       firestorePayloadForDebug = withCurrentUserId(sanitizeCustomerListForSave(customers));
-      console.log('[SAVE] 保存直前のデータ:', JSON.stringify(data, null, 2));
-      console.log('[SAVE] 認証ユーザー:', user.uid, user.email || '');
-      console.log('[SAVE] 書き込み先: customers');
-      console.log('[SAVE] Firestoreに送ろうとしている全データ:', JSON.stringify(firestorePayloadForDebug, null, 2));
-      data = sanitizeCustomerRecordForSave({
+      const customerData = sanitizeCustomerRecordForSave({
         ...data,
-        uid: String(user.uid || '').trim(),
-        userId: String(user.uid || '').trim(),
+        uid: ownerUidForDebug,
+        userId: ownerUidForDebug,
+        createdAt: data.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       });
-      await db.collection('customers').add(data);
-      saveLocalValue(STORAGE_KEY, customers);
+      console.log('[SAVE] 保存直前のデータ:', JSON.stringify(customerData, null, 2));
+      console.log('[SAVE] 認証ユーザー:', user.uid, user.email || '');
+      console.log('[SAVE] 書き込み先:', `users/${ownerUidForDebug}/clients`);
+      console.log('[SAVE] Firestoreに送ろうとしている全データ:', JSON.stringify(firestorePayloadForDebug, null, 2));
+      console.log('[SAVE] user:', user.uid, user.email);
+      console.log('[SAVE] data:', JSON.stringify(customerData));
+      await saveCustomers(customers, { propagateError: true });
       console.log('[SAVE] Firestore保存: 成功');
 
       showToast(editingId ? t('msgUpdated') : t('msgCreated'));
@@ -5942,7 +7080,7 @@
       if (calendarView.classList.contains('active')) renderCalendar();
 
       try {
-        await syncCalendarIfEligible(user, data, previousCustomer);
+        await syncCalendarIfEligible(user, customerData, previousCustomer);
       } catch (calErr) {
         console.warn('[CALENDAR] 同期失敗（保存は成功済み）:', calErr?.message || calErr);
       }
@@ -5952,6 +7090,7 @@
       const normalizedCode = normalizeOperationErrorCode(err);
       console.error('[SAVE] エラー発生箇所:', 'window.saveCustomer');
       console.error('[SAVE] Firestoreエラー:', err?.code || normalizedCode || 'unknown', err?.message || '');
+      console.error('[ERROR] code:', err?.code || normalizedCode || 'unknown', 'message:', err?.message || '');
       console.error('[SAVE] 認証ユーザーUID:', currentUidForDebug || '(empty)');
       console.error('[SAVE] Firestoreに送ろうとしていたデータ:', JSON.stringify(firestorePayloadForDebug, null, 2));
       console.error('[Customer Save] failed', {
@@ -6020,9 +7159,27 @@
     renderTasks(c);
 
     // Button actions
+    const canEdit = canCurrentUserEditCustomer(c);
+    const canDelete = canCurrentUserDeleteCustomer(c);
+    const detailEditBtn = $('#detail-edit-btn');
+    const detailDeleteBtn = $('#detail-delete-btn');
+    if (detailEditBtn) detailEditBtn.style.display = canEdit ? '' : 'none';
+    if (detailDeleteBtn) detailDeleteBtn.style.display = canDelete ? '' : 'none';
     $('#detail-invoice-btn').onclick = () => { closeDetailModal(); setTimeout(() => openInvoiceBuilderModal(id), 200); };
-    $('#detail-edit-btn').onclick = () => { closeDetailModal(); setTimeout(() => openModal(id), 200); };
-    $('#detail-delete-btn').onclick = () => { closeDetailModal(); setTimeout(() => openConfirm(id), 200); };
+    if (detailEditBtn) {
+      detailEditBtn.onclick = () => {
+        if (!canEdit) return;
+        closeDetailModal();
+        setTimeout(() => openModal(id), 200);
+      };
+    }
+    if (detailDeleteBtn) {
+      detailDeleteBtn.onclick = () => {
+        if (!canDelete) return;
+        closeDetailModal();
+        setTimeout(() => openConfirm(id), 200);
+      };
+    }
 
     detailOverlay.style.display = 'flex';
     setTimeout(() => detailOverlay.classList.add('active'), 10);
@@ -6040,6 +7197,11 @@
 
   // ===== Delete =====
   window.openConfirm = function (id) {
+    const target = customers.find((entry) => entry.id === id);
+    if (target && !canCurrentUserDeleteCustomer(target)) {
+      showToast(t('staffDeleteRestricted'), 'error');
+      return;
+    }
     deletingId = id;
     confirmOverlay.style.display = 'flex';
     setTimeout(() => confirmOverlay.classList.add('active'), 10);
@@ -6070,7 +7232,7 @@
           notFoundError.code = 'not-found';
           throw notFoundError;
         }
-        assertCustomerWriteAccess(target);
+        assertCustomerWriteAccess(target, 'delete');
         customers = customers.filter(c => c.id !== deletingId);
         await saveCustomers(customers, { propagateError: hasCloudAuthenticatedUser() });
         showToast(t('msgDeleted'));
@@ -6497,10 +7659,15 @@
       `;
       }).join('');
 
-    const dashboardRows = dashboardConfig.map((item, index) => {
+    const isStaffUser = isManagedStaffUser();
+    const isAdminUser = isCurrentUserAdmin() && !isStaffUser;
+    const dashboardRowsSource = isStaffUser
+      ? dashboardConfig.filter((item) => item.key === 'monthlyShoots')
+      : dashboardConfig;
+    const dashboardRows = dashboardRowsSource.map((item, index) => {
       const label = getDashboardCardLabel(item.key);
       const disableUp = index === 0 ? 'disabled' : '';
-      const disableDown = index === dashboardConfig.length - 1 ? 'disabled' : '';
+      const disableDown = index === dashboardRowsSource.length - 1 ? 'disabled' : '';
       const checked = item.visible ? 'checked' : '';
       return `
         <div class="settings-item dashboard-config-row">
@@ -6516,7 +7683,11 @@
       `;
     }).join('');
 
-    const formVisibilityRows = FORM_FIELD_VISIBILITY_DEFINITIONS.map((item) => `
+    const staffAllowedFormVisibility = new Set(['location', 'assignedTo', 'deliveryDate', 'paymentConfirmDate']);
+    const formVisibilityDefinitions = isManagedStaffUser()
+      ? FORM_FIELD_VISIBILITY_DEFINITIONS.filter((item) => staffAllowedFormVisibility.has(item.key))
+      : FORM_FIELD_VISIBILITY_DEFINITIONS;
+    const formVisibilityRows = formVisibilityDefinitions.map((item) => `
       <div class="settings-item dashboard-config-row">
         <label class="dashboard-config-label">
           <input type="checkbox" data-form-visibility-key="${item.key}" ${isFormFieldVisible(item.key) ? 'checked' : ''}>
@@ -6524,9 +7695,28 @@
         </label>
       </div>
     `).join('');
+    const staffDashboardRows = STAFF_DASHBOARD_CARD_KEYS.map((key) => {
+      const checked = staffDashboardConfig?.[key] !== false;
+      const disabled = STAFF_ALWAYS_HIDDEN_DASHBOARD_KEYS.has(key);
+      const disabledText = disabled ? ` <small style="color:var(--text-muted);">(${escapeHtml(getLocaleTextOrFallback('staffFinancialHidden', 'スタッフ非表示固定'))})</small>` : '';
+      return `
+        <div class="settings-item dashboard-config-row">
+          <label class="dashboard-config-label">
+            <input type="checkbox" data-staff-dashboard-visible="${key}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}>
+            <span>${escapeHtml(getDashboardCardLabel(key))}${disabledText}</span>
+          </label>
+        </div>
+      `;
+    }).join('');
+    const staffDashboardSection = isAdminUser ? `
+      <div class="settings-section" data-settings-section="staff-dashboard">
+        <h3>${escapeHtml(getLocaleTextOrFallback('staffDashboardSectionTitle', 'スタッフ向け表示項目設定'))}</h3>
+        <div class="settings-item-list dashboard-config-list">${staffDashboardRows}</div>
+      </div>
+    ` : '';
 
     container.innerHTML = `
-      <div class="settings-section">
+      <div class="settings-section" data-settings-section="studio">
         <h3>${escapeHtml(t('settingsStudioSection'))}</h3>
         <div class="settings-item dashboard-config-row">
           <label class="dashboard-config-label" for="settings-studio-name">${escapeHtml(t('settingsStudioNameLabel'))}</label>
@@ -6542,7 +7732,7 @@
           <button type="button" class="btn btn-secondary btn-sm settings-text-btn" id="btn-save-studio-name">${escapeHtml(labelSaveSettings)}</button>
         </div>
       </div>
-      <div class="settings-section">
+      <div class="settings-section" data-settings-section="language">
         <h3>${escapeHtml(t('settingsLanguageSection'))}</h3>
         <div class="settings-item dashboard-config-row">
           <label class="dashboard-config-label" for="settings-language-select">${escapeHtml(t('settingsLanguageLabel'))}</label>
@@ -6550,7 +7740,7 @@
         </div>
         <div class="settings-detail-empty">${escapeHtml(t('settingsLanguageHelp'))}</div>
       </div>
-      <div class="settings-section">
+      <div class="settings-section" data-settings-section="currency">
         <h3>${escapeHtml(t('settingsCurrencySection'))}</h3>
         <div class="settings-item dashboard-config-row">
           <label class="dashboard-config-label" for="settings-currency-select">${escapeHtml(t('currency'))}</label>
@@ -6558,7 +7748,7 @@
         </div>
         <div class="settings-detail-empty">${escapeHtml(t('settingsCurrencyHelp'))}</div>
       </div>
-      <div class="settings-section">
+      <div class="settings-section" data-settings-section="theme">
         <h3>${escapeHtml(t('themeColorSection'))}</h3>
         <div class="settings-item dashboard-config-row">
           <label class="dashboard-config-label" for="theme-color-picker">${escapeHtml(t('themeColorLabel'))}</label>
@@ -6577,7 +7767,7 @@
         </div>
         <div class="settings-detail-empty">${escapeHtml(t('themeColorHelp'))}</div>
       </div>
-      <div class="settings-section">
+      <div class="settings-section" data-settings-section="plan">
         <h3>${escapeHtml(t('settingsPlanSection'))}</h3>
         <div class="settings-item-list">${planRows}</div>
         <div class="settings-add-box settings-add-box-plan">
@@ -6591,7 +7781,7 @@
             </div>
           </div>
       </div>
-      <div class="settings-section">
+      <div class="settings-section" data-settings-section="dynamic">
         <h3>${escapeHtml(t('settingsDynamicSection'))}</h3>
         <div class="settings-item-list">${dynamicItemRows}</div>
         <div class="settings-add-box settings-add-box-dynamic">
@@ -6599,7 +7789,7 @@
           <button type="button" class="btn btn-secondary btn-sm settings-text-btn" id="btn-dynamic-item-add">${escapeHtml(labelAdd)}</button>
         </div>
       </div>
-      <div class="settings-section">
+      <div class="settings-section" data-settings-section="google-calendar">
         <h3>${escapeHtml(t('settingsGoogleCalendarSection'))}</h3>
         <div class="settings-item dashboard-config-row">
           <label class="dashboard-config-label">
@@ -6617,15 +7807,39 @@
         </div>
         <div class="settings-detail-empty" id="settings-google-calendar-status">${escapeHtml(t('settingsGoogleCalendarSelectHelp'))}</div>
       </div>
-      <div class="settings-section">
+      <div class="settings-section" data-settings-section="display">
         <h3>${escapeHtml(t('settingsDisplaySection'))}</h3>
         <div class="settings-item-list dashboard-config-list">${dashboardRows}</div>
       </div>
-      <div class="settings-section">
+      <div class="settings-section" data-settings-section="input-visibility">
         <h3>${escapeHtml(t('settingsInputVisibilitySection'))}</h3>
         <div class="settings-item-list dashboard-config-list">${formVisibilityRows}</div>
       </div>
+      ${staffDashboardSection}
     `;
+
+    if (isManagedStaffUser()) {
+      const allowedSections = new Set(['language', 'currency']);
+      container.querySelectorAll('.settings-section[data-settings-section]').forEach((section) => {
+        const sectionKey = String(section.dataset.settingsSection || '').trim();
+        const shouldHide = !allowedSections.has(sectionKey);
+        section.style.display = shouldHide ? 'none' : '';
+        section.setAttribute('aria-hidden', shouldHide ? 'true' : 'false');
+      });
+      const studioInput = container.querySelector('#settings-studio-name');
+      const saveStudioButton = container.querySelector('#btn-save-studio-name');
+      if (studioInput) {
+        studioInput.readOnly = true;
+        studioInput.disabled = true;
+        studioInput.setAttribute('aria-disabled', 'true');
+      }
+      if (saveStudioButton) {
+        saveStudioButton.disabled = true;
+        saveStudioButton.classList.add('staff-ui-disabled');
+        saveStudioButton.setAttribute('aria-disabled', 'true');
+        saveStudioButton.style.display = 'none';
+      }
+    }
 
     bindEventOnce(container.querySelector('#btn-plan-save'), 'click', savePlanMasterFromForm, 'plan-master-save');
     bindEventOnce(container.querySelector('#btn-plan-reset'), 'click', resetPlanMasterFormInputs, 'plan-master-reset');
@@ -6774,6 +7988,29 @@
       }, `settings-dashboard-visible-${key}`);
     });
 
+    container.querySelectorAll('input[data-staff-dashboard-visible]').forEach((input) => {
+      const key = input.dataset.staffDashboardVisible || '';
+      bindEventOnce(input, 'change', async (e) => {
+        const ownerUid = getActiveDataOwnerUid(window.FirebaseService?.getCurrentUser?.()?.uid);
+        if (!ownerUid) return;
+        const next = {
+          ...staffDashboardConfig,
+          [key]: !!e.target.checked,
+        };
+        staffDashboardConfig = normalizeStaffDashboardConfig(next);
+        e.target.checked = staffDashboardConfig[key] !== false;
+        try {
+          await saveStaffDashboardConfigToCloud(ownerUid, staffDashboardConfig);
+          showToast(t('settingsSaved'));
+        } catch (error) {
+          console.error('[STAFF] staffDashboard save failed', error);
+          showToast(getLocaleTextOrFallback('msgSettingsSaveFailed', '設定の保存に失敗しました。'), 'error');
+        }
+        applyDashboardConfig();
+        applyStaffFeatureVisibilityRestrictions();
+      }, `settings-staff-dashboard-visible-${key}`);
+    });
+
     container.querySelectorAll('button[data-dashboard-move-key]').forEach((button) => {
       const key = button.dataset.dashboardMoveKey || '';
       const direction = Number(button.dataset.dashboardMoveDir || '0');
@@ -6826,6 +8063,7 @@
         applyModalFieldVisibility();
       }, `settings-form-visibility-${key}`);
     });
+    applyStaffFeatureVisibilityRestrictions();
   };
 
   // ===== Toast =====
@@ -6891,37 +8129,86 @@
   }
 
   // Team Management UI
+  async function refreshTeamMembersFromCloud() {
+    if (!isCurrentUserAdmin()) return;
+    const currentUid = String(firebase.auth().currentUser?.uid || '').trim();
+    if (!currentUid) return;
+    const ownerUid = getActiveDataOwnerUid(currentUid);
+    if (!ownerUid) return;
+    try {
+      const teamMembers = await fetchStaffMembersForAdmin(ownerUid);
+      window.TeamManager.savePhotographers(Array.isArray(teamMembers) ? teamMembers : []);
+    } catch (error) {
+      console.error('[TEAM] load failed', error);
+      showToast(t('msgSaveFailed'), 'error');
+    }
+  }
+
   function renderTeamList() {
     const photographers = window.TeamManager.loadPhotographers();
     const container = $('#team-list');
+    if (!container) return;
     container.innerHTML = '';
+    const canManageTeam = canCurrentUserManageAllClients();
+    if (photographers.length === 0) {
+      container.innerHTML = `<div class="settings-detail-empty">${escapeHtml(t('settingsDynamicItemEmpty') || 'No data')}</div>`;
+      return;
+    }
     photographers.forEach(p => {
       const item = document.createElement('div');
       item.className = 'team-member-item';
+      const roleKey = `role${normalizeStaffRole(p.role).charAt(0).toUpperCase()}${normalizeStaffRole(p.role).slice(1)}`;
+      const scopeKey = normalizeStaffViewScope(p.viewScope) === 'team_all' ? 'viewScopeTeamAll' : 'viewScopeOwnOnly';
       item.innerHTML = `
         <div class="team-member-info">
           <h4>${escapeHtml(p.name)}</h4>
-          <p>${t('role' + p.role.charAt(0).toUpperCase() + p.role.slice(1))}</p>
+          <p>${escapeHtml(p.email || '—')} · ${t(roleKey)} · ${t(scopeKey)}</p>
         </div>
-        <button class="btn-icon btn-del-member" data-id="${p.id}">✕</button>
+        ${canManageTeam ? `<button class="btn btn-secondary btn-sm btn-del-member" data-id="${p.id}">🗑️ ${escapeHtml(t('delete'))}</button>` : ''}
       `;
-      item.querySelector('.btn-del-member').onclick = () => {
-        window.TeamManager.removePhotographer(p.id);
-        renderTeamList();
-        renderSettings();
-        renderPlanManagementSection();
-        populateSelects();
-        renderTable();
-      };
+      const removeButton = item.querySelector('.btn-del-member');
+      if (removeButton) {
+        removeButton.onclick = async () => {
+          const ownerUid = getActiveDataOwnerUid();
+          if (!ownerUid || !canCurrentUserManageAllClients()) return;
+          const confirmed = window.confirm(t('staffDeleteConfirm') || 'このスタッフを削除しますか？');
+          if (!confirmed) return;
+          try {
+            const nextTeam = photographers.filter((member) => String(member.id || '') !== String(p.id || ''));
+            await saveStaffDirectoryToCloud(ownerUid, nextTeam);
+            window.TeamManager.savePhotographers(nextTeam);
+            renderTeamList();
+            renderSettings();
+            renderPlanManagementSection();
+            populateSelects();
+            renderTable();
+            showToast(t('msgMemberRemoved'));
+          } catch (error) {
+            console.error('[TEAM] remove failed', error);
+            showToast(t('msgSaveFailed'), 'error');
+          }
+        };
+      }
       container.appendChild(item);
     });
   }
 
   function getPhotographerName(id) {
-    if (!id) return '—';
-    const psychologists = window.TeamManager.loadPhotographers();
-    const p = psychologists.find(x => x.id === id);
-    return p ? p.name : '—';
+    const normalizedId = String(id || '').trim();
+    if (!normalizedId) return t('unassignedStaff');
+    const photographers = window.TeamManager.loadPhotographers();
+    const photographer = photographers.find((item) => {
+      const itemId = String(item?.id || '').trim();
+      const itemEmail = normalizeEmail(item?.email || item?.mail || item?.userEmail || '');
+      return itemId === normalizedId || itemEmail === normalizeEmail(normalizedId);
+    });
+    if (photographer?.name) return photographer.name;
+    const currentUser = window.FirebaseService?.getCurrentUser?.();
+    const currentUserEmail = normalizeEmail(currentUser?.email || '');
+    if (normalizeEmail(normalizedId) === currentUserEmail) {
+      return String(currentUser?.displayName || currentUser?.email || normalizedId);
+    }
+    return normalizedId.includes('@') ? normalizedId : '—';
   }
 
   // ICS Export
@@ -7807,7 +9094,7 @@
     const statusEl = document.getElementById('admin-security-status-mini');
     if (!statusEl) return;
     const normalized = String(state || 'online').trim().toLowerCase();
-    const adminVisible = isCurrentUserAdmin() || !!adminSecurityContext.isAdmin;
+    const adminVisible = isCurrentUserAdmin();
     statusEl.classList.remove('is-error', 'is-online');
     if (!adminVisible) {
       statusEl.style.display = 'none';
@@ -8685,14 +9972,27 @@
   }
 
   function handleAddCustomerClick() {
+    if (!canCurrentUserCreateOrSave()) {
+      showToast(t('staffViewerReadonly'), 'error');
+      return;
+    }
     setMobileHeaderMenuOpen(false);
     openModal();
   }
 
   function handleTeamAddClick() {
+    if (!canCurrentUserManageAllClients()) {
+      showToast(t('staffRoleAdminOnly'), 'error');
+      return;
+    }
     const name = $('#team-new-name')?.value.trim();
+    const email = normalizeEmail($('#team-new-email')?.value || '');
     const role = $('#team-new-role')?.value;
-    if (!name) return;
+    const viewScope = normalizeStaffViewScope($('#team-new-view-scope')?.value || 'own_only');
+    if (!name || !email) {
+      showToast(t('msgMemberEmailRequired'), 'error');
+      return;
+    }
     const nextMemberCount = getCurrentTeamMemberCount() + 1;
     const nextEstimate = calculatePlanEstimate(currentUserPlan, nextMemberCount);
     if (nextEstimate.plan === 'small_team' && nextEstimate.extraMembers > 0 && nextEstimate.extraCost > 0) {
@@ -8710,13 +10010,46 @@
       }));
       if (!confirmedEnterprise) return;
     }
-    window.TeamManager.addPhotographer({ name, role });
-    $('#team-new-name').value = '';
-    renderTeamList();
-    renderSettings();
-    renderPlanManagementSection();
-    populateSelects();
-    showToast(t('msgMemberAdded'));
+    const ownerUid = getActiveDataOwnerUid();
+    if (!ownerUid) {
+      showToast(t('msgErrorAuthRequired'), 'error');
+      return;
+    }
+    (async () => {
+      try {
+        const currentMembers = window.TeamManager.loadPhotographers();
+        const duplicate = currentMembers.find((member) => normalizeEmail(member?.email) === email);
+        if (duplicate) {
+          showToast(t('msgMemberAlreadyExists'), 'error');
+          return;
+        }
+        const newMember = normalizeStaffMemberRecord({
+          id: generateId(),
+          name,
+          email,
+          role: normalizeStaffRole(role),
+          viewScope,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+        const nextMembers = [...currentMembers, newMember];
+        await saveStaffDirectoryToCloud(ownerUid, nextMembers);
+        window.TeamManager.savePhotographers(nextMembers);
+        $('#team-new-name').value = '';
+        const emailInput = $('#team-new-email');
+        if (emailInput) emailInput.value = '';
+        const scopeInput = $('#team-new-view-scope');
+        if (scopeInput) scopeInput.value = 'own_only';
+        renderTeamList();
+        renderSettings();
+        renderPlanManagementSection();
+        populateSelects();
+        showToast(t('msgMemberAdded'));
+      } catch (error) {
+        console.error('[TEAM] add failed', error);
+        showToast(t('msgSaveFailed'), 'error');
+      }
+    })();
   }
 
   function updateSettingsCurrentTabIndicator() {
@@ -8735,7 +10068,24 @@
         settingsOverlay.querySelectorAll('.settings-tab-content').forEach((c) => c.classList.remove('active'));
         btn.classList.add('active');
         const tab = btn.dataset.tab;
-        if (tab === 'team' && !canAccessTeamManagement(currentUserPlan)) {
+        if (tab === 'team' && isManagedStaffUser()) {
+          showToast(t('staffRoleAdminOnly'), 'error');
+          btn.classList.remove('active');
+          const fallbackTab = settingsOverlay?.querySelector('.settings-tab-btn[data-tab="menu"]');
+          const fallbackContent = document.getElementById('settings-content-menu');
+          if (fallbackTab) fallbackTab.classList.add('active');
+          if (fallbackContent) fallbackContent.classList.add('active');
+          updateSettingsCurrentTabIndicator();
+          return;
+        }
+        if (tab === 'plan' && isManagedStaffUser()) {
+          showToast(t('staffRoleAdminOnly'), 'error');
+          btn.classList.remove('active');
+          const fallbackTab = settingsOverlay?.querySelector('.settings-tab-btn[data-tab="menu"]');
+          const fallbackContent = document.getElementById('settings-content-menu');
+          if (fallbackTab) fallbackTab.classList.add('active');
+          if (fallbackContent) fallbackContent.classList.add('active');
+          updateSettingsCurrentTabIndicator();
           return;
         }
         $(`#settings-content-${tab}`)?.classList.add('active');
@@ -8743,7 +10093,11 @@
         if (tab === 'profile') loadBillingProfileSettings();
         if (tab === 'plan') renderPlanManagementSection();
         if (tab === 'contract') loadContractTemplateSettings();
-        if (tab === 'team') renderTeamList();
+        if (tab === 'team') {
+          refreshTeamMembersFromCloud().finally(() => {
+            renderTeamList();
+          });
+        }
         if (tab === 'support') {
           refreshMySupportReplies({ notify: false });
         }
@@ -8758,6 +10112,9 @@
     });
   }
 
+  // OAuth branding note:
+  // Firebase Console > Authentication > Settings > Public-facing name (App Name) を
+  // 「Pholio」に設定すると、Google同意画面の表示名を Pholio に統一できます。
   async function handleGoogleLoginClick() {
     try {
       if (window.location.protocol === 'file:') {
@@ -8786,6 +10143,16 @@
       showToast(t('googleLoginFailed'));
       alert(t('googleLoginFailedAlert'));
     }
+  }
+
+  function rebindOwnerControlsIfNeeded() {
+    if (!isCurrentUserAdmin()) return;
+    bindEventOnce(document.getElementById('btn-settings'), 'click', handleOpenSettingsClick, 'open-settings-click');
+    bindEventOnce(document.getElementById('btn-add'), 'click', handleAddCustomerClick, 'add-customer-click');
+    bindEventOnce(document.getElementById('btn-add-fab'), 'click', handleAddCustomerClick, 'add-customer-fab-click');
+    bindEventOnce(document.getElementById('btn-team-add'), 'click', handleTeamAddClick, 'team-add-click');
+    bindEventOnce(document.getElementById('toggle-stats-btn'), 'click', handleDashboardToggleButtonClick, 'dashboard-toggle-btn-click');
+    bindEventOnce(document.getElementById('btn-list-columns'), 'click', handleListColumnsToggleButtonClick, 'list-columns-toggle-btn-click');
   }
 
   function handleCustomerFormSyncGoogleCalendarToggle(event) {
@@ -8858,8 +10225,7 @@
     });
     bindEventOnce(document.getElementById('btn-theme'), 'click', toggleTheme, 'theme-toggle-click');
     if (ENABLE_STATS_FEATURES) {
-      bindEventOnce(document.getElementById('btn-toggle-dashboard'), 'click', handleDashboardToggleButtonClick, 'dashboard-visibility-toggle');
-      bindEventOnce(document.getElementById('btn-toggle-graph'), 'click', handleGraphToggleButtonClick, 'graph-visibility-toggle');
+      bindEventOnce(document.getElementById('toggle-stats-btn'), 'click', handleDashboardToggleButtonClick, 'dashboard-visibility-toggle');
     }
     bindEventOnce(document.getElementById('btn-list-columns'), 'click', handleListColumnsToggleButtonClick, 'list-columns-toggle');
     bindEventOnce(document, 'click', handleDashboardQuickMenuOutsideClick, 'dashboard-quick-menu-outside-click');
@@ -8979,6 +10345,20 @@
 
   let uiInitialized = false;
 
+  function forceBindCriticalLoginButtons() {
+    const bindTargets = [
+      document.getElementById('btn-google-login'),
+      document.getElementById('btn-google-login-screen'),
+    ];
+    bindTargets.forEach((button) => {
+      if (!button) return;
+      button.onclick = handleGoogleLoginClick;
+      button.disabled = false;
+      button.style.pointerEvents = 'auto';
+      button.style.opacity = '1';
+    });
+  }
+
   function initializeUI() {
     if (uiInitialized) return;
     bindCoreUIEventListeners();
@@ -9005,7 +10385,7 @@
     if (ENABLE_STATS_FEATURES) {
       applyHeroMetricsConfig();
       setDashboardVisibility(dashboardVisible);
-      setGraphVisibility(false, false);
+      setGraphVisibility(isGraphVisible, false);
       applyDashboardConfig();
     } else {
       applyMinimalSafeModeUI();
@@ -9045,16 +10425,48 @@
   }
 
   function hydrateStateFromCloud() {
-    const hydratedLang = getCloudValue(LANG_KEY, getLocalValue(LANG_KEY, 'ja'));
+    if (isManagedStaffUser()) {
+      syncManagedStaffLocalStateFromOrgCloud();
+    }
+    const savedPlan = getLocalValue('userPlan', 'free');
+    const savedCurrency = getLocalValue('currency', 'JPY');
+    const savedLang = getLocalValue('lang', 'ja');
+    const hydratedLang = getCloudValue(
+      LANG_KEY,
+      getCloudValue(
+        'lang',
+        isManagedStaffUser() ? 'ja' : getLocalValue(LANG_KEY, savedLang)
+      )
+    );
     currentLang = hydratedLang;
     if (!window.LOCALE || !window.LOCALE[currentLang]) currentLang = 'ja';
-    currentTheme = FORCE_DARK_MODE ? 'dark' : getCloudValue(THEME_KEY, getLocalValue(THEME_KEY, 'dark'));
-    currentAccentColor = normalizeAccentColor(
-      getCloudValue(ACCENT_COLOR_KEY, getLocalValue(ACCENT_COLOR_KEY, DEFAULT_ACCENT_COLOR))
+    currentUserPlan = normalizeUserPlan(
+      getCloudValue(
+        USER_PLAN_KEY,
+        getCloudValue('plan', getLocalValue(USER_PLAN_KEY, savedPlan))
+      )
     );
-    currentCurrency = getCloudValue(CURRENCY_KEY, getLocalValue(CURRENCY_KEY, 'USD'));
+    currentTheme = FORCE_DARK_MODE
+      ? 'dark'
+      : getCloudValue(THEME_KEY, isManagedStaffUser() ? 'dark' : getLocalValue(THEME_KEY, 'dark'));
+    currentAccentColor = normalizeAccentColor(
+      getCloudValue(
+        ACCENT_COLOR_KEY,
+        isManagedStaffUser() ? DEFAULT_ACCENT_COLOR : getLocalValue(ACCENT_COLOR_KEY, DEFAULT_ACCENT_COLOR)
+      )
+    );
+    currentCurrency = getCloudValue(
+      CURRENCY_KEY,
+      getCloudValue(
+        'currency',
+        isManagedStaffUser() ? 'USD' : getLocalValue(CURRENCY_KEY, savedCurrency)
+      )
+    );
     if (!CURRENCY_CONFIG[currentCurrency]) currentCurrency = 'USD';
-    currentStudioName = normalizeStudioName(getCloudValue(STUDIO_NAME_KEY, getLocalValue(STUDIO_NAME_KEY, '')));
+    currentStudioName = normalizeStudioName(getCloudValue(
+      STUDIO_NAME_KEY,
+      isManagedStaffUser() ? '' : getLocalValue(STUDIO_NAME_KEY, '')
+    ));
     syncPlanFromStorage();
     reloadRuntimeStateFromStorage();
     updateHeaderBrandWordmark();
@@ -9073,6 +10485,18 @@
   let authWatcherDisabled = false;
   let authUnsubscribe = null;
   let currentAuthUserEmail = '';
+  let currentOwnerId = '';
+  let currentOrgId = '';
+  let currentDataOwnerUid = '';
+  var staffAccessContext = {
+    adminUid: '',
+    role: 'admin',
+    viewScope: 'team_all',
+    isManagedStaff: false,
+    staffId: '',
+    staffName: '',
+    staffEmail: '',
+  };
   let cloudSyncState = 'local';
   let mergePromptedUid = null;
   let adminSupportTickets = [];
@@ -9142,13 +10566,540 @@
     return String(value || '').trim().toLowerCase();
   }
 
+  function getCurrentUserEmail() {
+    const firebaseServiceEmail = normalizeEmail(window.FirebaseService?.getCurrentUser?.()?.email || '');
+    if (firebaseServiceEmail) return firebaseServiceEmail;
+    const firebaseAuthEmail = normalizeEmail(firebase.auth().currentUser?.email || '');
+    return firebaseAuthEmail;
+  }
+
+  function normalizeStaffRole(role) {
+    const normalized = String(role || '').trim().toLowerCase();
+    if (normalized === 'admin') return 'admin';
+    if (normalized === 'editor') return 'editor';
+    return 'viewer';
+  }
+
+  function normalizeStaffViewScope(scope) {
+    const normalized = String(scope || '').trim().toLowerCase();
+    if (normalized === 'team_all') return 'team_all';
+    return 'own_only';
+  }
+
+  function getCurrentStaffRole() {
+    return normalizeStaffRole(staffAccessContext?.role || 'admin');
+  }
+
+  function getCurrentStaffViewScope() {
+    return normalizeStaffViewScope(staffAccessContext?.viewScope || 'own_only');
+  }
+
+  function getActiveDataOwnerUid(fallbackUid = '') {
+    const explicitOwnerUid = String(currentOwnerId || currentOrgId || staffAccessContext?.adminUid || '').trim();
+    if (explicitOwnerUid) return explicitOwnerUid;
+    return String(fallbackUid || window.FirebaseService?.getCurrentUser?.()?.uid || '').trim();
+  }
+
+  function isManagedStaffUser() {
+    if (EMERGENCY_SIMPLE_OWNER_MODE) return false;
+    return !!staffAccessContext?.isManagedStaff;
+  }
+
+  function canCurrentUserViewAllClients() {
+    if (isCurrentUserAdmin()) return true;
+    if (!isManagedStaffUser()) return true;
+    if (getCurrentStaffRole() === 'admin') return true;
+    return getCurrentStaffViewScope() === 'team_all';
+  }
+
+  function canCurrentUserManageAllClients() {
+    if (isCurrentUserAdmin()) return true;
+    if (!isManagedStaffUser()) return true;
+    return getCurrentStaffRole() === 'admin';
+  }
+
+  function canCurrentUserCreateOrSave() {
+    if (!isManagedStaffUser()) return true;
+    return getCurrentStaffRole() !== 'viewer';
+  }
+
+  function resolveAssignedStaffEmail(assignedToValue, explicitEmail = '') {
+    const normalizedExplicitEmail = normalizeEmail(explicitEmail);
+    if (normalizedExplicitEmail) return normalizedExplicitEmail;
+
+    const normalizedAssignedValue = normalizeEmail(assignedToValue);
+    if (normalizedAssignedValue.includes('@')) return normalizedAssignedValue;
+
+    const assignedTo = String(assignedToValue || '').trim();
+    if (!assignedTo) return '';
+
+    const photographers = window.TeamManager?.loadPhotographers?.() || [];
+    const matchedPhotographer = photographers.find((item) => String(item?.id || '').trim() === assignedTo);
+    if (matchedPhotographer) {
+      const photographerEmail = normalizeEmail(
+        matchedPhotographer?.email || matchedPhotographer?.mail || matchedPhotographer?.userEmail || ''
+      );
+      if (photographerEmail) return photographerEmail;
+    }
+
+    const currentUser = window.FirebaseService?.getCurrentUser?.();
+    const currentUid = String(currentUser?.uid || '').trim();
+    if (currentUid && assignedTo === currentUid) {
+      return normalizeEmail(currentUser?.email || '');
+    }
+
+    if (isManagedStaffUser() && String(staffAccessContext?.staffId || '').trim() === assignedTo) {
+      return normalizeEmail(staffAccessContext?.staffEmail || '');
+    }
+
+    return '';
+  }
+
+  function isStaffRestrictedView() {
+    if (!isManagedStaffUser()) return false;
+    return !canCurrentUserViewAllClients();
+  }
+
+  function isCustomerAssignedToCurrentStaff(customer) {
+    if (canCurrentUserViewAllClients()) return true;
+    const viewerEmail = getCurrentUserEmail();
+    if (!viewerEmail) return false;
+    const assignedStaffEmail = normalizeEmail(
+      resolveAssignedStaffEmail(customer?.assignedTo, customer?.assignedStaffEmail)
+    );
+    return !!assignedStaffEmail && assignedStaffEmail === viewerEmail;
+  }
+
+  function applyStaffScopeFilter(records) {
+    const list = Array.isArray(records) ? records : [];
+    if (!isStaffRestrictedView()) return [...list];
+    return list.filter((record) => isCustomerAssignedToCurrentStaff(record));
+  }
+
+  function canCurrentUserEditCustomer(record) {
+    if (!record || typeof record !== 'object') return canCurrentUserCreateOrSave();
+    if (canCurrentUserManageAllClients()) return true;
+    if (!isManagedStaffUser()) return true;
+    if (getCurrentStaffRole() !== 'editor') return false;
+    return isCustomerAssignedToCurrentStaff(record);
+  }
+
+  function canCurrentUserDeleteCustomer(record) {
+    if (!record || typeof record !== 'object') return canCurrentUserManageAllClients();
+    if (!isManagedStaffUser()) return true;
+    return getCurrentStaffRole() === 'admin' && canCurrentUserManageAllClients();
+  }
+
+  function updateStaffScopeIndicator() {
+    const indicator = document.getElementById('staff-scope-indicator');
+    if (!indicator) return;
+    indicator.style.display = isStaffRestrictedView() ? 'inline-flex' : 'none';
+  }
+
+  function canCurrentUserViewStats() {
+    if (isManagedStaffUser()) return false;
+    return isCurrentUserAdmin();
+  }
+
+  function updateCustomerActionVisibilityByRole() {
+    const canMutate = canCurrentUserCreateOrSave();
+    const addButtons = [
+      document.getElementById('btn-add'),
+      document.getElementById('btn-add-fab'),
+      document.querySelector('#empty-state button[onclick*="openModal"]'),
+    ];
+
+    addButtons.forEach((button) => {
+      if (!button) return;
+      button.style.display = canMutate ? '' : 'none';
+      button.setAttribute('aria-hidden', canMutate ? 'false' : 'true');
+      if ('disabled' in button) button.disabled = !canMutate;
+    });
+
+    const saveButton = document.getElementById('btn-save');
+    if (saveButton) {
+      saveButton.style.display = canMutate ? '' : 'none';
+      saveButton.disabled = !canMutate;
+    }
+
+    const detailEditBtn = document.getElementById('detail-edit-btn');
+    if (detailEditBtn) {
+      detailEditBtn.style.display = canMutate ? '' : 'none';
+      detailEditBtn.disabled = !canMutate;
+    }
+
+    const detailDeleteBtn = document.getElementById('detail-delete-btn');
+    if (detailDeleteBtn) {
+      const canDeleteAny = canCurrentUserDeleteCustomer();
+      detailDeleteBtn.style.display = canDeleteAny ? '' : 'none';
+      detailDeleteBtn.disabled = !canDeleteAny;
+    }
+  }
+
+  function applyRoleBasedUiModeClasses() {
+    const body = document.body;
+    if (!body) return;
+    const isStaff = isManagedStaffUser();
+    const isViewer = isStaff && getCurrentStaffRole() === 'viewer';
+    body.classList.toggle('is-staff-mode', isStaff);
+    body.classList.toggle('is-staff-viewer', isViewer);
+  }
+
+  function getStaffScopedLocalFallbackValue(key) {
+    switch (key) {
+      case STORAGE_KEY:
+      case EXPENSES_KEY:
+      case PLAN_MASTER_KEY:
+        return [];
+      case OPTIONS_KEY:
+        return DEFAULT_OPTIONS;
+      case THEME_KEY:
+        return 'dark';
+      case LANG_KEY:
+        return 'ja';
+      case CURRENCY_KEY:
+        return 'USD';
+      case ACCENT_COLOR_KEY:
+        return DEFAULT_ACCENT_COLOR;
+      case STUDIO_NAME_KEY:
+        return '';
+      case DASHBOARD_VISIBILITY_KEY:
+        return false;
+      case DASHBOARD_CONFIG_KEY:
+        return getDefaultDashboardConfig();
+      case LIST_COLUMN_CONFIG_KEY:
+        return getDefaultListColumnConfig();
+      case CONTRACT_TEMPLATE_KEY:
+        return getDefaultContractTemplateText();
+      case STATUS_COLOR_MAP_KEY:
+        return { ...DEFAULT_STATUS_COLORS };
+      case HERO_METRICS_CONFIG_KEY:
+        return getDefaultHeroMetricsConfig();
+      case HERO_METRICS_VISIBLE_KEY:
+        return false;
+      case FORM_FIELD_VISIBILITY_KEY:
+        return getDefaultFormFieldVisibilityConfig();
+      case GOOGLE_CALENDAR_AUTO_SYNC_KEY:
+        return false;
+      case GOOGLE_CALENDAR_SELECTED_ID_KEY:
+        return '';
+      default:
+        return '';
+    }
+  }
+
+  function syncManagedStaffLocalStateFromOrgCloud() {
+    if (!isManagedStaffUser()) return;
+    STAFF_ORG_SCOPED_LOCAL_KEYS.forEach((key) => {
+      const cloudValue = window.FirebaseService?.getCachedData?.(key);
+      const nextValue = cloudValue === undefined
+        ? getStaffScopedLocalFallbackValue(key)
+        : cloudValue;
+      saveLocalValue(key, nextValue);
+    });
+  }
+
+  function sanitizeStaffUiArtifacts() {
+    try {
+      applyRoleBasedUiModeClasses();
+      applyStaffStatsDomIsolation();
+      applyStaffFeatureVisibilityRestrictions();
+
+      const restrictedHeaderButtonIds = [
+        'btn-sync-export',
+        'btn-sync-import',
+        'btn-ics-export',
+        'btn-export',
+      ];
+
+      if (!isManagedStaffUser() || isCurrentUserAdmin()) {
+        document.querySelectorAll('.staff-ui-hidden').forEach((node) => node.classList.remove('staff-ui-hidden'));
+        restrictedHeaderButtonIds.forEach((id) => {
+          const node = document.getElementById(id);
+          if (!node) return;
+          node.style.display = '';
+          node.setAttribute('aria-hidden', 'false');
+          if ('disabled' in node) node.disabled = false;
+        });
+        const ownerVisibleButtonIds = [
+          'btn-settings',
+          'btn-refresh',
+          'btn-add',
+          'btn-add-fab',
+          'btn-team-add',
+          'toggle-stats-btn',
+          'dashboard-stats-menu-wrap',
+        ];
+        ownerVisibleButtonIds.forEach((id) => {
+          const node = document.getElementById(id);
+          if (!node) return;
+          node.style.display = '';
+          node.setAttribute('aria-hidden', 'false');
+          if ('disabled' in node) node.disabled = false;
+        });
+        applyStaffFeatureVisibilityRestrictions();
+        return;
+      }
+
+      setDashboardQuickMenuOpen(false);
+      setListColumnsMenuOpen(false);
+      setMobileHeaderMenuOpen(false);
+
+      const dashboardQuickMenu = document.getElementById('dashboard-quick-menu');
+      if (dashboardQuickMenu) dashboardQuickMenu.style.display = 'none';
+
+      const listColumnsMenuEl = document.getElementById('list-columns-menu');
+      if (listColumnsMenuEl) listColumnsMenuEl.style.display = 'none';
+
+      restrictedHeaderButtonIds.forEach((id) => {
+        const node = document.getElementById(id);
+        if (!node) return;
+        node.style.display = 'none';
+        node.setAttribute('aria-hidden', 'true');
+        if ('disabled' in node) node.disabled = true;
+      });
+
+      document.querySelectorAll('.header-left button, .header-actions button').forEach((button) => {
+        if (!button) return;
+        const keepIds = new Set(['btn-logout', 'btn-refresh', 'btn-theme']);
+        if (keepIds.has(button.id)) return;
+        const hasVisibleText = String(button.textContent || '').replace(/\s+/g, '').trim().length > 0;
+        const hasIconElement = !!button.querySelector('svg, img, .cloud-sync-dot');
+        if (!hasVisibleText && !hasIconElement) {
+          button.classList.add('staff-ui-hidden');
+        }
+      });
+      applyStaffFeatureVisibilityRestrictions();
+    } catch (error) {
+      console.error('[UI] sanitizeStaffUiArtifacts failed', error);
+    }
+  }
+
+  function updateStatsVisibilityByRole() {
+    const canViewStats = canCurrentUserViewStats();
+    const isStaff = isManagedStaffUser() && !isCurrentUserAdmin();
+    const periodControls = document.getElementById('dashboard-period-controls');
+    const dashboardCollapsible = document.getElementById('dashboard-collapsible');
+    const statsToggleButton = document.getElementById('toggle-stats-btn');
+    const statsWrap = document.getElementById('dashboard-stats-menu-wrap');
+    const dashboardQuickMenu = document.getElementById('dashboard-quick-menu');
+
+    if (statsToggleButton) {
+      const visible = canViewStats && !isStaff;
+      statsToggleButton.style.display = visible ? 'inline-flex' : 'none';
+      statsToggleButton.setAttribute('aria-hidden', visible ? 'false' : 'true');
+    }
+    if (statsWrap) {
+      statsWrap.style.display = (canViewStats && !isStaff) ? '' : 'none';
+    }
+    if (periodControls) {
+      periodControls.style.display = (canViewStats && !isStaff) ? '' : 'none';
+    }
+    if (dashboardCollapsible) {
+      dashboardCollapsible.style.display = (canViewStats || isStaff) ? '' : 'none';
+    }
+    if (!canViewStats || isStaff) {
+      setDashboardQuickMenuOpen(false);
+      if (dashboardQuickMenu) dashboardQuickMenu.style.display = 'none';
+    }
+    applyStaffFeatureVisibilityRestrictions();
+  }
+
+  function normalizeStaffMemberRecord(source = {}, fallbackId = '') {
+    const safe = source && typeof source === 'object' ? source : {};
+    const id = String(safe.id || fallbackId || '').trim() || generateId();
+    const email = normalizeEmail(safe.email || safe.staffEmail || '');
+    const role = normalizeStaffRole(safe.role);
+    const name = String(safe.name || safe.displayName || email || '').trim();
+    const fallbackScope = role === 'admin' ? 'team_all' : 'own_only';
+    return {
+      id,
+      email,
+      name: name || email,
+      role,
+      viewScope: normalizeStaffViewScope(safe.viewScope || fallbackScope),
+      createdAt: safe.createdAt || new Date().toISOString(),
+      updatedAt: safe.updatedAt || new Date().toISOString(),
+    };
+  }
+
+  async function fetchStaffMembersForAdmin(adminUid) {
+    const ownerUid = String(adminUid || '').trim();
+    if (!ownerUid) return [];
+    const { getDocs } = await getFirestoreSdkModule();
+    const staffCollectionRef = await getUserStaffCollectionRef(ownerUid);
+    const snapshot = await getDocs(staffCollectionRef);
+    const members = [];
+    snapshot.forEach((docSnap) => {
+      members.push(normalizeStaffMemberRecord(docSnap.data() || {}, docSnap.id));
+    });
+    return members;
+  }
+
+  async function saveStaffDirectoryToCloud(adminUid, staffList = []) {
+    const ownerUid = String(adminUid || '').trim();
+    if (!ownerUid) return;
+    const { getDocs, writeBatch, doc } = await getFirestoreSdkModule();
+    const { db: dbInstance } = await window.FirebaseService.whenReady();
+    const staffCollectionRef = await getUserStaffCollectionRef(ownerUid);
+    const snapshot = await getDocs(staffCollectionRef);
+    const normalizedList = (Array.isArray(staffList) ? staffList : [])
+      .map((entry) => normalizeStaffMemberRecord(entry, entry?.id))
+      .filter((entry) => entry.email);
+    const nextIds = new Set(normalizedList.map((entry) => entry.id));
+    const batch = writeBatch(dbInstance);
+
+    normalizedList.forEach((entry) => {
+      batch.set(doc(staffCollectionRef, entry.id), {
+        email: entry.email,
+        name: entry.name,
+        role: entry.role,
+        viewScope: normalizeStaffViewScope(entry.viewScope),
+        updatedAt: new Date().toISOString(),
+        createdAt: entry.createdAt || new Date().toISOString(),
+      }, { merge: true });
+    });
+    snapshot.forEach((docSnap) => {
+      if (!nextIds.has(docSnap.id)) batch.delete(doc(staffCollectionRef, docSnap.id));
+    });
+    await batch.commit();
+  }
+
+  async function resolveStaffAccessContext(user) {
+    const fallbackContext = {
+      adminUid: String(user?.uid || '').trim(),
+      role: 'admin',
+      viewScope: 'team_all',
+      isManagedStaff: false,
+      staffId: '',
+      staffName: String(user?.displayName || user?.email || '').trim(),
+      staffEmail: normalizeEmail(user?.email || ''),
+    };
+    if (!user?.uid) return fallbackContext;
+    if (isAdminEmail(user.email)) return fallbackContext;
+
+    const currentEmail = normalizeEmail(user.email || '');
+    if (!currentEmail) return fallbackContext;
+
+    try {
+      const { collectionGroup, query, where, limit, getDocs } = await getFirestoreSdkModule();
+      const { db: dbInstance } = await window.FirebaseService.whenReady();
+      const result = await getDocs(
+        query(
+          collectionGroup(dbInstance, STAFF_COLLECTION_NAME),
+          where('email', '==', currentEmail),
+          limit(1)
+        )
+      );
+      if (result.empty) return fallbackContext;
+
+      const match = result.docs[0];
+      const adminRef = match.ref.parent?.parent;
+      const adminUid = String(adminRef?.id || '').trim();
+      if (!adminUid) return fallbackContext;
+      const data = match.data() || {};
+      return {
+        adminUid,
+        role: normalizeStaffRole(data.role),
+        viewScope: normalizeStaffViewScope(data.viewScope),
+        isManagedStaff: adminUid !== String(user.uid || '').trim(),
+        staffId: String(match.id || '').trim(),
+        staffName: String(data.name || user.displayName || user.email || '').trim(),
+        staffEmail: currentEmail,
+      };
+    } catch (error) {
+      console.warn('[STAFF] Access context resolve failed', error);
+      return fallbackContext;
+    }
+  }
+
+  function forceOwnerAccessContext(user) {
+    const ownerUid = String(user?.uid || '').trim();
+    const ownerEmail = normalizeEmail(user?.email || '');
+    staffAccessContext = {
+      adminUid: ownerUid,
+      role: 'admin',
+      viewScope: 'team_all',
+      isManagedStaff: false,
+      staffId: '',
+      staffName: String(user?.displayName || user?.email || '').trim(),
+      staffEmail: ownerEmail,
+    };
+    currentOwnerId = ownerUid;
+    currentOrgId = ownerUid;
+    currentDataOwnerUid = ownerUid;
+    if (ownerUid) saveLocalValue(ADMIN_UID_CACHE_KEY, ownerUid);
+  }
+
+  async function hydrateStaffAccessContext(user) {
+    try {
+      const isOwner = isCurrentUserOwner(user) || isAdminEmail(user?.email);
+      if (isOwner) {
+        forceOwnerAccessContext(user);
+      } else {
+        const nextContext = await resolveStaffAccessContext(user);
+        staffAccessContext = {
+          adminUid: String(nextContext.adminUid || '').trim(),
+          role: normalizeStaffRole(nextContext.role),
+          viewScope: normalizeStaffViewScope(nextContext.viewScope),
+          isManagedStaff: !!nextContext.isManagedStaff,
+          staffId: String(nextContext.staffId || '').trim(),
+          staffName: String(nextContext.staffName || '').trim(),
+          staffEmail: normalizeEmail(nextContext.staffEmail || ''),
+        };
+        currentOwnerId = String(nextContext.adminUid || user?.uid || '').trim();
+        currentOrgId = String(nextContext.adminUid || user?.uid || '').trim();
+        currentDataOwnerUid = getActiveDataOwnerUid(user?.uid);
+        saveLocalValue(ADMIN_UID_CACHE_KEY, currentDataOwnerUid || '');
+      }
+
+      try {
+        const teamMembers = await fetchStaffMembersForAdmin(currentDataOwnerUid);
+        if (Array.isArray(teamMembers) && teamMembers.length > 0) {
+          window.TeamManager?.savePhotographers?.(teamMembers);
+        } else if (!staffAccessContext.isManagedStaff) {
+          window.TeamManager?.savePhotographers?.([]);
+        }
+      } catch (error) {
+        console.warn('[STAFF] Team directory load failed', error);
+      }
+    } catch (error) {
+      console.error('[AUTH] staff access hydration failed', error);
+      forceOwnerAccessContext(user);
+    }
+  }
+
   function isAdminEmail(email) {
     return ADMIN_MANAGEMENT_EMAILS.has(normalizeEmail(email));
   }
 
+  function isCurrentUserOwner(user = null) {
+    if (EMERGENCY_SIMPLE_OWNER_MODE) {
+      const resolvedUser = user || window.FirebaseService?.getCurrentUser?.() || firebase.auth().currentUser || null;
+      return !!resolvedUser?.uid;
+    }
+    const resolvedUser = user || window.FirebaseService?.getCurrentUser?.() || firebase.auth().currentUser || null;
+    const currentUid = String(resolvedUser?.uid || '').trim();
+    if (!currentUid) return false;
+    if (isAdminEmail(resolvedUser?.email)) return true;
+    const cachedOwnerUid = String(getLocalValue(ADMIN_UID_CACHE_KEY, '') || '').trim();
+    const ownerCandidates = [
+      String(currentOwnerId || '').trim(),
+      String(currentOrgId || '').trim(),
+      String(currentDataOwnerUid || '').trim(),
+      cachedOwnerUid,
+    ];
+    const matchedOwnerUid = ownerCandidates.some((uid) => !!uid && uid === currentUid);
+    if (matchedOwnerUid) return true;
+    if (staffAccessContext?.isManagedStaff) return false;
+    return false;
+  }
+
   function isCurrentUserAdmin() {
-    const currentUserEmail = String(window.FirebaseService?.getCurrentUser?.()?.email || '').trim();
-    if (currentUserEmail) return isAdminEmail(currentUserEmail);
+    if (EMERGENCY_SIMPLE_OWNER_MODE) {
+      return !!(window.FirebaseService?.getCurrentUser?.()?.uid || firebase.auth().currentUser?.uid);
+    }
+    if (isCurrentUserOwner()) return true;
     if (typeof window.FirebaseService?.isCurrentUserAdmin === 'function') {
       try {
         return !!window.FirebaseService.isCurrentUserAdmin();
@@ -9483,6 +11434,7 @@
 
     const hasAdminAccess = isCurrentUserAdmin();
     tabButton.style.display = hasAdminAccess ? '' : 'none';
+    tabButton.hidden = !hasAdminAccess;
 
     if (hasAdminAccess) {
       setAdminDeviceWarning('');
@@ -9568,7 +11520,13 @@
       if (loginScreen) loginScreen.style.display = 'none';
       if (authBanner) authBanner.style.display = 'flex';
       if (appContainer) appContainer.style.display = 'none';
-      updateHeaderAuthUi(null);
+      safeRun('authUi.updateHeaderAuthUi.checking', () => updateHeaderAuthUi(null));
+      safeRun('authUi.updateStaffScopeIndicator.checking', () => updateStaffScopeIndicator());
+      safeRun('authUi.updateStatsVisibilityByRole.checking', () => updateStatsVisibilityByRole());
+      safeRun('authUi.updateCustomerActionVisibilityByRole.checking', () => updateCustomerActionVisibilityByRole());
+      safeRun('authUi.updateTeamManagementTabAvailability.checking', () => updateTeamManagementTabAvailability());
+      safeRun('authUi.sanitizeStaffUiArtifacts.checking', () => sanitizeStaffUiArtifacts());
+      safeRun('authUi.initializeUI.checking', () => initializeUI());
       setCloudSyncIndicator('syncing');
       return;
     }
@@ -9576,6 +11534,18 @@
     if (state === 'loggedOut') {
       isLoggedIn = false;
       currentAuthUserEmail = '';
+      currentOwnerId = '';
+      currentOrgId = '';
+      currentDataOwnerUid = '';
+      staffAccessContext = {
+        adminUid: '',
+        role: 'admin',
+        viewScope: 'team_all',
+        isManagedStaff: false,
+        staffId: '',
+        staffName: '',
+        staffEmail: '',
+      };
       clearAdminSecurityState('not_admin');
       setCurrentUserPlan('free', { persistCloud: false });
       if (authStatus) authStatus.textContent = t('authLoggedOutPrompt');
@@ -9588,7 +11558,13 @@
       if (loginScreen) loginScreen.style.display = 'flex';
       if (authBanner) authBanner.style.display = 'none';
       if (appContainer) appContainer.style.display = 'none';
-      updateHeaderAuthUi(null);
+      safeRun('authUi.updateHeaderAuthUi.loggedOut', () => updateHeaderAuthUi(null));
+      safeRun('authUi.updateStaffScopeIndicator.loggedOut', () => updateStaffScopeIndicator());
+      safeRun('authUi.updateStatsVisibilityByRole.loggedOut', () => updateStatsVisibilityByRole());
+      safeRun('authUi.updateCustomerActionVisibilityByRole.loggedOut', () => updateCustomerActionVisibilityByRole());
+      safeRun('authUi.updateTeamManagementTabAvailability.loggedOut', () => updateTeamManagementTabAvailability());
+      safeRun('authUi.sanitizeStaffUiArtifacts.loggedOut', () => sanitizeStaffUiArtifacts());
+      safeRun('authUi.initializeUI.loggedOut', () => initializeUI());
       renderSupportRepliesForCurrentUser([]);
       setCloudSyncIndicator('local');
       return;
@@ -9607,7 +11583,14 @@
       if (loginScreen) loginScreen.style.display = 'none';
       if (authBanner) authBanner.style.display = 'none';
       if (appContainer) appContainer.style.display = 'block';
-      updateHeaderAuthUi(user);
+      safeRun('authUi.updateHeaderAuthUi.loggedIn', () => updateHeaderAuthUi(user));
+      safeRun('authUi.updateStaffScopeIndicator.loggedIn', () => updateStaffScopeIndicator());
+      safeRun('authUi.updateStatsVisibilityByRole.loggedIn', () => updateStatsVisibilityByRole());
+      safeRun('authUi.updateCustomerActionVisibilityByRole.loggedIn', () => updateCustomerActionVisibilityByRole());
+      safeRun('authUi.updateTeamManagementTabAvailability.loggedIn', () => updateTeamManagementTabAvailability());
+      safeRun('authUi.sanitizeStaffUiArtifacts.loggedIn', () => sanitizeStaffUiArtifacts());
+      safeRun('authUi.initializeUI.loggedIn', () => initializeUI());
+      safeRun('authUi.rebindOwnerControlsIfNeeded.loggedIn', () => rebindOwnerControlsIfNeeded());
       setCloudSyncIndicator('syncing', `${t('cloudSyncStatusSyncing')} (${userName})`);
     }
   }
@@ -9618,22 +11601,35 @@
     if (!resolvedUser) return;
 
     try {
+      await hydrateStaffAccessContext(resolvedUser);
+      await hydrateStaffDashboardConfigForSession(resolvedUser);
       await window.FirebaseService.loadForUser(resolvedUser);
       hydrateStateFromCloud();
+      const firestoreClients = await fetchClientsForCurrentUser();
+      if (Array.isArray(firestoreClients)) {
+        customers = firestoreClients;
+        saveLocalValue(STORAGE_KEY, customers);
+      }
       syncPlanFromStorage();
       if (window.FirebaseService?.setUserPlan && !getCloudValue('plan', null)) {
         window.FirebaseService.setUserPlan(currentUserPlan).catch((err) => {
           console.warn('User plan bootstrap save failed', err);
         });
       }
-      applyTheme(currentTheme);
-      updateLanguage(currentLang || 'ja');
-      updateCurrency(currentCurrency);
-      renderTable();
-      renderExpenses();
-      updateDashboard();
-      populateSelects();
-      syncCalendarFilterControls();
+      safeRun('authState.applyTheme', () => applyTheme(currentTheme));
+      safeRun('authState.updateLanguage', () => updateLanguage(currentLang || 'ja'));
+      safeRun('authState.updateCurrency', () => updateCurrency(currentCurrency));
+      safeRun('authState.updateStatsVisibilityByRole', () => updateStatsVisibilityByRole());
+      safeRun('authState.updateCustomerActionVisibilityByRole', () => updateCustomerActionVisibilityByRole());
+      safeRun('authState.updateTeamManagementTabAvailability', () => updateTeamManagementTabAvailability());
+      safeRun('authState.sanitizeStaffUiArtifacts', () => sanitizeStaffUiArtifacts());
+      safeRun('authState.rebindOwnerControlsIfNeeded', () => rebindOwnerControlsIfNeeded());
+      safeRun('authState.renderTable', () => renderTable());
+      safeRun('authState.renderExpenses', () => renderExpenses());
+      safeRun('authState.updateDashboard', () => updateDashboard());
+      safeRun('authState.populateSelects', () => populateSelects());
+      safeRun('authState.updateStaffScopeIndicator', () => updateStaffScopeIndicator());
+      safeRun('authState.syncCalendarFilterControls', () => syncCalendarFilterControls());
       if (calendarView.classList.contains('active')) renderCalendar();
       setCloudSyncIndicator('ready');
       refreshMySupportReplies({ notify: true });
@@ -9668,7 +11664,9 @@
       if (!user) return;
       console.log('[TEST] 接続テスト開始 ユーザー:', user.email || user.uid || '');
       try {
-        await db.collection('customers').limit(1).get();
+        const { query, limit, getDocs } = await getFirestoreSdkModule();
+        const clientsCollectionRef = await getUserClientsCollectionRef(user.uid);
+        await getDocs(query(clientsCollectionRef, limit(1)));
         console.log('[TEST] Firestore読み取り: 成功');
       } catch (e) {
         console.error('[TEST] Firestore読み取り失敗:', e?.code || '', e?.message || e);
@@ -9717,17 +11715,29 @@
         authUnsubscribe = null;
       }
 
+      let authStateSettled = false;
+      const authTimeoutId = window.setTimeout(() => {
+        if (!authStateSettled) {
+          console.warn('[AUTH] onAuthStateChanged timeout — showing login screen');
+          setAuthScreenState('loggedOut');
+        }
+      }, 10000);
+
       authUnsubscribe = window.FirebaseService.onAuthChanged((user) => {
+        if (!authStateSettled) {
+          authStateSettled = true;
+          window.clearTimeout(authTimeoutId);
+        }
         if (authWatcherDisabled) return;
 
         if (user) {
           isLoggedIn = true;
           saveLocalValue(LOCAL_GUEST_MODE_KEY, false);
-          setAuthScreenState('loggedIn', user);
           (async () => {
-            await maybeMergeGuestDataToCloud(user);
+            await hydrateStaffAccessContext(user);
+            await hydrateStaffDashboardConfigForSession(user);
+            safeRun('authFlow.setAuthScreenState.loggedIn', () => setAuthScreenState('loggedIn', user));
             await handleAuthState(user);
-            await initializeAdminSecurityForUser(user);
             setCloudSyncIndicator('ready');
           })().catch((err) => {
             console.error('Auth state update failed', err);
@@ -9753,6 +11763,7 @@
 
   async function bootstrapApp() {
     initializeManifestSafely();
+    forceBindCriticalLoginButtons();
 
     const restoredFromMirror = await restoreLocalStorageFromIndexedDBIfNeeded();
     mirrorCurrentLocalStorageToIndexedDB();
@@ -9772,9 +11783,10 @@
       scheduleVerticalLongVowelNormalization();
     } catch (err) {
       console.error('App bootstrap failed', err);
+      forceBindCriticalLoginButtons();
+      setAuthScreenState('loggedOut');
       try {
         init();
-        setAuthScreenState('loggedOut');
         scheduleVerticalLongVowelNormalization();
       } catch (fallbackErr) {
         console.error('Bootstrap fallback failed', fallbackErr);

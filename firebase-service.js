@@ -143,12 +143,32 @@ function localMigrationPayload() {
 
 function normalizeRecordsForUser(records, uid) {
   if (!Array.isArray(records)) return [];
+  const sanitizeForFirestore = (value) => {
+    if (value === undefined || value === null) return '';
+    if (value instanceof Date) return value.toISOString();
+    if (Array.isArray(value)) return value.map((item) => sanitizeForFirestore(item));
+    if (value && typeof value === 'object') {
+      const sanitized = {};
+      Object.entries(value).forEach(([key, entry]) => {
+        sanitized[key] = sanitizeForFirestore(entry);
+      });
+      return sanitized;
+    }
+    if (typeof value === 'number' && !Number.isFinite(value)) return 0;
+    return value;
+  };
   return records.map((record, index) => {
     const safeRecord = (record && typeof record === 'object') ? record : { value: record };
+    const sanitizedRecord = sanitizeForFirestore(safeRecord);
     return {
-      ...safeRecord,
-      id: safeRecord.id || `migrated_${index}_${Date.now().toString(36)}`,
+      ...sanitizedRecord,
+      id: sanitizedRecord.id || `migrated_${index}_${Date.now().toString(36)}`,
       userId: uid,
+      startTime: String(sanitizedRecord.startTime || '').trim(),
+      endTime: String(sanitizedRecord.endTime || '').trim(),
+      calendarEventId: String(sanitizedRecord.calendarEventId || sanitizedRecord.google_event_id || '').trim(),
+      google_event_id: String(sanitizedRecord.google_event_id || '').trim(),
+      google_event_calendar_id: String(sanitizedRecord.google_event_calendar_id || '').trim(),
     };
   });
 }
@@ -281,7 +301,7 @@ async function overwriteCollection(collectionRef, records) {
     batch.set(doc(collectionRef, docId), {
       ...record,
       id: docId,
-    });
+    }, { merge: true });
   });
 
   await batch.commit();
@@ -1373,8 +1393,8 @@ async function migrateLocalDataToCloud(user, options = {}) {
   const expenses = normalizeRecordsForUser(payload.photocrm_expenses || [], uid);
 
   if (customers.length) {
-    if (overwrite) await overwriteCollection(userProjectsCol(uid), customers);
-    else await mergeCollectionRecords(userProjectsCol(uid), customers);
+    if (overwrite) await overwriteCollection(userLegacyClientsCol(uid), customers);
+    else await mergeCollectionRecords(userLegacyClientsCol(uid), customers);
   }
 
   if (expenses.length) {
@@ -1481,21 +1501,10 @@ async function loadCloudDataForUser(user) {
     }
   });
 
-  const projectDocs = customerSnap.docs.length > 0
-    ? customerSnap.docs
-    : (legacyProjectSnap.docs.length > 0 ? legacyProjectSnap.docs : legacyClientSnap.docs);
-
-  if (customerSnap.docs.length === 0 && (legacyProjectSnap.docs.length > 0 || legacyClientSnap.docs.length > 0)) {
-    const legacyRecords = legacyProjectSnap.docs.length > 0
-      ? legacyProjectSnap.docs
-      : legacyClientSnap.docs;
-    mergeCollectionRecords(
-      userProjectsCol(uid),
-      legacyRecords.map((docSnap) => ({ id: docSnap.id, ...docSnap.data(), userId: uid }))
-    ).catch((err) => {
-      console.warn('Legacy customers migration failed', err);
-    });
-  }
+  // Priority: clients (canonical) → customers (legacy) → projects (older legacy)
+  const projectDocs = legacyClientSnap.docs.length > 0
+    ? legacyClientSnap.docs
+    : (customerSnap.docs.length > 0 ? customerSnap.docs : legacyProjectSnap.docs);
 
   const loaded = {
     ...(settingsSnap.exists() ? settingsSnap.data() : {}),
@@ -1567,7 +1576,7 @@ async function updateKey(user, key, value) {
 
   if (key === 'photocrm_customers') {
     const customers = normalizeRecordsForUser(normalizedValue, user.uid);
-    await overwriteCollection(userProjectsCol(user.uid), customers);
+    await overwriteCollection(userLegacyClientsCol(user.uid), customers);
     try {
       await syncAdminUserSummary(user, { projectCount: customers.length });
     } catch (err) {

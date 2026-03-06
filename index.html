@@ -53,6 +53,7 @@
           <option value="en">🇺🇸 English</option>
           <option value="ja">🇯🇵 日本語</option>
           <option value="fr">🇫🇷 Français</option>
+          <option value="de">🇩🇪 Deutsch</option>
           <option value="es">🇪🇸 Español</option>
           <option value="zh-CN">🇨🇳 简体中文</option>
           <option value="zh-TW">🇹🇼 繁體中文</option>
@@ -82,6 +83,7 @@
             <option value="en">🇺🇸 English</option>
             <option value="ja">🇯🇵 日本語</option>
             <option value="fr">🇫🇷 Français</option>
+            <option value="de">🇩🇪 Deutsch</option>
             <option value="es">🇪🇸 Español</option>
             <option value="zh-CN">🇨🇳 简体中文</option>
             <option value="zh-TW">🇹🇼 繁體中文</option>
@@ -113,13 +115,14 @@
       <button class="btn-icon" id="dashboard-prev-month" title="Previous month" data-i18n-title="dashboardPrevMonth">◀</button>
       <input type="month" id="dashboard-month-picker" aria-label="Dashboard month" data-i18n-aria-label="dashboardMonthAria" />
       <button class="btn-icon" id="dashboard-next-month" title="Next month" data-i18n-title="dashboardNextMonth">▶</button>
-      <button class="stats-toggle-btn stats-toggle-inline" id="btn-toggle-dashboard" type="button"
-        title="統計を隠す" aria-expanded="true">📊 統計 ON</button>
-      <button class="stats-toggle-btn graph-toggle-btn" id="btn-toggle-graph" type="button"
-        title="グラフを表示" aria-expanded="false">📈 グラフ OFF</button>
-      <div class="dashboard-quick-menu" id="dashboard-quick-menu" style="display:none;">
-        <div class="dashboard-quick-menu-content" id="dashboard-quick-menu-content"></div>
+      <div class="dashboard-stats-menu-wrap" id="dashboard-stats-menu-wrap">
+        <button class="stats-toggle-btn graph-toggle-btn" id="toggle-stats-btn" type="button"
+          title="統計" aria-expanded="false" data-i18n-title="statsMenuTitle">📈 統計</button>
+        <div class="dashboard-quick-menu" id="dashboard-quick-menu" style="display:none;">
+          <div class="dashboard-quick-menu-content" id="dashboard-quick-menu-content"></div>
+        </div>
       </div>
+      <span id="staff-scope-indicator" class="staff-scope-indicator" data-i18n="myAssignmentsOnly" style="display:none;">自分の案件のみ表示</span>
     </div>
 
     <div class="tomorrow-reminder-card" id="tomorrow-reminder-card" style="display:none;">
@@ -200,7 +203,7 @@
       </div>
       <div class="dashboard-chart-card graph-container" id="graph-container">
         <div class="dashboard-chart-grid">
-          <div class="dashboard-chart-block">
+          <div class="dashboard-chart-block" data-dashboard-key="monthlyRevenueGraph">
             <div class="dashboard-chart-header">
               <h3 class="dashboard-chart-title" data-i18n="dashboardChartTitle">月次 売上 / 利益</h3>
             </div>
@@ -208,7 +211,7 @@
               <canvas id="revenueChart" aria-label="月次売上と月次利益グラフ" data-i18n-aria-label="dashboardChartAria" role="img"></canvas>
             </div>
           </div>
-          <div class="dashboard-chart-block">
+          <div class="dashboard-chart-block" data-dashboard-key="requestTrendGraph">
             <div class="dashboard-chart-header">
               <h3 class="dashboard-chart-title" data-i18n="dashboardRequestChartTitle">月別依頼数（前年比）</h3>
             </div>
@@ -216,7 +219,30 @@
               <canvas id="requestTrendChart" aria-label="前年比の月別依頼数グラフ" data-i18n-aria-label="dashboardRequestChartAria" role="img"></canvas>
             </div>
           </div>
+          <div class="dashboard-chart-block" data-dashboard-key="analysisMonthlyContractsGraph">
+            <div class="dashboard-chart-header">
+              <h3 class="dashboard-chart-title" data-i18n="analysisMonthlyContracts">月別成約数</h3>
+            </div>
+            <div class="dashboard-chart-canvas-wrap">
+              <canvas id="analysisContractsChart" role="img" data-i18n-aria-label="analysisMonthlyContracts"></canvas>
+            </div>
+            <div class="analysis-preview-line" id="analysis-monthly-contracts-preview">—</div>
+          </div>
+          <div class="dashboard-chart-block" data-dashboard-key="analysisLeadSourceGraph">
+            <div class="dashboard-chart-header">
+              <h3 class="dashboard-chart-title" data-i18n="analysisLeadSource">問い合わせ元</h3>
+            </div>
+            <div class="dashboard-chart-canvas-wrap">
+              <canvas id="analysisLeadSourceChart" role="img" data-i18n-aria-label="analysisLeadSource"></canvas>
+            </div>
+            <div class="analysis-preview-line" id="analysis-lead-source-preview">—</div>
+          </div>
         </div>
+        <div class="analysis-kpi-row">
+          <div class="analysis-kpi-label" data-i18n="analysisConversionRate">成約率</div>
+          <div class="analysis-kpi-value" id="analysis-conversion-rate">0%</div>
+        </div>
+        <p class="analysis-empty-note" id="analysis-empty-message" data-i18n="analysisInsufficientData" style="display:none;">データが不足しています</p>
       </div>
     </div>
 
@@ -548,9 +574,9 @@
             </select>
           </div>
           <div class="form-group" data-input-key="assignedTo">
-            <label for="form-assignedTo" data-i18n="labelAssignedTo">担当カメラマン</label>
+            <label for="form-assignedTo" data-i18n="labelAssignedStaff">担当スタッフ</label>
             <select id="form-assignedTo">
-              <option value="" data-i18n="selectDefault">選択してください</option>
+              <option value="" data-i18n="unassignedStaff">未割り当て</option>
             </select>
           </div>
           <div class="form-group" data-input-key="location">
@@ -805,13 +831,13 @@
         <div class="settings-tabs">
           <button class="settings-tab-btn active" data-tab="menu" data-i18n="settings">設定</button>
           <button class="settings-tab-btn" data-tab="profile" data-i18n="billingProfileTab">請求プロフィール</button>
+          <button class="settings-tab-btn" data-tab="team" data-i18n="teamTab">チーム</button>
           <button class="settings-tab-btn" data-tab="plan" data-i18n="settingsPlanTab">プラン</button>
           <button class="settings-tab-btn" data-tab="invoice" data-i18n="invoiceSettings">請求書・税設定</button>
           <button class="settings-tab-btn" data-tab="contract">契約書設定</button>
-          <button class="settings-tab-btn" data-tab="team" data-i18n="teamManager">チーム管理</button>
           <button class="settings-tab-btn" data-tab="support" data-i18n="supportFeedbackTab">サポート</button>
           <button class="settings-tab-btn" data-tab="referral" data-i18n="referralProgramTab">紹介プログラム</button>
-          <button class="settings-tab-btn" data-tab="admin" id="settings-tab-admin" data-i18n="adminPanelTab" style="display:none;">管理者</button>
+          <button class="settings-tab-btn" data-tab="admin" id="settings-tab-admin" data-i18n="adminPanelTab" style="display:none;" hidden>管理者</button>
         </div>
         <div class="settings-current-tab-indicator" id="settings-current-tab-indicator" aria-live="polite"></div>
         <div class="settings-tab-content active" id="settings-content-menu">
@@ -956,15 +982,23 @@
             <h3 data-i18n="teamList">Team Members</h3>
             <div id="team-list" class="team-list"></div>
             <div class="team-add-form">
-              <h3 data-i18n="addMember">Add Member</h3>
+              <h3 data-i18n="addStaffMember">スタッフ追加</h3>
               <div class="form-group">
+                <label for="team-new-name" data-i18n="staffNameLabel">スタッフ名</label>
                 <input type="text" id="team-new-name" data-i18n-placeholder="placeholderMemberName" />
+                <label for="team-new-email" data-i18n="staffEmailLabel">メールアドレス</label>
+                <input type="email" id="team-new-email" data-i18n-placeholder="placeholderMemberEmail" placeholder="staff@example.com" />
+                <label for="team-new-role" data-i18n="permissionSettingLabel">権限設定</label>
                 <select id="team-new-role">
-                  <option value="photographer" data-i18n="rolePhotog">Photographer</option>
-                  <option value="admin" data-i18n="roleAdmin">Admin</option>
-                  <option value="assistant" data-i18n="roleAsst">Assistant</option>
+                  <option value="viewer" data-i18n="roleViewer">Viewer</option>
+                  <option value="editor" data-i18n="roleEditor">Editor</option>
                 </select>
-                <button class="btn btn-primary btn-sm" id="btn-team-add" data-i18n="addMember">Add</button>
+                <label for="team-new-view-scope" data-i18n="viewScopeLabel">閲覧範囲</label>
+                <select id="team-new-view-scope">
+                  <option value="own_only" data-i18n="viewScopeOwnOnly">自分の案件のみ</option>
+                  <option value="team_all" data-i18n="viewScopeTeamAll">チーム全案件</option>
+                </select>
+                <button class="btn btn-primary btn-sm" id="btn-team-add" data-i18n="addStaffMember">スタッフ追加</button>
               </div>
             </div>
           </div>

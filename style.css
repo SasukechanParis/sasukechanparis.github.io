@@ -42,6 +42,20 @@
   --primary-light: var(--accent-glow);
 }
 
+/* Emergency visibility reset */
+.btn-primary,
+.btn-primary:visited,
+.btn-primary:active,
+.btn-primary:focus-visible {
+  background-color: #000 !important;
+  border-color: #000 !important;
+  color: #fff !important;
+}
+
+.btn-primary * {
+  color: #fff !important;
+}
+
 /* ===== Light Theme ===== */
 [data-theme="light"] {
   --bg-primary: #f5f3ff;
@@ -606,6 +620,63 @@ body {
   background: var(--border-color);
 }
 
+.staff-ui-hidden {
+  display: none !important;
+}
+
+.staff-ui-disabled {
+  opacity: 0.6 !important;
+  pointer-events: none !important;
+}
+
+/* Staff scope guard:
+   Force-hide admin/stat widgets for managed staff to avoid stale local UI artifacts. */
+body.is-staff-mode #dashboard-stats-menu-wrap,
+body.is-staff-mode #toggle-stats-btn,
+body.is-staff-mode #dashboard-collapsible,
+body.is-staff-mode #dashboard-quick-menu {
+  display: none !important;
+}
+
+body.is-staff-mode #btn-sync-export,
+body.is-staff-mode #btn-sync-import,
+body.is-staff-mode #btn-ics-export,
+body.is-staff-mode #btn-export {
+  display: none !important;
+}
+
+body.is-staff-mode .header-actions .btn:empty,
+body.is-staff-mode .header-left .btn:empty {
+  display: none !important;
+}
+
+body.is-staff-mode .btn,
+body.is-staff-mode .btn:visited,
+body.is-staff-mode .btn:active,
+body.is-staff-mode .btn:focus-visible,
+body.is-staff-mode .action-button,
+body.is-staff-mode .table-action-btn {
+  color: #ffffff !important;
+}
+
+body.is-staff-mode .btn-secondary,
+body.is-staff-mode .btn:not(.btn-primary):not(.toolbar-add-btn) {
+  background: #2f3542 !important;
+  border-color: #46506a !important;
+  color: #ffffff !important;
+}
+
+/* Viewer mode guard:
+   Read-only staff must not see mutation buttons even if stale UI state remains. */
+body.is-staff-viewer #btn-add,
+body.is-staff-viewer #btn-add-fab,
+body.is-staff-viewer #btn-save,
+body.is-staff-viewer #detail-edit-btn,
+body.is-staff-viewer #detail-delete-btn,
+body.is-staff-viewer #empty-state button[onclick*="openModal"] {
+  display: none !important;
+}
+
 .header-actions {
   display: flex;
   flex-wrap: nowrap;
@@ -1029,6 +1100,69 @@ button,
   border-color: rgba(255, 255, 255, 0.16);
 }
 
+/* Visibility hardening:
+   prevent white-on-white ghost buttons across staff/admin screens. */
+.btn:not(.btn-primary):not(.toolbar-add-btn):not(#btn-add):not(#btn-add-fab):not(#btn-team-add),
+.action-button {
+  background-color: #333 !important;
+  color: #fff !important;
+  border-color: #4a4a4a !important;
+}
+
+.btn:not(.btn-primary):not(.toolbar-add-btn):not(#btn-add):not(#btn-add-fab):not(#btn-team-add) *,
+.action-button * {
+  color: #fff !important;
+}
+
+/* Header top buttons should stay white-background/black-text */
+.header-actions #btn-sync-export,
+.header-actions #btn-sync-import,
+.header-actions #btn-ics-export,
+.header-actions #btn-export,
+.header-actions #btn-logout,
+.header-actions #btn-settings,
+.header-actions #btn-refresh,
+.header-actions .btn-secondary,
+.header-actions .btn-primary,
+.header-actions .btn {
+  background: #ffffff !important;
+  color: #111827 !important;
+  border-color: #d5dbe8 !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+.header-actions #btn-sync-export *,
+.header-actions #btn-sync-import *,
+.header-actions #btn-ics-export *,
+.header-actions #btn-export *,
+.header-actions #btn-logout *,
+.header-actions #btn-settings *,
+.header-actions #btn-refresh *,
+.header-actions .btn * {
+  color: #111827 !important;
+}
+
+.header-actions #btn-sync-export:hover,
+.header-actions #btn-sync-import:hover,
+.header-actions #btn-ics-export:hover,
+.header-actions #btn-export:hover,
+.header-actions #btn-logout:hover,
+.header-actions #btn-settings:hover,
+.header-actions #btn-refresh:hover,
+.header-actions .btn:hover {
+  background: #f8fafc !important;
+  border-color: #c4cfdf !important;
+}
+
+/* Staff quick-action visibility */
+body.is-staff-mode #btn-add,
+body.is-staff-mode #btn-add-fab {
+  background: #4A90E2 !important;
+  border-color: #3f7fcc !important;
+  color: #fff !important;
+  text-shadow: none;
+}
+
 .btn-sm {
   padding: 6px 12px;
   font-size: 0.85rem;
@@ -1084,6 +1218,18 @@ button,
   position: relative;
   flex-wrap: wrap;
   justify-content: flex-start;
+}
+
+.dashboard-stats-menu-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.dashboard-stats-menu-wrap .dashboard-quick-menu {
+  left: 0;
+  right: auto;
 }
 
 .tomorrow-reminder-card {
@@ -1363,6 +1509,32 @@ html[lang="fr"] .stat-label {
   color: #ffffff !important;
 }
 
+#btn-add,
+#btn-add-fab,
+#btn-team-add,
+.toolbar .btn-primary,
+.toolbar-add-btn {
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover)) !important;
+  border: 1px solid color-mix(in srgb, var(--accent) 60%, #111827) !important;
+  color: #ffffff !important;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+}
+
+#btn-add:hover,
+#btn-add-fab:hover,
+#btn-team-add:hover {
+  filter: brightness(1.05);
+  color: #ffffff !important;
+}
+
+#btn-add *,
+#btn-add-fab *,
+#btn-team-add *,
+.toolbar .btn-primary *,
+.toolbar-add-btn * {
+  color: #ffffff !important;
+}
+
 .toolbar-csv-btn {
   flex: 0 0 auto;
   min-height: 38px;
@@ -1609,6 +1781,10 @@ html[lang="fr"] .stat-label {
   margin-left: auto;
 }
 
+.dashboard-period-controls .list-columns-menu-wrap {
+  margin-left: 0;
+}
+
 .list-columns-menu {
   position: fixed;
   top: 0;
@@ -1643,6 +1819,15 @@ html[lang="fr"] .stat-label {
   font-size: 0.75rem;
   color: #6b7280;
   padding: 6px 8px 4px;
+}
+
+.list-columns-section-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #475569;
+  padding: 8px 8px 4px;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+  margin-top: 4px;
 }
 
 .list-columns-item {
@@ -1928,6 +2113,54 @@ tbody tr:hover {
 
 .list-view.active {
   display: block;
+}
+
+.analysis-view {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+  display: none;
+}
+
+.analysis-view.active {
+  display: block;
+}
+
+.analysis-preview-line {
+  margin-top: 12px;
+  font-size: 0.86rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.analysis-kpi-row {
+  margin-top: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+}
+
+.analysis-kpi-label {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.analysis-kpi-value {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.analysis-empty-note {
+  margin-top: 12px;
+  font-size: 0.86rem;
+  color: var(--text-muted);
 }
 
 .table-container {
@@ -2820,6 +3053,15 @@ tbody tr:hover {
 
   .dashboard-chart-canvas-wrap {
     height: 220px;
+  }
+
+  .analysis-view {
+    padding: 0 0.85rem;
+  }
+
+  .analysis-kpi-row {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .stats-toggle-btn {
@@ -4398,6 +4640,19 @@ html[lang="fr"] .modal-footer .btn {
 .subscription-plan-list {
   display: grid;
   gap: 8px;
+}
+
+.team-management > h3 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
 .subscription-plan-card {

@@ -1,21 +1,8 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // 顧客データ: ログイン済みユーザーなら読み書き可
-    match /customers/{docId} {
-      allow read, write: if request.auth != null;
-    }
-
-    // usersコレクション: 本人のみ読み書き可
-    match /users/{userId} {
-      allow read, write: if request.auth != null
-                         && request.auth.uid == userId;
-    }
-
-    // その他全て拒否
     match /{document=**} {
-      allow read, write: if false;
+      allow read, write: if request.auth != null;
     }
   }
 }
