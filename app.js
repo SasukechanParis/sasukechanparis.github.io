@@ -1767,8 +1767,19 @@
         list.push(sanitizeCustomerRecordForSave({ id: docSnap.id, ...(docSnap.data() || {}) }));
       });
 
-      console.log('[GET] loaded:', list.length, 'clients, projects:', projectsSnap.docs.length, 'clients:', clientsSnap.docs.length);
-      return list;
+      // JS-side fallback filter for own_only scope (in case assignedStaffEmail field is absent)
+      let finalList = list;
+      if (isManagedStaffUser() && getCurrentStaffViewScope() === 'own_only' && currentUserEmail) {
+        finalList = list.filter((c) => {
+          const assigned = normalizeEmail(c.assignedStaffEmail || '');
+          return !assigned || assigned === currentUserEmail;
+        });
+        if (finalList.length !== list.length) {
+          console.log('[GET] own_only JS fallback filter applied:', list.length, '->', finalList.length);
+        }
+      }
+      console.log('[GET] loaded:', finalList.length, 'clients, projects:', projectsSnap.docs.length, 'clients:', clientsSnap.docs.length);
+      return finalList;
     } catch (e) {
       console.error('[LOAD] failed:', e?.code || '', e?.message || e);
       return null;
@@ -7243,8 +7254,16 @@
     $('#detail-plan').textContent = toDisplayText(resolveCustomerPlanName(c));
     const detailWorkflowStatus = $('#detail-workflow-status');
     if (detailWorkflowStatus) detailWorkflowStatus.innerHTML = renderWorkflowStatusBadge(c);
+    const hideFinancials = isManagedStaffUser() && staffAccessContext?.role === 'viewer';
+    const hideDetailItem = (id) => {
+      const el = document.getElementById(id);
+      const wrapper = el?.closest('.detail-item') || el;
+      if (wrapper) wrapper.style.display = hideFinancials ? 'none' : '';
+    };
     $('#detail-revenue').textContent = formatCurrency(c.revenue);
     $('#detail-payment').innerHTML = c.paymentChecked ? `<span class="badge badge-success">${t('paid')}</span>` : `<span class="badge badge-warning">${t('unpaid')}</span>`;
+    hideDetailItem('detail-revenue');
+    hideDetailItem('detail-payment');
     $('#detail-notes').textContent = toDisplayText(c.notes);
     const planDetails = normalizePlanDetails(c.planDetails, c.revenue);
     const detailPlanName = $('#detail-plan-name');
@@ -7253,6 +7272,8 @@
     if (detailPlanName) detailPlanName.textContent = toDisplayText(planDetails.planName || resolveCustomerPlanName(c));
     if (detailBasePrice) detailBasePrice.textContent = formatCurrency(planDetails.basePrice);
     if (detailTotalPrice) detailTotalPrice.textContent = formatCurrency(planDetails.totalPrice);
+    hideDetailItem('detail-base-price');
+    hideDetailItem('detail-total-price');
 
     const detailContainer = $('#detail-body-container');
     detailContainer.querySelectorAll('.custom-detail-field').forEach(el => el.remove());
@@ -8269,14 +8290,29 @@
       const item = document.createElement('div');
       item.className = 'team-member-item';
       const roleKey = `role${normalizeStaffRole(p.role).charAt(0).toUpperCase()}${normalizeStaffRole(p.role).slice(1)}`;
-      const scopeKey = normalizeStaffViewScope(p.viewScope) === 'team_all' ? 'viewScopeTeamAll' : 'viewScopeOwnOnly';
+      const currentScope = normalizeStaffViewScope(p.viewScope);
+      const scopeSelectHtml = canManageTeam
+        ? `<select class="select-view-scope" data-id="${escapeHtml(p.id)}" style="font-size:0.8rem;padding:2px 4px;">
+            <option value="own_only"${currentScope === 'own_only' ? ' selected' : ''}>${escapeHtml(t('viewScopeOwnOnly') || '自分のみ')}</option>
+            <option value="team_all"${currentScope === 'team_all' ? ' selected' : ''}>${escapeHtml(t('viewScopeTeamAll') || '全員')}</option>
+           </select>`
+        : `<span>${escapeHtml(t(currentScope === 'team_all' ? 'viewScopeTeamAll' : 'viewScopeOwnOnly'))}</span>`;
       item.innerHTML = `
         <div class="team-member-info">
           <h4>${escapeHtml(p.name)}</h4>
-          <p>${escapeHtml(p.email || '—')} · ${t(roleKey)} · ${t(scopeKey)}</p>
+          <p>${escapeHtml(p.email || '—')} · ${t(roleKey)}</p>
         </div>
-        ${canManageTeam ? `<button class="btn btn-secondary btn-sm btn-del-member" data-id="${p.id}">🗑️ ${escapeHtml(t('delete'))}</button>` : ''}
+        <div class="team-member-actions" style="display:flex;align-items:center;gap:8px;">
+          ${scopeSelectHtml}
+          ${canManageTeam ? `<button class="btn btn-secondary btn-sm btn-del-member" data-id="${p.id}">🗑️ ${escapeHtml(t('delete'))}</button>` : ''}
+        </div>
       `;
+      const scopeSelect = item.querySelector('.select-view-scope');
+      if (scopeSelect) {
+        scopeSelect.onchange = async (e) => {
+          await updateStaffViewScope(p.id, e.target.value);
+        };
+      }
       const removeButton = item.querySelector('.btn-del-member');
       if (removeButton) {
         removeButton.onclick = async () => {
@@ -11097,6 +11133,25 @@
       if (!nextIds.has(docSnap.id)) batch.delete(doc(staffCollectionRef, docSnap.id));
     });
     await batch.commit();
+  }
+
+  async function updateStaffViewScope(staffId, newScope) {
+    const ownerUid = getActiveDataOwnerUid();
+    if (!ownerUid || !staffId) return;
+    const scope = normalizeStaffViewScope(newScope);
+    try {
+      const { doc, setDoc } = await getFirestoreSdkModule();
+      const staffColRef = await getUserStaffCollectionRef(ownerUid);
+      await setDoc(doc(staffColRef, staffId), { viewScope: scope, updatedAt: new Date().toISOString() }, { merge: true });
+      // Update local TeamManager cache
+      const photographers = window.TeamManager.loadPhotographers();
+      const updated = photographers.map((p) => String(p.id) === String(staffId) ? { ...p, viewScope: scope } : p);
+      window.TeamManager.savePhotographers(updated);
+      console.log('[TEAM] viewScope updated:', staffId, '->', scope);
+    } catch (err) {
+      console.error('[TEAM] updateStaffViewScope failed:', err?.message);
+      showToast(t('msgSaveFailed'), 'error');
+    }
   }
 
   async function resolveStaffAccessContext(user) {
